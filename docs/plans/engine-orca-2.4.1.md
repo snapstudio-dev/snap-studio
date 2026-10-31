@@ -243,7 +243,10 @@ Decided by kameka22 on 2026-10-31, except D2. The implementation go has
   false on 2.4.1) and its Undo are gone; `slice.tower.conflict` remains
   only for a wall chosen on a head with no known material. The automatic
   wall is sent to the engine but is not one of the user's differences (not
-  counted, not saved in a preset).
+  counted, not saved in a preset). Only when the materials that don't
+  bond fall in different blocks: a family without an upstream category
+  (TPE) gets the engine's default, PLA's 100, so PLA + TPE still share a
+  block and keep the warning.
 - **D3. Default tower position: ours is kept.** That is X 15, Y 220, the
   back-left corner first, then the other corners and the first free
   spot (`ptSpot`). The new GUI default (middle of the left edge) is not

@@ -161,6 +161,21 @@ fn material_family(material: &str) -> Option<&'static str> {
     FAMILIES.iter().copied().find(|f| word.starts_with(f))
 }
 
+/// Family a word of a profile's name says, as ui/spoolcheck.js
+/// `spMaterialFromName` reads it: the whole word ("PLA", "PLA+"), its part
+/// before a dash ("PLA-CF"), or an alias ("Nylon") — never a word's start,
+/// or a brand ("Panchroma", "Paramount") would read as PA.
+fn name_family(word: &str) -> Option<&'static str> {
+    let up = word.trim().trim_end_matches('+').to_uppercase();
+    let base = up.split('-').next().unwrap_or("");
+    for w in [up.as_str(), base] {
+        if let Some(f) = material_family(w).filter(|f| *f == w || matches!(w, "NYLON" | "PA6" | "PA12" | "PAHT" | "FLEX")) {
+            return Some(f);
+        }
+    }
+    None
+}
+
 /// D6: the adhesiveness category of a filament whose profile does not set
 /// one (a filament that does not inherit a Snapmaker base profile), from its
 /// type: otherwise the engine would put it in PLA's block (its default,
@@ -177,7 +192,7 @@ fn set_adhesiveness_category(cfg: &mut Map<String, Value>) {
             .get("name")
             .and_then(Value::as_str)
             .map(|n| n.split('@').next().unwrap_or(n))
-            .and_then(|n| n.split(|c: char| c.is_whitespace() || "_/()".contains(c)).find_map(material_family)),
+            .and_then(|n| n.split(|c: char| c.is_whitespace() || "_/()".contains(c)).find_map(name_family)),
     };
     let category = family.and_then(|f| ADHESIVENESS.iter().find(|(name, _)| *name == f)).map(|(_, c)| *c);
     if let Some(c) = category {
@@ -1062,6 +1077,11 @@ mod inheritance_tests {
         assert_eq!(cat(serde_json::json!({"filament_type": ["TPE"]})), None);
         assert_eq!(cat(serde_json::json!({})), None);
         assert_eq!(cat(serde_json::json!({"name": "Brand PETG Basic @U1"})), one("300"), "no type: its name");
+        assert_eq!(cat(serde_json::json!({"name": "Panchroma PLA Matte"})), one("100"), "a brand is not PA");
+        assert_eq!(cat(serde_json::json!({"name": "Paramount PETG"})), one("300"));
+        assert_eq!(cat(serde_json::json!({"name": "Brand PLA-CF @U1"})), one("100"), "the part before a dash");
+        assert_eq!(cat(serde_json::json!({"name": "Generic Nylon"})), one("400"), "an alias");
+        assert_eq!(cat(serde_json::json!({"name": "Polymaker Thing"})), None, "nothing it says");
     }
 
     /// What the engine gets: each filament's JSON written by `prepare`

@@ -140,6 +140,13 @@ assert.deepEqual(
 // The tower's automatic outer wall (D2): the first material's first head.
 assert.equal(S.spTowerWallHead(S.spTowerAdvice({ tower: true, heads: [{ n: 2, material: "PETG" }, { n: 0, material: "PLA" }, { n: 3, material: "PETG HF" }] })), 2);
 assert.equal(S.spTowerWallHead(null), null, "nothing to say: the engine picks");
+// Apart only when the pairs that do not bond purge into different blocks:
+// TPE has no category, the engine puts it in PLA's (100).
+assert.equal(S.spTowerAdvice({ tower: true, heads: [{ n: 0, material: "PLA" }, { n: 1, material: "PETG" }] }).apart, true);
+const tpe = S.spTowerAdvice({ tower: true, heads: [{ n: 0, material: "PLA" }, { n: 1, material: "TPE" }] });
+assert.equal(tpe.apart, false, "PLA and TPE share the engine's block 100");
+assert.equal(S.spTowerWallHead(tpe), null, "a wall would not keep them apart: none set");
+assert.equal(S.spTowerAdvice({ tower: true, heads: [{ n: 0, material: "PETG" }, { n: 1, material: "TPE" }] }).apart, true, "PETG (300) and TPE (100)");
 const h = (n, material) => ({ n, material });
 assert.equal(S.spTowerAdvice({ tower: false, heads: [h(0, "PLA"), h(1, "PETG")] }), null, "no tower, nothing to say");
 assert.equal(S.spTowerAdvice({ tower: true, heads: [h(0, "PLA")] }), null, "one head");

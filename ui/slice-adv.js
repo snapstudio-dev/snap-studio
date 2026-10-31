@@ -655,8 +655,10 @@ function advTowerHeads() {
    Snapmaker Orca 2.4.1 each purges into its own block, and with the outer
    wall in one of them (chosen, or advTowerAutoWall) they never meet (D2):
    said above the Slice button as information, with the other walls, no
-   tower and one tower per material. Warned only when the chosen wall's
-   head prints none of the plate's known materials. */
+   tower and one tower per material. Warned when two of them purge into one
+   block (a family without a category shares PLA's, the engine's default),
+   or when the chosen wall's head prints none of the plate's known
+   materials. */
 function advRenderTower() {
   const box = $("s-tower");
   if (!box) return;
@@ -677,7 +679,7 @@ function advRenderTower() {
   } else if (a) {
     const list = a.families.map((g) => `<b>${esc(g.family)}</b> (${esc(heads(g))})`).join(" · ");
     const off = `<button class="btn small" data-tower="off">${esc(tr("slice.tower.off"))}</button>`;
-    if (a.state === "walled") {
+    if (a.state === "walled" && a.apart) {
       const g = a.families.find((x) => x.heads.includes(wall));
       const others = a.families
         .filter((x) => x !== g)
@@ -692,7 +694,7 @@ function advRenderTower() {
       html = `<span class="sl-tower-t">${tr("slice.tower.conflict", { list })}</span><span class="sl-tower-acts">${off}${material}${walls}</span>`;
     }
   }
-  box.classList.toggle("info", multiHead() && (prPillarsShown() || a?.state === "walled"));
+  box.classList.toggle("info", multiHead() && (prPillarsShown() || (a?.state === "walled" && a.apart)));
   // Rewritten only when it changes (the summary is refreshed often): a
   // focused button keeps its focus, the screen reader is not repeated.
   if (html === ADV.tower) return;

@@ -110,6 +110,12 @@ assert.strictEqual(A.sliceLevelValid(null) || A.sliceLevelValid("full"), false);
   // Chosen: that one, the others offered.
   b = line({ pillars: false, offered: true, wall: "3" });
   assert.ok(b.innerHTML.includes("slice.tower.apart") && b.innerHTML.includes('"t":"T2"') && b.innerHTML.includes('data-tower-wall="0"'), "with the wall chosen");
+  // Two materials that do not bond in one engine block (TPE has no
+  // category: PLA's): still warned, no automatic wall, a wall offered.
+  b = line({ pillars: false, offered: false, heads: [{ n: 0, material: "PLA" }, { n: 1, material: "TPE" }] });
+  assert.ok(b.innerHTML.includes("slice.tower.conflict") && !b.classes.has("info") && b.innerHTML.includes('data-tower-wall="0"'), "PLA and TPE");
+  b = line({ pillars: false, offered: false, wall: "1", heads: [{ n: 0, material: "PLA" }, { n: 1, material: "TPE" }] });
+  assert.ok(b.innerHTML.includes("slice.tower.conflict") && !b.innerHTML.includes("slice.tower.apart"), "a chosen wall does not part them either");
   // A wall on a head with no known material: still warned.
   b = line({ pillars: false, offered: true, wall: "4", heads: [{ n: 0, material: "PLA" }, { n: 2, material: "PETG" }, { n: 3, material: "" }] });
   assert.ok(b.innerHTML.includes("slice.tower.conflict") && !b.classes.has("info"), "the wall's head prints none of them");
@@ -223,6 +229,7 @@ assert.strictEqual(A.sliceLevelValid(null) || A.sliceLevelValid("full"), false);
   assert.strictEqual(run({ wipe_tower_filament: "3" }, apart).wipe_tower_filament, "3", "a chosen wall wins");
   assert.strictEqual(run({}, [{ n: 0, material: "PLA" }, { n: 1, material: "PLA Silk" }]).wipe_tower_filament, undefined, "they bond: the engine picks");
   assert.strictEqual(run({}, apart, false).wipe_tower_filament, undefined, "no tower");
+  assert.strictEqual(run({}, [{ n: 0, material: "PLA" }, { n: 1, material: "TPE" }]).wipe_tower_filament, undefined, "one block: no automatic wall");
   assert.ok(src.includes("return Object.keys(advOverridesOwn()).filter"), "not counted as a difference");
   assert.ok(src.includes("overrides: { ...advOverridesOwn(), ...spdOverrides() }"), "not saved in a preset");
   assert.ok(src.includes("const o = advOverridesOwn();"), "advHeads: no loop through advTowerHeads");
