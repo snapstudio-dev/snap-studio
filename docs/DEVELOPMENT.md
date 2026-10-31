@@ -8,6 +8,8 @@ languages and the code layout. To report a bug or propose a change, see
 
 ```sh
 cargo tauri dev                    # development
+scripts/dev.sh                     # the same, from the repository's root
+scripts/dev.sh --engine 2.4.1      # with another Snapmaker Orca (downloaded once on macOS)
 cargo tauri build --bundles app    # local build
 python3 scripts/build-icons.py     # icons (Pillow, numpy; Xcode 26+ for macOS)
 ```
