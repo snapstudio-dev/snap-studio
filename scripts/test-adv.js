@@ -79,31 +79,40 @@ assert.strictEqual(A.sliceLevelValid("basic") && A.sliceLevelValid("advanced"), 
 assert.strictEqual(A.sliceLevelValid(null) || A.sliceLevelValid("full"), false);
 
 // The prime tower's line above Slice (advRenderTower, run as written with
-// stand-ins): the materials do not bond, a third way out — one tower per
-// material — next to "No tower" and the outer wall; once chosen, an
-// information line with the way back.
+// stand-ins): the materials do not bond — since 2.4.1 the tower keeps them
+// apart with its outer wall in one of them, automatic or chosen (D2): an
+// information line, the other walls, no tower, one tower per material;
+// once pillars are chosen, an information line with the way back.
 {
   const SP = require("../ui/spoolcheck.js");
   const PL = require("../ui/pillar-logic.js");
   const body = src.slice(src.indexOf("function advRenderTower()"), src.indexOf("\n}\n", src.indexOf("function advRenderTower()")) + 3);
-  const line = ({ pillars, offered, wall = "0" }) => {
+  const line = ({ pillars, offered, wall = "0", heads: list = null }) => {
     const box = { innerHTML: "", classes: new Set(), classList: { toggle(c, on) { on ? box.classes.add(c) : box.classes.delete(c); } }, querySelectorAll: () => [] };
-    const heads = [{ n: 0, material: "PLA" }, { n: 1, material: "PLA" }, { n: 2, material: "PETG" }];
+    const heads = list || [{ n: 0, material: "PLA" }, { n: 1, material: "PLA" }, { n: 2, material: "PETG" }];
     const ctx = {
       $: () => box, ADV: {}, SL: {}, esc: (x) => String(x), tr: (k, v) => k + (v ? JSON.stringify(v) : ""),
       advVal: () => wall, advTowerHeads: () => heads, advTowerOn: () => !pillars, multiHead: () => true,
+      advTowerAutoWall: () => (+wall > 0 ? null : SP.spTowerWallHead(SP.spTowerAdvice({ heads, tower: !pillars }))),
       spTowerAdvice: SP.spTowerAdvice, pmGroups: PL.pmGroups, prPillarHeads: () => heads, prPillarFamily: (g) => g.family || g.key,
       prPillarOffered: () => offered, prPillarsShown: () => pillars,
     };
     vm.runInNewContext(body + ";advRenderTower();", ctx);
     return box;
   };
+  // Automatic: the first material's first head prints the wall; the other
+  // material's wall offered, no warning.
   let b = line({ pillars: false, offered: true });
-  assert.ok(b.innerHTML.includes("slice.tower.conflict") && b.innerHTML.includes('data-tower="off"') && b.innerHTML.includes('data-tower-wall="0"'));
-  assert.ok(b.innerHTML.includes('data-tower="material"'), "the third button");
-  assert.ok(!b.classes.has("info") && !b.classes.has("hidden"));
-  b = line({ pillars: false, offered: true, wall: "1" });
-  assert.ok(b.innerHTML.includes("slice.tower.walled") && b.innerHTML.includes('data-tower="material"'), "with the outer wall too");
+  assert.ok(b.innerHTML.includes("slice.tower.apart") && b.innerHTML.includes('"t":"T0"') && b.innerHTML.includes("PLA"), b.innerHTML);
+  assert.ok(b.innerHTML.includes('data-tower-wall="2"') && !b.innerHTML.includes('data-tower-wall="0"'), "the other wall only");
+  assert.ok(b.innerHTML.includes('data-tower="off"') && b.innerHTML.includes('data-tower="material"'));
+  assert.ok(!b.innerHTML.includes("slice.tower.conflict") && b.classes.has("info") && !b.classes.has("hidden"));
+  // Chosen: that one, the others offered.
+  b = line({ pillars: false, offered: true, wall: "3" });
+  assert.ok(b.innerHTML.includes("slice.tower.apart") && b.innerHTML.includes('"t":"T2"') && b.innerHTML.includes('data-tower-wall="0"'), "with the wall chosen");
+  // A wall on a head with no known material: still warned.
+  b = line({ pillars: false, offered: true, wall: "4", heads: [{ n: 0, material: "PLA" }, { n: 2, material: "PETG" }, { n: 3, material: "" }] });
+  assert.ok(b.innerHTML.includes("slice.tower.conflict") && !b.classes.has("info"), "the wall's head prints none of them");
   b = line({ pillars: false, offered: false });
   assert.ok(!b.innerHTML.includes('data-tower="material"'), "not offered: no button");
   b = line({ pillars: true, offered: true });
@@ -187,15 +196,36 @@ assert.strictEqual(A.sliceLevelValid(null) || A.sliceLevelValid("full"), false);
 
   // The engine refuses a support angle below 1 since 2.4.1: a value kept
   // from before is raised, the field says so.
-  const body = src.slice(src.indexOf("function advOverrides()"), src.indexOf("\n}\n", src.indexOf("function advOverrides()")) + 3);
+  const body = src.slice(src.indexOf("function advOverridesOwn()"), src.indexOf("\n}\n", src.indexOf("function advOverridesOwn()")) + 3);
   const min = vm.runInNewContext(`(${src.slice(src.indexOf("const ADV_MIN = ") + "const ADV_MIN = ".length, src.indexOf(";", src.indexOf("const ADV_MIN = ")))})`);
   const over = (adv) =>
-    vm.runInNewContext(body + ";advOverrides();", {
+    vm.runInNewContext(body + ";advOverridesOwn();", {
       SL: { adv }, ADV_MIN: min, ADV_WHEN: {}, advVal: () => "0", advCatKeysAll: () => [], multiHead: () => true, $: () => ({ checked: true }),
     });
   assert.strictEqual(over({ support_threshold_angle: "0" }).support_threshold_angle, "1");
   assert.strictEqual(over({ support_threshold_angle: "35" }).support_threshold_angle, "35");
   assert.ok(src.includes('const min = k in ADV_MIN ? ` min="${ADV_MIN[k]}"` : "";'), "the field's minimum");
+}
+
+// D2: the engine gets the automatic wall, the user's own differences do
+// not count it (nor save it in a preset).
+{
+  const own = src.slice(src.indexOf("function advOverrides()"), src.indexOf("\n}\n", src.indexOf("function advOverrides()")) + 3);
+  const auto = src.slice(src.indexOf("function advTowerAutoWall()"), src.indexOf("\n}\n", src.indexOf("function advTowerAutoWall()")) + 3);
+  const SP = require("../ui/spoolcheck.js");
+  const run = (adv, heads, tower = true) =>
+    vm.runInNewContext(own + auto + ";advOverrides();", {
+      advOverridesOwn: () => ({ ...adv }), spTowerWallHead: SP.spTowerWallHead, spTowerAdvice: SP.spTowerAdvice,
+      advTowerHeads: () => heads, advTowerOn: () => tower,
+    });
+  const apart = [{ n: 1, material: "PETG" }, { n: 2, material: "PLA" }];
+  assert.strictEqual(run({}, apart).wipe_tower_filament, "2", "the first material's head (T1), 1-based");
+  assert.strictEqual(run({ wipe_tower_filament: "3" }, apart).wipe_tower_filament, "3", "a chosen wall wins");
+  assert.strictEqual(run({}, [{ n: 0, material: "PLA" }, { n: 1, material: "PLA Silk" }]).wipe_tower_filament, undefined, "they bond: the engine picks");
+  assert.strictEqual(run({}, apart, false).wipe_tower_filament, undefined, "no tower");
+  assert.ok(src.includes("return Object.keys(advOverridesOwn()).filter"), "not counted as a difference");
+  assert.ok(src.includes("overrides: { ...advOverridesOwn(), ...spdOverrides() }"), "not saved in a preset");
+  assert.ok(src.includes("const o = advOverridesOwn();"), "advHeads: no loop through advTowerHeads");
 }
 
 console.log("adv: ok");

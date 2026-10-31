@@ -199,8 +199,8 @@ function advCatKeys(cat) {
 /* Heads flagged in a head picker when the plate's materials do not all
    bond (spTowerAdvice; #s-tower says why): for the walls, the heads whose
    material does not bond with another of the plate's; for the tower's
-   wall, the choices that leave it mixed — a head the plate does not print
-   with, or Automatic — since a head it prints with is the fix. */
+   wall, the heads the plate does not print with (Automatic picks one it
+   prints with, advTowerAutoWall). */
 function advWarnHeads(k) {
   if (k !== "wipe_tower_filament" && k !== "wall_filament") return { heads: [], auto: false };
   const used = advTowerHeads();
@@ -208,7 +208,7 @@ function advWarnHeads(k) {
   if (!a) return { heads: [], auto: false };
   if (k === "wall_filament") return { heads: [...new Set(a.pairs.flat())], auto: false };
   const fix = new Set(a.families.flatMap((g) => g.heads));
-  return { heads: Array.from({ length: headCount() }, (_, h) => h).filter((h) => !fix.has(h)), auto: true };
+  return { heads: Array.from({ length: headCount() }, (_, h) => h).filter((h) => !fix.has(h)), auto: false };
 }
 
 /* Heads offered to the per-feature filament fields (swatch-logic.js
@@ -234,7 +234,25 @@ async function advSchema() {
 
 /* Values sent to the engine: the kept differences, minus what does not
    apply (brim type with the brim off: the switch's "no_brim" must win). */
+/* What the engine gets: the user's differences, and the tower's outer wall
+   in one material when the plate's materials do not bond and none is
+   chosen (D2: with 2.4.1's blocks the materials then never meet). */
 function advOverrides() {
+  const o = advOverridesOwn();
+  const wall = advTowerAutoWall();
+  if (wall != null) o.wipe_tower_filament = String(wall + 1);
+  return o;
+}
+
+/* The tower's automatic outer wall (spoolcheck.js spTowerWallHead), null
+   when a wall is chosen, there is no tower, or the materials bond. */
+function advTowerAutoWall() {
+  if (+advOverridesOwn().wipe_tower_filament > 0) return null;
+  return spTowerWallHead(spTowerAdvice({ heads: advTowerHeads(), tower: advTowerOn(), wall: null }));
+}
+
+/* The user's differences from the profile, as they apply now. */
+function advOverridesOwn() {
   const o = { ...(SL.adv || {}) };
   // Sent either way: off unless the plate turns it on, whatever the profile.
   o.enable_prime_tower = advVal("enable_prime_tower");
@@ -266,7 +284,7 @@ const advCountOf = (cat, level = null) => advCatKeysAll(cat, level).filter((k) =
 /* The advanced differences, for the summary: not the tower's switch,
    which is on the sheet. */
 function advCount() {
-  return Object.keys(advOverrides()).filter((k) => k !== "enable_prime_tower").length;
+  return Object.keys(advOverridesOwn()).filter((k) => k !== "enable_prime_tower").length;
 }
 
 /* Machine profile changed: its remembered differences come back. */
@@ -589,7 +607,8 @@ function advSet(k, v) {
    walls, infill, the tower's wall (`tower`: when it is printed) — as the
    engine gets them: { key: head }. */
 function advHeads({ tower = true } = {}) {
-  const o = advOverrides();
+  // The user's own: the automatic tower wall is one of the plate's heads.
+  const o = advOverridesOwn();
   const out = {};
   for (const k of ADV_FILAMENT) {
     const v = +o[k];
@@ -632,15 +651,17 @@ function advTowerHeads() {
   });
 }
 
-/* The tower shared by materials that do not bond (spoolcheck.js): it
-   comes off or collapses. Said above the Slice button, with the fixes the
-   engine allows (one tower per plate): no tower — the U1's tower only
-   primes the nozzle, ooze prevention covers the rest — or its outer wall
-   in one material, the wiki's advice (the inside still mixes). */
+/* The tower shared by materials that do not bond (spoolcheck.js). Since
+   Snapmaker Orca 2.4.1 each purges into its own block, and with the outer
+   wall in one of them (chosen, or advTowerAutoWall) they never meet (D2):
+   said above the Slice button as information, with the other walls, no
+   tower and one tower per material. Warned only when the chosen wall's
+   head prints none of the plate's known materials. */
 function advRenderTower() {
   const box = $("s-tower");
   if (!box) return;
-  const wall = +advVal("wipe_tower_filament") > 0 ? +advVal("wipe_tower_filament") - 1 : null;
+  const chosen = +advVal("wipe_tower_filament") > 0 ? +advVal("wipe_tower_filament") - 1 : null;
+  const wall = chosen ?? advTowerAutoWall();
   const a = spTowerAdvice({ heads: advTowerHeads(), tower: advTowerOn(), wall });
   const heads = (g) => g.heads.map((n) => "T" + n).join(", ");
   // One tower per material, Prepare's choice too (prepare-pillars.js).
@@ -658,8 +679,12 @@ function advRenderTower() {
     const off = `<button class="btn small" data-tower="off">${esc(tr("slice.tower.off"))}</button>`;
     if (a.state === "walled") {
       const g = a.families.find((x) => x.heads.includes(wall));
-      html = `<span class="sl-tower-t">${tr("slice.tower.walled", { m: `<b>${esc(g.family)}</b>`, t: `T${wall}` })}</span>
-        <span class="sl-tower-acts">${off}${material}<button class="btn small" data-tower="undo">${esc(tr("slice.tower.undo"))}</button></span>`;
+      const others = a.families
+        .filter((x) => x !== g)
+        .map((x) => `<button class="btn small" data-tower-wall="${x.heads[0]}">${esc(tr("slice.tower.wall", { m: x.family, t: `T${x.heads[0]}` }))}</button>`)
+        .join("");
+      html = `<span class="sl-tower-t">${tr("slice.tower.apart", { m: `<b>${esc(g.family)}</b>`, t: `T${wall}` })}</span>
+        <span class="sl-tower-acts">${others}${off}${material}</span>`;
     } else {
       const walls = a.families
         .map((g) => `<button class="btn small" data-tower-wall="${g.heads[0]}">${esc(tr("slice.tower.wall", { m: g.family, t: `T${g.heads[0]}` }))}</button>`)
@@ -667,7 +692,7 @@ function advRenderTower() {
       html = `<span class="sl-tower-t">${tr("slice.tower.conflict", { list })}</span><span class="sl-tower-acts">${off}${material}${walls}</span>`;
     }
   }
-  box.classList.toggle("info", multiHead() && prPillarsShown());
+  box.classList.toggle("info", multiHead() && (prPillarsShown() || a?.state === "walled"));
   // Rewritten only when it changes (the summary is refreshed often): a
   // focused button keeps its focus, the screen reader is not repeated.
   if (html === ADV.tower) return;
@@ -686,7 +711,6 @@ $("s-tower")?.addEventListener("click", (e) => {
   if (!b) return;
   if (b.dataset.tower === "off") advSet("enable_prime_tower", "0");
   else if (b.dataset.tower === "material" || b.dataset.tower === "single") prTowerSetKind(b.dataset.tower);
-  else if (b.dataset.tower === "undo") advSet("wipe_tower_filament", null);
   else advSet("wipe_tower_filament", String(+b.dataset.towerWall + 1));
 });
 
@@ -830,7 +854,7 @@ async function advSaveGo() {
   }
   if (exists && !(await confirmDelete(tr("slice.adv.save.replace_title"), tr("slice.adv.save.replace_text", { name }), tr("slice.adv.save.replace")))) return;
   try {
-    await invoke("slice_save_process", { name, base, simple: currentSimple(), overrides: { ...advOverrides(), ...spdOverrides() } });
+    await invoke("slice_save_process", { name, base, simple: currentSimple(), overrides: { ...advOverridesOwn(), ...spdOverrides() } });
   } catch (e) {
     $("advsave-msg").textContent = String(e);
     $("advsave-msg").className = "pf-test err";

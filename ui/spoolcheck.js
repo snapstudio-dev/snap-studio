@@ -268,12 +268,18 @@ function spTowerAdvice({ heads, tower, wall = null }) {
     if (g) g.heads.push(h.n);
     else families.push({ family: f, heads: [h.n] });
   }
-  // The outer wall in one of them: the inside still mixes, said, not urged.
+  // The outer wall in one of them: with 2.4.1's blocks (one per category),
+  // the materials no longer meet (plans/engine-orca-2.4.1.md, T2).
   return { state: wall != null && used.some((h) => h.n === wall) ? "walled" : "conflict", pairs, families };
 }
 
+/* The head that prints the tower's outer wall when none is chosen and the
+   materials do not bond (D2): the first head of the first material, in the
+   plate's order. */
+const spTowerWallHead = (advice) => advice?.families?.[0]?.heads?.[0] ?? null;
+
 if (typeof module !== "undefined") {
-  module.exports = { SP_COLOR_TOL, SP_CATEGORY, spCategory, spBonds, spTowerAdvice, spMaterialFamily, spMaterialFromName, spColorDelta, spExpected, spLoaded, spReasons, spMismatches, spRemap, spSuggest, spHeadOf, spDefaults };
+  module.exports = { SP_COLOR_TOL, SP_CATEGORY, spCategory, spBonds, spTowerAdvice, spTowerWallHead, spMaterialFamily, spMaterialFromName, spColorDelta, spExpected, spLoaded, spReasons, spMismatches, spRemap, spSuggest, spHeadOf, spDefaults };
 }
 
 /* ------------------------------------------------------------ the sheet */

@@ -137,6 +137,9 @@ assert.deepEqual(
 }
 
 // The prime tower's advice.
+// The tower's automatic outer wall (D2): the first material's first head.
+assert.equal(S.spTowerWallHead(S.spTowerAdvice({ tower: true, heads: [{ n: 2, material: "PETG" }, { n: 0, material: "PLA" }, { n: 3, material: "PETG HF" }] })), 2);
+assert.equal(S.spTowerWallHead(null), null, "nothing to say: the engine picks");
 const h = (n, material) => ({ n, material });
 assert.equal(S.spTowerAdvice({ tower: false, heads: [h(0, "PLA"), h(1, "PETG")] }), null, "no tower, nothing to say");
 assert.equal(S.spTowerAdvice({ tower: true, heads: [h(0, "PLA")] }), null, "one head");
