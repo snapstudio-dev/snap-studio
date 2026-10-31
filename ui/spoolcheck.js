@@ -218,16 +218,23 @@ function spDefaults(expected, slots) {
 
 /* ------------------------------------------------------------ bonding */
 
+/* Snapmaker Orca's adhesiveness category of a family
+   (`filament_adhesiveness_category`, from its fdm_filament_<type>_category
+   base profiles, 2.4.1): its prime tower gives each category a block of
+   its own, and two families bond when they share one. The engine's
+   default is 100 (PLA's). Kept equal to presets.rs ADHESIVENESS, which
+   sends it (scripts/test-spoolcheck.js checks). */
+const SP_CATEGORY = { PLA: 100, ABS: 200, ASA: 200, PETG: 300, PET: 300, PCTG: 300, PA: 400, PC: 500, TPU: 600, PEBA: 600, PVA: 704, BVOH: 797 };
+const spCategory = (material) => SP_CATEGORY[spMaterialFamily(material)] ?? null;
+
 /* Whether two material families bond to each other, layer on layer: what
    a prime tower shared by several heads needs (#35), and a plate under a
-   material (#16). Same family: they bond; the pairs below by experience
+   material (#16). Two families with a category: when they share it. For
+   the others, same family: they bond; the pairs below by experience
    (Snapmaker's wiki, slicer guides); any other pair: not known, never
    warned about. */
-const SP_BOND = [["ABS", "ASA"], ["PETG", "PCTG"], ["PETG", "PET"], ["PCTG", "PET"], ["TPU", "TPE"], ["PLA", "PVA"]];
-const SP_NO_BOND = [
-  ["PLA", "PETG"], ["PLA", "PCTG"], ["PLA", "PET"], ["PLA", "TPU"], ["PLA", "TPE"], ["PLA", "ABS"], ["PLA", "ASA"],
-  ["PETG", "TPU"], ["PETG", "TPE"], ["PCTG", "TPU"], ["PCTG", "TPE"], ["PET", "TPU"], ["PET", "TPE"],
-];
+const SP_BOND = [["TPU", "TPE"]];
+const SP_NO_BOND = [["PLA", "TPE"], ["PETG", "TPE"], ["PCTG", "TPE"], ["PET", "TPE"]];
 const spPair = (list, a, b) => list.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
 
 /* true: they bond; false: they do not; null: not known (or a material
@@ -235,6 +242,7 @@ const spPair = (list, a, b) => list.some(([x, y]) => (x === a && y === b) || (x 
 function spBonds(a, b) {
   const fa = spMaterialFamily(a), fb = spMaterialFamily(b);
   if (!fa || !fb) return null;
+  if (fa in SP_CATEGORY && fb in SP_CATEGORY) return SP_CATEGORY[fa] === SP_CATEGORY[fb];
   if (fa === fb || spPair(SP_BOND, fa, fb)) return true;
   return spPair(SP_NO_BOND, fa, fb) ? false : null;
 }
@@ -265,7 +273,7 @@ function spTowerAdvice({ heads, tower, wall = null }) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { SP_COLOR_TOL, spBonds, spTowerAdvice, spMaterialFamily, spMaterialFromName, spColorDelta, spExpected, spLoaded, spReasons, spMismatches, spRemap, spSuggest, spHeadOf, spDefaults };
+  module.exports = { SP_COLOR_TOL, SP_CATEGORY, spCategory, spBonds, spTowerAdvice, spMaterialFamily, spMaterialFromName, spColorDelta, spExpected, spLoaded, spReasons, spMismatches, spRemap, spSuggest, spHeadOf, spDefaults };
 }
 
 /* ------------------------------------------------------------ the sheet */

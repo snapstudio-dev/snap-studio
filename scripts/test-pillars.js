@@ -15,10 +15,16 @@ assert.deepStrictEqual(keys(P.pmGroups([h(0, "ABS"), h(1, "ASA")])), ["ABS+ASA:0
 assert.deepStrictEqual(keys(P.pmGroups([h(0, "PETG"), h(1, "PCTG"), h(2, "PET")])), ["PETG+PCTG+PET:0,1,2"]);
 assert.deepStrictEqual(keys(P.pmGroups([h(0, "PLA"), h(1, "PLA-CF"), h(3, "PLA Silk")])), ["PLA:0,1,3"], "one family");
 // A pair whose bonding is not known: separate pillars.
-assert.strictEqual(require("../ui/spoolcheck.js").spBonds("PLA", "PC"), null);
+assert.strictEqual(require("../ui/spoolcheck.js").spBonds("PLA", "PPS"), null);
+assert.deepStrictEqual(keys(P.pmGroups([h(0, "PLA"), h(1, "PPS")])), ["PLA:0", "PPS:1"]);
+// Separate categories since Snapmaker Orca 2.4.1 (D4): PC, and PVA, no
+// longer with PLA.
 assert.deepStrictEqual(keys(P.pmGroups([h(0, "PLA"), h(1, "PC")])), ["PLA:0", "PC:1"]);
-// Cliques: PLA bonds with PVA, PETG does not with PLA; PVA joins PLA.
-assert.deepStrictEqual(keys(P.pmGroups([h(0, "PLA"), h(1, "PETG"), h(2, "PVA")])), ["PLA+PVA:0,2", "PETG:1"]);
+assert.deepStrictEqual(keys(P.pmGroups([h(0, "PLA"), h(1, "PETG"), h(2, "PVA")])), ["PLA:0", "PETG:1", "PVA:2"]);
+// Cliques: TPU bonds with PEBA (its category) and with TPE (a pair known
+// by experience), PLA with none of them; TPE and PEBA: not known, apart.
+assert.deepStrictEqual(keys(P.pmGroups([h(0, "PLA"), h(1, "TPU"), h(3, "PEBA")])), ["PLA:0", "TPU+PEBA:1,3"]);
+assert.deepStrictEqual(keys(P.pmGroups([h(0, "PLA"), h(1, "TPU"), h(2, "TPE"), h(3, "PEBA")])), ["PLA:0", "TPU+TPE:1,2", "PEBA:3"]);
 // A head with no known material: alone, keyed by its head.
 assert.deepStrictEqual(keys(P.pmGroups([h(0, "PLA"), h(1, ""), h(2, "?")])), ["PLA:0", "T1:1", "T2:2"]);
 assert.strictEqual(P.pmGroups([h(1, "")])[0].family, null);
@@ -31,7 +37,8 @@ assert.strictEqual(P.pmList(P.pmGroups([h(0, "PLA"), h(1, "PLA"), h(2, "PETG")])
 
 assert.strictEqual(P.pmOffered([h(0, "PLA"), h(1, "PETG")]), true);
 assert.strictEqual(P.pmOffered([h(0, "PLA"), h(1, "PLA")]), false, "materials that bond");
-assert.strictEqual(P.pmOffered([h(0, "PLA"), h(1, "PC")]), false, "unknown pairs: not offered");
+assert.strictEqual(P.pmOffered([h(0, "PLA"), h(1, "PPS")]), false, "unknown pairs: not offered");
+assert.strictEqual(P.pmOffered([h(0, "PLA"), h(1, "PC")]), true, "PC: its own category since 2.4.1 (D4)");
 assert.strictEqual(P.pmOffered([h(0, "PLA"), h(1, "")]), false);
 assert.strictEqual(P.pmOffered([h(0, "PLA")]), false);
 const on = T.ptState({ heads: 2, on: true });

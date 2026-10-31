@@ -126,6 +126,65 @@ pub fn filament_extra(color: Option<&str>) -> Map<String, Value> {
     out
 }
 
+/// Snapmaker Orca's adhesiveness category of a material family
+/// (`filament_adhesiveness_category`, from its `fdm_filament_<type>_category`
+/// base profiles, 2.4.1): the prime tower gives each category a block of its
+/// own. Kept equal to ui/spoolcheck.js `SP_CATEGORY` (scripts/test-spoolcheck.js
+/// checks).
+const ADHESIVENESS: &[(&str, i64)] = &[
+    ("PLA", 100),
+    ("ABS", 200),
+    ("ASA", 200),
+    ("PETG", 300),
+    ("PET", 300),
+    ("PCTG", 300),
+    ("PA", 400),
+    ("PC", 500),
+    ("TPU", 600),
+    ("PEBA", 600),
+    ("PVA", 704),
+    ("BVOH", 797),
+];
+
+/// Family of a material type ("PETG-CF" → PETG, "Nylon" → PA), as
+/// ui/spoolcheck.js `spMaterialFamily` reads it: the longer families first,
+/// so PETG is not taken for PET, nor PCTG for PC.
+fn material_family(material: &str) -> Option<&'static str> {
+    const FAMILIES: &[&str] = &["PETG", "PCTG", "PEBA", "BVOH", "PLA", "PET", "ABS", "ASA", "TPU", "PVA", "PA", "PC"];
+    let up = material.trim().to_uppercase();
+    let word = up.split(|c: char| c.is_whitespace() || "_/+-".contains(c)).next().unwrap_or("");
+    match word {
+        "NYLON" | "PA6" | "PA12" | "PAHT" => return Some("PA"),
+        "FLEX" => return Some("TPU"),
+        _ => {}
+    }
+    FAMILIES.iter().copied().find(|f| word.starts_with(f))
+}
+
+/// D6: the adhesiveness category of a filament whose profile does not set
+/// one (a filament that does not inherit a Snapmaker base profile), from its
+/// type: otherwise the engine would put it in PLA's block (its default,
+/// 100). A type without a known category gets none: the engine's default.
+fn set_adhesiveness_category(cfg: &mut Map<String, Value>) {
+    if cfg.contains_key("filament_adhesiveness_category") {
+        return;
+    }
+    let material = cfg.get("filament_type").and_then(|t| t.as_array().and_then(|a| a.first()).or(Some(t))).and_then(Value::as_str);
+    // Without a type, the family its name says ("Brand PETG Basic @U1").
+    let family = match material {
+        Some(m) => material_family(m),
+        None => cfg
+            .get("name")
+            .and_then(Value::as_str)
+            .map(|n| n.split('@').next().unwrap_or(n))
+            .and_then(|n| n.split(|c: char| c.is_whitespace() || "_/()".contains(c)).find_map(material_family)),
+    };
+    let category = family.and_then(|f| ADHESIVENESS.iter().find(|(name, _)| *name == f)).map(|(_, c)| *c);
+    if let Some(c) = category {
+        cfg.insert("filament_adhesiveness_category".into(), Value::Array(vec![Value::String(c.to_string())]));
+    }
+}
+
 /// Plate type: value expected by the engine, label shown.
 #[derive(Serialize, Clone, Debug)]
 pub struct BedType {
@@ -664,6 +723,7 @@ pub fn prepare(
         }
         let mut cfg = index.resolve(name)?;
         declare_compatible(&mut cfg, machine);
+        set_adhesiveness_category(&mut cfg);
         for (k, v) in filament_extra(colors.get(i).and_then(|c| c.as_deref())) {
             cfg.insert(k, v);
         }
@@ -936,7 +996,7 @@ mod tests {
 
 #[cfg(test)]
 mod inheritance_tests {
-    use super::{Entry, Index, Kind};
+    use super::{Entry, Index, Kind, Map, Value};
     use std::collections::HashMap;
 
     #[test]
@@ -967,6 +1027,63 @@ mod inheritance_tests {
         let whole = idx.flatten("Whole").unwrap();
         assert_eq!(whole["wall_loops"], "2");
         assert_eq!(whole["layer_height"], "0.2");
+    }
+
+    /// D6: a filament without the category gets its family's; one with it
+    /// keeps it; a material without a known category gets none.
+    #[test]
+    fn adhesiveness_category_from_the_material() {
+        let cat = |cfg: serde_json::Value| {
+            let mut m = cfg.as_object().unwrap().clone();
+            super::set_adhesiveness_category(&mut m);
+            m.get("filament_adhesiveness_category").cloned()
+        };
+        let one = |c: &str| Some(serde_json::json!([c]));
+        assert_eq!(cat(serde_json::json!({"filament_type": ["PETG"]})), one("300"));
+        assert_eq!(cat(serde_json::json!({"filament_type": ["PETG-CF"]})), one("300"), "not PET's prefix");
+        assert_eq!(cat(serde_json::json!({"filament_type": ["PCTG"]})), one("300"), "not PC");
+        assert_eq!(cat(serde_json::json!({"filament_type": ["PC"]})), one("500"));
+        assert_eq!(cat(serde_json::json!({"filament_type": ["PA12-CF"]})), one("400"));
+        assert_eq!(cat(serde_json::json!({"filament_type": ["TPU"]})), one("600"));
+        assert_eq!(cat(serde_json::json!({"filament_type": ["PLA"]})), one("100"));
+        assert_eq!(cat(serde_json::json!({"filament_type": "ASA"})), one("200"), "a plain string too");
+        assert_eq!(
+            cat(serde_json::json!({"filament_type": ["PETG"], "filament_adhesiveness_category": ["100"]})),
+            one("100"),
+            "the profile's kept"
+        );
+        assert_eq!(cat(serde_json::json!({"filament_type": ["PPS"]})), None, "no known category: the engine's default");
+        assert_eq!(cat(serde_json::json!({"filament_type": ["TPE"]})), None);
+        assert_eq!(cat(serde_json::json!({})), None);
+        assert_eq!(cat(serde_json::json!({"name": "Brand PETG Basic @U1"})), one("300"), "no type: its name");
+    }
+
+    /// What the engine gets: each filament's JSON written by `prepare`
+    /// carries its category, the profile's when it has one.
+    #[test]
+    fn prepare_sends_each_filaments_category() {
+        let e = |kind, json: serde_json::Value| Entry { kind, json, user: true };
+        let mut entries = HashMap::new();
+        entries.insert("M".to_string(), e(Kind::Machine, serde_json::json!({"name": "M", "nozzle_diameter": ["0.4", "0.4", "0.4"]})));
+        entries.insert("P".to_string(), e(Kind::Process, serde_json::json!({"name": "P", "layer_height": "0.2"})));
+        entries.insert("Own PETG".to_string(), e(Kind::Filament, serde_json::json!({"name": "Own PETG", "filament_type": ["PETG"]})));
+        entries.insert(
+            "Base PLA".to_string(),
+            e(Kind::Filament, serde_json::json!({"name": "Base PLA", "filament_type": ["PLA"], "filament_adhesiveness_category": ["100"]})),
+        );
+        entries.insert("Odd".to_string(), e(Kind::Filament, serde_json::json!({"name": "Odd", "filament_type": ["PPS"]})));
+        let idx = Index { entries, renamed: HashMap::new(), selected: Default::default() };
+        let dir = std::env::temp_dir().join("snapstudio-category-sent");
+        let _ = std::fs::remove_dir_all(&dir);
+        let names = ["Own PETG".to_string(), "Base PLA".to_string(), "Odd".to_string()];
+        let p = super::prepare(&idx, &dir, "M", "P", &names, &[], &Map::new()).unwrap();
+        let sent: Vec<Option<Value>> = p
+            .filaments
+            .iter()
+            .map(|f| serde_json::from_slice::<Value>(&std::fs::read(f).unwrap()).unwrap().get("filament_adhesiveness_category").cloned())
+            .collect();
+        assert_eq!(sent, [Some(serde_json::json!(["300"])), Some(serde_json::json!(["100"])), None]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Snapmaker Orca 2.4.1 ships profiles that start with a UTF-8 BOM (the
