@@ -4,7 +4,7 @@
    The tower is placed as the engine places it: `wipe_tower_x` /
    `wipe_tower_y` are its front-left corner, `wipe_tower_rotation_angle`
    turns it counter-clockwise around that corner (checked on Snapmaker Orca
-   2.4.0, slice.rs engine_prime_tower_position). Its box is what it prints —
+   2.4.0 and 2.4.1, slice.rs engine_prime_tower_position). Its box is what it prints —
    brim and ribs included — in its own frame: from (x0, y0), relative to the
    corner, w × d mm, h high. */
 

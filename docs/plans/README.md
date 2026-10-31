@@ -13,7 +13,7 @@ lists below.
 | [prime-tower-per-material.md](prime-tower-per-material.md) | One prime tower per material: pillars per group of materials that bond (concentric rings, one per head), engine tower off, list order | Implemented in draft PR [#37](https://github.com/kameka22/snap-studio/pull/37); checks on the U1 left (see the plan) |
 | [languages.md](languages.md) | German, Spanish, Brazilian Portuguese and Italian (wave 1); Japanese, Simplified Chinese and Korean next (wave 2); Weblate for review | Wave 1 implemented in draft PR [#72](https://github.com/kameka22/snap-studio/pull/72) |
 | [printer-files-multi-delete.md](printer-files-multi-delete.md) | Printer files: right-click → Delete on picked files deletes them all and keeps the other picks; Ctrl/Cmd and Shift-click picking outside Select mode | Merged in [#84](https://github.com/kameka22/snap-studio/pull/84), in 0.18.0; checks on a printer left (see the plan) |
-| [engine-orca-2.4.1.md](engine-orca-2.4.1.md) | Bundled engine Snapmaker Orca 2.4.0 → 2.4.1: the engine's prime tower in blocks per adhesiveness category (vs #35's warning and #37's pillars), changed defaults, U1 profile changes, 3MF compatibility | Written, awaiting a go; draft PR |
+| [engine-orca-2.4.1.md](engine-orca-2.4.1.md) | Bundled engine Snapmaker Orca 2.4.0 → 2.4.1: the engine's prime tower in blocks per adhesiveness category (vs #35's warning and #37's pillars), changed defaults, U1 profile changes, 3MF compatibility | Implemented in draft PR [#86](https://github.com/kameka22/snap-studio/pull/86); engine release (kameka22), D2 and a real U1 print left |
 
 ## Planned
 

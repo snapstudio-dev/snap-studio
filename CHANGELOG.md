@@ -11,6 +11,26 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Added
+- **Settings from Snapmaker Orca 2.4.1 in the slice sheet**: top and bottom
+  paint penetration layers (Surfaces), the minimum support contact area
+  (Supports), internal ribs for the prime tower (Multi-material), and the
+  first layer's travel acceleration and jerk (Quality) (#86).
+
+### Changed
+- **Slicing engine updated to Snapmaker Orca 2.4.1** (#86):
+  - the prime tower now gives each kind of material its own block inside
+    the tower, by default. Prepare's tower estimate follows its new size and
+    place, and the tower's materials are matched to the engine's own
+    material categories (which materials bond with each other now follows
+    them);
+  - bridges follow Snapmaker's new defaults: in the U1's 0.20 mm Standard
+    profile, full bridge flow and density, and with supports on, bridges of
+    any length get supports (bridges up to 10 mm used to be left free);
+  - a few filament profiles come with new bed temperatures, from
+    Snapmaker's profiles;
+  - the support threshold angle starts at 1°: the engine refuses 0.
+
 ## [0.18.0] — 2026-10-31
 
 ### Added

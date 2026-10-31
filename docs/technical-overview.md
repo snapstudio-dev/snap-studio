@@ -16,9 +16,15 @@ plan: [plans/prime-tower-per-material.md](plans/prime-tower-per-material.md)).
 
 - *Engine*: Snapmaker Orca, like upstream OrcaSlicer, builds **one prime
   tower per plate** (`Print::m_wipe_tower_data`, one `wipe_tower_x/y` per
-  plate). Every head primes on it, so materials that don't bond with each
-  other are stacked and the tower can come off. Separate towers are an open
-  request upstream ([OrcaSlicer #8474](https://github.com/SoftFever/OrcaSlicer/issues/8474)).
+  plate). Since 2.4.1 that tower has **one block per adhesiveness
+  category** of material (`filament_adhesiveness_category`): each material
+  purges into its own block. Its outer wall and the seam between blocks are
+  still printed by whichever head ends the layer, so materials that don't
+  bond still meet there, unless one head prints the whole wall
+  (`wipe_tower_filament`; measured in
+  [plans/engine-orca-2.4.1.md](plans/engine-orca-2.4.1.md), T2). Separate
+  towers are an open request upstream
+  ([OrcaSlicer #8474](https://github.com/SoftFever/OrcaSlicer/issues/8474)).
 - *Snap Studio*: groups the plate's heads into cliques of materials that
   bond (`pmGroups`, bonding table in `ui/spoolcheck.js`), and generates one
   pillar per group, with one concentric ring per head (2 mm rings, an 8 mm
@@ -111,7 +117,7 @@ No cloud and no account: everything goes over the LAN to the U1's own **Moonrake
 - **Setting labels, tooltips and translations**: generated from Snapmaker Orca's sources (`Tab.cpp`, `PrintConfig.cpp`, `.po` files) by `scripts/gen-orca-settings.py`. None of it is written by hand.
 - **Speed slider** (50 to 120 %): speeds × f and accelerations × f². At 100 %, the G-code is exactly the profile's.
 - **Color mixing**: the preview color uses Snapmaker Orca's own pigment mixer (`filament_mixer_model.h`, MIT), ported as is in `mixcolor.rs` so that the swatch matches the slicer.
-- **Material bonding** (tower warnings, one tower per material, mixing): a small table in `ui/spoolcheck.js`. Same family bonds, known pairs come from Snapmaker's wiki and slicer guides, and **unknown pairs are never warned about**. The pillar sizes come from a feasibility slice documented in [plans/prime-tower-per-material.md](plans/prime-tower-per-material.md).
+- **Material bonding** (tower warnings, one tower per material, mixing): Snapmaker Orca's adhesiveness categories (2.4.1), in `ui/spoolcheck.js` and `presets.rs`, which also sends each filament's category to the engine when its profile has none. Two families bond when they share a category; for families without one (TPE…), known pairs come from Snapmaker's wiki and slicer guides, and **unknown pairs are never warned about**. The pillar sizes come from a feasibility slice documented in [plans/prime-tower-per-material.md](plans/prime-tower-per-material.md).
 - **Spool check**: CIEDE2000 color distance with a tolerance of 10 between the file's colors and the loaded spools.
 - **Maintenance intervals**: head contacts every 100,000 tool changes, following Snapmaker's figure. The other intervals are prudent defaults, and the app says so, since Snapmaker gives none.
 - **Bed-mesh thresholds**: 0.5 / 1 mm by default, and manual leveling is only suggested above 2 mm, since the U1's mesh compensates below that.

@@ -86,7 +86,7 @@ fn candidates(k: &Known) -> Vec<PathBuf> {
 #[cfg(all(unix, not(target_os = "macos")))]
 fn candidates(k: &Known) -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = k.linux.iter().filter_map(|c| crate::util::which(c)).collect();
-    // AppImage dropped in a usual folder: "Snapmaker_Orca_Linux_V2.4.0.AppImage".
+    // AppImage dropped in a usual folder: "Snapmaker_Orca_Linux_V2.4.1.AppImage".
     let mut dirs_ = vec![PathBuf::from("/opt")];
     if let Some(h) = dirs::home_dir() {
         for d in ["Applications", "Downloads", "Téléchargements", ".local/bin", "bin"] {

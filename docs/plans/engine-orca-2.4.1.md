@@ -1,8 +1,11 @@
 # Engine: Snapmaker Orca 2.4.0 → 2.4.1
 
-**State: plan, decisions taken on 2026-10-31 (D2 after test T2), awaiting the implementation go.** Nothing in this plan is implemented: the
-bundled engine stays at 2.4.0 (`src-tauri/engine.json`), no engine
-workflow was started and no `engine-orca-2.4.1` release exists.
+**State: implemented in draft PR #86** (steps 2–10 and the review's
+gaps within D1–D7), **except step 1**: the `engine-orca-2.4.1` release is
+not published and `src-tauri/engine.json` still points at 2.4.0 —
+kameka22 runs `scripts/engine.sh 2.4.1` once #86 is merged. D2 waits for
+kameka22's decision on T2's answer (finding 9); the support transition
+settings (finding 11) too.
 
 ## Goal
 
@@ -555,3 +558,38 @@ review). Links point at the tags. "Within D1–D7" gaps are implemented in
   (finding 8).
 - Implementation step 5: the category goes into the filament JSON
   (finding 5).
+
+## Test results on 2.4.1 (#86)
+
+Run on macOS with the official 2.4.1 package (`SNAPSTUDIO_ENGINE`), the
+bundled 2.4.0 for comparison.
+
+- **Engine tests** (`cargo test --lib <name> -- --ignored`), all pass on
+  2.4.1: `engine_smoke` (the workflow's test slice; it failed before
+  finding 1's fix), `engine_prime_tower_position` (T5),
+  `engine_material_pillars` (T3: each ring by its own head, pillars before
+  the model, heights), `engine_advanced_overrides`,
+  `engine_speed_overrides`, `engine_virtual_head_alternates`,
+  `engine_virtual_head_smooth_mix`, `engine_painted` (a painted
+  multi-color 3MF: colors and heads, fix 39) and `engine_progress_trace`
+  (the stages are still read).
+- **T1**: `engine_tower_sizes`, findings 7 and 8; `ptEstimate`
+  recalibrated, `scripts/test-tower.js` holds the 2.4.1 measurements.
+- **T2**: finding 9.
+- **T6**: a 3MF written by the 2.4.1 command line (`--export-3mf`) is read
+  by Snap Studio as before (application, filaments, extruders, tower
+  place, the mesh's 24,248 triangles); its configs carry no BOM. 2.4.1
+  refuses to load a project whose own settings are out of its ranges
+  (`tree_support_wall_count` −1, `solid_infill_filament` 0, in two
+  downloaded 3MF files): Snap Studio is not concerned, it sends its own 3MF
+  and settings. Opening a Snap Studio project in Orca 2.4.0's window was not
+  tried (no change to our 3MF writers).
+- **T7**: an arch with a 30 mm and a 6 mm bridge, supports on, 0.20 mm
+  Standard: 2.4.1 extrudes 4 % more support (10,642 → 11,115 mm) and 3 %
+  less bridge; 2.4.0 already supported both bridges of this model.
+- **Support threshold angle 0**: 2.4.1 refuses it and the slice fails
+  ("not in range [1,90]"); the slice sheet now starts the field at 1 and
+  raises a remembered 0.
+- **T4** (a real U1 print, block tower against pillars, `M104` tool
+  changes) is left for the machine.
+

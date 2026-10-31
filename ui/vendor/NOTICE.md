@@ -27,8 +27,8 @@ third-party component: listed here so its origin is clear.
 `ui/assets/slice-icons/orca/` (and their copies in the generated
 `ui/slice-icons.js`) come from
 [Snapmaker/OrcaSlicer](https://github.com/Snapmaker/OrcaSlicer),
-`resources/images/`, at `v2.4.0-beta` (b1831e5), the source of the bundled
-Snapmaker Orca 2.4.0. License: AGPL-3.0; these files keep their terms
+`resources/images/`, at `v2.4.0-beta` (b1831e5), the source of Snapmaker
+Orca 2.4.0 (unchanged in the bundled 2.4.1). License: AGPL-3.0; these files keep their terms
 (GPLv3 §13 allows the combination).
 
 `param_rectilinear.svg`, `param_rectilinear-grid.svg`, `param_honeycomb.svg`,
