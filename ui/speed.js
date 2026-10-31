@@ -43,7 +43,8 @@ const SPD_ROWS = [
 ];
 const SPD_KEYS = SPD_ROWS.flatMap((r) => r.keys);
 
-/* Engine defaults (Snapmaker Orca 2.4.0, PrintConfig.cpp) for the keys a
+/* Engine defaults (Snapmaker Orca 2.4.1, PrintConfig.cpp; unchanged since
+   2.4.0) for the keys a
    profile may leave out; the U1 profiles leave out inner_wall_acceleration
    and sparse_infill_acceleration. A percentage follows another key
    (sparse_infill_acceleration: of default_acceleration) and is left as is. */

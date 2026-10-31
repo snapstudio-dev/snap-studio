@@ -4,7 +4,7 @@
    Supports, Brim, Seam and Multi-material each open a sub-panel inside the
    sheet. Every field is an Orca process key, described by
    `assets/orca-settings.<lang>.json` (label, unit, values, tooltip) and
-   checked against the shipped engine (Snapmaker Orca 2.4.0). Only values
+   checked against the shipped engine (Snapmaker Orca 2.4.1). Only values
    that differ from the chosen profile are kept, in `SL.adv`, remembered per
    machine profile, and sent to the engine as `overrides` (which win over the
    profile and the quick settings, see slice.rs). */
@@ -12,7 +12,7 @@
 const ADV = { schema: null, defaults: {}, cat: null, seq: 0 };
 SL.adv = SL.adv || {};
 
-/* Engine defaults (Snapmaker Orca 2.4.0, PrintConfig.cpp) for the keys a
+/* Engine defaults (Snapmaker Orca 2.4.1, PrintConfig.cpp) for the keys a
    profile may leave out: the engine then applies these. */
 const ADV_ENGINE_DEFAULTS = {
   seam_position: "aligned", staggered_inner_seams: "0", seam_gap: "10%",
@@ -50,6 +50,9 @@ const ADV_ENGINE_DEFAULTS = {
   // The tower's shape, for its estimate in Prepare (prepare-tower.js).
   wipe_tower_wall_type: "rectangle", wipe_tower_rib_width: "8", wipe_tower_extra_rib_length: "0",
   wipe_tower_extra_spacing: "100%",
+  // Added by Snapmaker Orca 2.4.1.
+  top_color_penetration_layers: "4", bottom_color_penetration_layers: "3", support_interface_min_area: "0.25",
+  prime_tower_enable_framework: "0", first_layer_travel_acceleration: "100%", first_layer_travel_jerk: "100%",
 };
 /* The prime tower's switch is the plate's (prepare-tower.js), never the
    profile's: a new plate starts without a tower. */
@@ -74,6 +77,10 @@ const ADV_STEPS = {
   overhang_1_4_speed: 1, overhang_2_4_speed: 1, overhang_3_4_speed: 1, overhang_4_4_speed: 1, ironing_speed: 1,
   infill_direction: 1, minimum_sparse_infill_area: 1, skirt_distance: 0.5, infill_anchor_max: 1,
 };
+/* Lowest values the engine takes, where the catalog does not say: below,
+   it refuses to slice (support_threshold_angle: 1 since 2.4.1, which
+   refuses 0, "not in range [1,90]"). */
+const ADV_MIN = { support_threshold_angle: 1 };
 /* Units the settings catalog leaves out. */
 const ADV_UNITS = { standby_temperature_delta: "°C", idle_temperature: "°C", infill_anchor_max: "mm" };
 /* Values hidden from a list: handled elsewhere ("no_brim" is the switch) or
@@ -92,7 +99,7 @@ const ADV_CATS = {
     title: "slice.supports",
     groups: [
       { t: "slice.adv.g.support", keys: ["support_type", "support_style", "support_threshold_angle", "support_on_build_plate_only", "support_critical_regions_only", "support_remove_small_overhang"] },
-      { t: "slice.adv.g.interface", keys: ["support_top_z_distance", "support_bottom_z_distance", "support_interface_top_layers", "support_interface_bottom_layers", "support_interface_pattern", "support_interface_spacing"] },
+      { t: "slice.adv.g.interface", keys: ["support_top_z_distance", "support_bottom_z_distance", "support_interface_top_layers", "support_interface_bottom_layers", "support_interface_pattern", "support_interface_spacing", "support_interface_min_area"] },
       { t: "slice.adv.g.base", keys: ["support_base_pattern", "support_base_pattern_spacing", "support_object_xy_distance", "bridge_no_support"] },
       {
         t: "slice.adv.g.tree",
@@ -114,7 +121,9 @@ const ADV_CATS = {
   quality: {
     title: "slice.quality",
     groups: [
-      { t: "slice.adv.g.first_layer", keys: ["initial_layer_print_height"] },
+      // Orca puts the travel ones in its Speed tab; the sheet's Speed panel
+      // scales the profile's speeds, so they join the first layer here.
+      { t: "slice.adv.g.first_layer", keys: ["initial_layer_print_height", "first_layer_travel_acceleration", "first_layer_travel_jerk"] },
       { t: "slice.adv.g.widths", keys: ["line_width", "initial_layer_line_width", "outer_wall_line_width", "top_surface_line_width"] },
       { t: "slice.adv.g.precision", keys: ["elefant_foot_compensation", "xy_hole_compensation", "xy_contour_compensation", "resolution", "enable_arc_fitting"] },
       { t: "slice.adv.g.overhangs", keys: ["detect_overhang_wall", "enable_overhang_speed", "overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed", "bridge_flow", "thick_bridges"] },
@@ -138,7 +147,7 @@ const ADV_CATS = {
   surfaces: {
     title: "slice.adv.surfaces",
     groups: [
-      { t: "slice.adv.g.shells", keys: ["top_shell_layers", "top_shell_thickness", "bottom_shell_layers", "bottom_shell_thickness", "ensure_vertical_shell_thickness"] },
+      { t: "slice.adv.g.shells", keys: ["top_shell_layers", "top_shell_thickness", "bottom_shell_layers", "bottom_shell_thickness", "ensure_vertical_shell_thickness", "top_color_penetration_layers", "bottom_color_penetration_layers"] },
       { t: "slice.adv.g.patterns", keys: ["top_surface_pattern", "bottom_surface_pattern", "internal_solid_infill_pattern"] },
       { t: "slice.adv.g.ironing", keys: ["ironing_type", "ironing_pattern", "ironing_flow", "ironing_spacing", "ironing_speed"] },
     ],
@@ -156,7 +165,7 @@ const ADV_CATS = {
     title: "slice.adv.mm",
     groups: [
       // The tower's switch is on the sheet (#s-tower-sw), as Supports' and Brim's.
-      { t: "slice.adv.g.tower", keys: ["wipe_tower_filament", "prime_tower_width", "prime_volume", "prime_tower_brim_width"] },
+      { t: "slice.adv.g.tower", keys: ["wipe_tower_filament", "prime_tower_width", "prime_volume", "prime_tower_brim_width", "prime_tower_enable_framework"] },
       { t: "slice.adv.g.ooze", keys: ["ooze_prevention", "standby_temperature_delta", "preheat_time", "idle_temperature"] },
       { t: "slice.adv.g.flush", keys: ["flush_into_infill", "flush_into_objects", "flush_into_support"] },
       { t: "slice.adv.g.features", keys: ["wall_filament", "sparse_infill_filament", "solid_infill_filament"] },
@@ -239,6 +248,9 @@ function advOverrides() {
   // details without ironing…) is neither sent nor counted; SL.adv keeps it
   // for when that setting is on again.
   for (const k in o) if (ADV_WHEN[k] && !ADV_WHEN[k]()) delete o[k];
+  // A value kept from before the engine raised its minimum would stop
+  // the slice: the lowest it takes instead.
+  for (const k in ADV_MIN) if (k in o && +o[k] < ADV_MIN[k]) o[k] = ADV_MIN[k];
   for (const k in o) o[k] = String(o[k]);
   return o;
 }
@@ -430,7 +442,8 @@ function advField(k) {
     // Whole numbers and percentages by one, millimetres and the rest by a
     // tenth, unless the setting asks for finer (ADV_STEPS).
     const step = ADV_STEPS[k] ?? (def.type === "int" || pct ? 1 : 0.1);
-    input = `<input type="number" class="field num" step="${step}" data-k="${k}" data-pct="${pct ? 1 : ""}" value="${esc(num)}" /><span class="unit">${esc(pct ? "%" : (def.unit || ADV_UNITS[k] || "").replace(/\s+(?:ou|or)\s+%$/, ""))}</span>`;
+    const min = k in ADV_MIN ? ` min="${ADV_MIN[k]}"` : "";
+    input = `<input type="number" class="field num" step="${step}"${min} data-k="${k}" data-pct="${pct ? 1 : ""}" value="${esc(num)}" /><span class="unit">${esc(pct ? "%" : (def.unit || ADV_UNITS[k] || "").replace(/\s+(?:ou|or)\s+%$/, ""))}</span>`;
   }
   return `<div class="grow-row adv-row${mod ? " mod" : ""}" title="${esc(def.tooltip || "")}">
     <span class="k">${esc(def.label)}${mod ? `<small class="sub">${esc(tr("slice.adv.profile_value", { v: advLabel(k, ADV.defaults[k]) || "—" }))}</small>` : ""}</span>

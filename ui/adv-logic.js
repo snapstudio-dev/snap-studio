@@ -39,7 +39,7 @@ const ADV_LEVEL_GROUPS = new Set(["slice.adv.g.ooze"]);
    list against ADV_CATS). */
 const ADV_LEVEL_KEYS = new Set([
   // Quality
-  "initial_layer_print_height", "line_width", "initial_layer_line_width", "outer_wall_line_width", "top_surface_line_width",
+  "initial_layer_print_height", "first_layer_travel_acceleration", "first_layer_travel_jerk", "line_width", "initial_layer_line_width", "outer_wall_line_width", "top_surface_line_width",
   "elefant_foot_compensation", "xy_hole_compensation", "xy_contour_compensation", "resolution", "enable_arc_fitting",
   "detect_overhang_wall", "enable_overhang_speed", "overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed",
   "overhang_4_4_speed", "bridge_flow", "thick_bridges",
@@ -51,6 +51,7 @@ const ADV_LEVEL_KEYS = new Set([
   "only_one_wall_first_layer", "extra_perimeters_on_overhangs",
   // Surfaces
   "top_shell_layers", "top_shell_thickness", "bottom_shell_layers", "bottom_shell_thickness", "ensure_vertical_shell_thickness",
+  "top_color_penetration_layers", "bottom_color_penetration_layers",
   "top_surface_pattern", "bottom_surface_pattern", "internal_solid_infill_pattern", "ironing_type", "ironing_pattern",
   "ironing_flow", "ironing_spacing", "ironing_speed",
   // Other

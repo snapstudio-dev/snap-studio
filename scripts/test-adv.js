@@ -147,4 +147,55 @@ assert.strictEqual(A.sliceLevelValid(null) || A.sliceLevelValid("full"), false);
   assert.ok(slice.includes("...(virtual_heads.length && vhSmoothOn(PR) ? { smooth_mix: true } : {})"), "smooth_mix in the request, with virtual heads only");
 }
 
+// Snapmaker Orca 2.4.1's new settings (D7): in the groups Orca puts them
+// in, with their engine defaults and the catalog's labels; the support
+// transition ones wait for a decision, the Developer-mode ones never show.
+{
+  const groupOf = (k) => {
+    for (const [cat, c] of Object.entries(catsWith(false))) for (const g of c.groups) if (keysOf(g).includes(k)) return `${cat} / ${g.t}`;
+    return null;
+  };
+  const placed = {
+    top_color_penetration_layers: "surfaces / slice.adv.g.shells",
+    bottom_color_penetration_layers: "surfaces / slice.adv.g.shells",
+    support_interface_min_area: "support / slice.adv.g.interface",
+    prime_tower_enable_framework: "mm / slice.adv.g.tower",
+    first_layer_travel_acceleration: "quality / slice.adv.g.first_layer",
+    first_layer_travel_jerk: "quality / slice.adv.g.first_layer",
+  };
+  const defaults = vm.runInNewContext(`(${src.slice(src.indexOf("const ADV_ENGINE_DEFAULTS = {") + "const ADV_ENGINE_DEFAULTS = ".length, src.indexOf("\n};\n", src.indexOf("const ADV_ENGINE_DEFAULTS = {")) + 2)})`);
+  const catalog = (lang) => JSON.parse(fs.readFileSync(require("path").join(__dirname, `../ui/assets/orca-settings.${lang}.json`), "utf8"));
+  const en = catalog("en"), fr = catalog("fr");
+  for (const [k, where] of Object.entries(placed)) {
+    assert.strictEqual(groupOf(k), where, k);
+    assert.ok(k in defaults, `${k}: an engine default`);
+    assert.ok(en.keys[k]?.label && fr.keys[k]?.label && fr.keys[k].label !== en.keys[k].label, `${k}: labelled in English and French`);
+  }
+  assert.deepStrictEqual([defaults.top_color_penetration_layers, defaults.bottom_color_penetration_layers, defaults.support_interface_min_area], ["4", "3", "0.25"]);
+  assert.deepStrictEqual([defaults.prime_tower_enable_framework, defaults.first_layer_travel_acceleration, defaults.first_layer_travel_jerk], ["0", "100%", "100%"]);
+  // Shells are advanced-only like their group; the others follow theirs.
+  assert.ok(A.ADV_LEVEL_KEYS.has("top_color_penetration_layers") && A.ADV_LEVEL_KEYS.has("first_layer_travel_jerk"));
+  assert.ok(!A.ADV_LEVEL_KEYS.has("support_interface_min_area") && !A.ADV_LEVEL_KEYS.has("prime_tower_enable_framework"));
+  for (const k of ["tree_support_transition_layers", "support_transition_perimeter", "support_transition_speed", "support_transition_flow_ratio", "filament_adhesiveness_category", "enable_tower_interface_features"]) {
+    assert.strictEqual(groupOf(k), null, `${k}: not in the sheet`);
+  }
+  const tabs = (c) => new Set(["process", "filament", "machine"].flatMap((t) => c[t].flatMap((p) => p.groups.flatMap((g) => g.keys))));
+  for (const k of ["filament_adhesiveness_category", "enable_tower_interface_features", "filament_tower_interface_print_temp"]) {
+    assert.ok(!tabs(en).has(k) && en.keys[k], `${k}: defined, out of the details' tabs`);
+  }
+  assert.ok(tabs(en).has("prime_tower_enable_framework") && !tabs(en).has("prime_tower_brim_chamfer"), "Orca's 2.4.1 tower group");
+
+  // The engine refuses a support angle below 1 since 2.4.1: a value kept
+  // from before is raised, the field says so.
+  const body = src.slice(src.indexOf("function advOverrides()"), src.indexOf("\n}\n", src.indexOf("function advOverrides()")) + 3);
+  const min = vm.runInNewContext(`(${src.slice(src.indexOf("const ADV_MIN = ") + "const ADV_MIN = ".length, src.indexOf(";", src.indexOf("const ADV_MIN = ")))})`);
+  const over = (adv) =>
+    vm.runInNewContext(body + ";advOverrides();", {
+      SL: { adv }, ADV_MIN: min, ADV_WHEN: {}, advVal: () => "0", advCatKeysAll: () => [], multiHead: () => true, $: () => ({ checked: true }),
+    });
+  assert.strictEqual(over({ support_threshold_angle: "0" }).support_threshold_angle, "1");
+  assert.strictEqual(over({ support_threshold_angle: "35" }).support_threshold_angle, "35");
+  assert.ok(src.includes('const min = k in ADV_MIN ? ` min="${ADV_MIN[k]}"` : "";'), "the field's minimum");
+}
+
 console.log("adv: ok");
