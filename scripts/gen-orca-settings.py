@@ -42,6 +42,20 @@ PO_DIRS = {"pt-BR": "pt_BR", "zh-Hans": "zh_CN"}
 FIXES = {
     "fr": {
         "Aligned back": "Alignée à l'arrière",
+        # Settings Snapmaker Orca 2.4.1 added, shown in the slice sheet.
+        "Top paint penetration layers": "Couches de pénétration de la peinture (dessus)",
+        "This is  the number of layers of top paint penetration.": "Nombre de couches sur lesquelles la peinture pénètre sous le dessus.",
+        "Bottom paint penetration layers": "Couches de pénétration de la peinture (dessous)",
+        "This is the number of layers of bottom paint penetration.": "Nombre de couches sur lesquelles la peinture pénètre au-dessus du dessous.",
+        "First layer travel": "Déplacements de la première couche",
+        "Acceleration of travel moves on the first layer. If expressed as a percentage it will be calculated based on the travel acceleration. A value of 0 means the printer will use its firmware default.": "Accélération des déplacements sur la première couche. En pourcentage, elle est calculée à partir de l’accélération des déplacements. À 0, l’imprimante utilise la valeur par défaut de son firmware.",
+        "Jerk of travel moves on the first layer. If expressed as a percentage it will be calculated based on the travel jerk. A value of 0 means the printer will use its firmware default.": "Jerk des déplacements sur la première couche. En pourcentage, il est calculé à partir du jerk des déplacements. À 0, l’imprimante utilise la valeur par défaut de son firmware.",
+        "Internal ribs": "Nervures internes",
+        "Enable internal ribs to increase the stability of the prime tower.": "Ajoute des nervures internes pour rendre la tour d’amorçage plus stable.",
+        "Minimum Support Contact Area": "Surface de contact minimale des supports",
+        "Lower values generate more support contact surfaces.": "Plus la valeur est basse, plus les supports ont de surfaces de contact.",
+        "Max speed": "Vitesse maximale",
+        "The maximum printing speed on the prime tower excluding ramming.": "Vitesse d’impression maximale sur la tour d’amorçage, hors pilonnage.",
     },
 }
 
@@ -101,8 +115,10 @@ def translator(lang):
 
 
 def load_defs(path, tr):
+    """Definitions by key, and the keys Orca shows in Developer mode only."""
     src = path.read_text(encoding="utf-8")
     keys = {}
+    develop = set()
     # `auto def_x = def = this->add("key", …)`: a definition another one
     # copies its list from (`def->enum_values = def_x->enum_values`).
     aliases = dict(re.findall(r'auto\s+(\w+)\s*=\s*def\s*=\s*this->add(?:_nullable)?\(\s*"([a-z0-9_]+)"', src))
@@ -119,6 +135,8 @@ def load_defs(path, tr):
         labels = [literals(v) for v in re.findall(r"def->enum_labels\.(?:push|emplace)_back\(\s*(?:L\()?\s*(" + STR + r")", block)]
         if values:
             info["enum"] = {v: tr(labels[j]) if j < len(labels) else v for j, v in enumerate(values)}
+        if re.search(r"def->mode\s*=\s*comDevelop\b", block):
+            develop.add(m.group(1))
         copied = re.search(r"def->enum_values\s*=\s*(\w+)->enum_values", block)
         if copied and copied.group(1) in aliases:
             copies[m.group(1)] = aliases[copied.group(1)]
@@ -140,7 +158,22 @@ def load_defs(path, tr):
     for key, source in copies.items():
         if "enum" in keys.get(source, {}) and "enum" not in keys[key]:
             keys[key]["enum"] = dict(keys[source]["enum"])
-    return keys
+    return keys, develop
+
+
+# Developer-mode settings (`comDevelop`) kept out of the tabs: the prime
+# tower's interface options, and the adhesiveness category Snap Studio sets
+# itself from the material (spoolcheck.js). Only those 2.4.1 added: the
+# Developer-mode settings shown before stay shown. Ignored unless Orca
+# still marks them Developer-only.
+HIDDEN = {
+    "enable_tower_interface_features",
+    "enable_tower_interface_cooldown_during_tower",
+    "filament_tower_interface_pre_extrusion_dist",
+    "filament_tower_interface_pre_extrusion_length",
+    "filament_tower_interface_print_temp",
+    "filament_adhesiveness_category",
+}
 
 
 # ---------------------------------------------------------------- tabs
@@ -211,7 +244,18 @@ def generate(lang):
             body(tab, "void TabPrinter::build_fff()") + "\n" + body(tab, "void TabPrinter::build_unregular_pages("), tr
         ),
     }
-    keys = load_defs(ORCA / "src" / "libslic3r" / "PrintConfig.cpp", tr)
+    keys, develop = load_defs(ORCA / "src" / "libslic3r" / "PrintConfig.cpp", tr)
+    # Developer-mode settings 2.4.1 added to the tabs stay out of them, as in
+    # Orca's own window outside that mode. Their definitions are kept.
+    hidden = {k for k in HIDDEN if k in develop}
+    for kind in layout.values():
+        for p in kind:
+            for g in p["groups"]:
+                g["keys"] = [k for k in g["keys"] if k not in hidden]
+                if "lines" in g:
+                    g["lines"] = {k: v for k, v in g["lines"].items() if k not in hidden}
+            p["groups"] = [g for g in p["groups"] if g["keys"]]
+        kind[:] = [p for p in kind if p["groups"]]
 
     used = {k for kind in layout.values() for p in kind for g in p["groups"] for k in g["keys"]}
     missing = sorted(k for k in used if k not in keys)
