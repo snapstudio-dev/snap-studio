@@ -204,6 +204,11 @@ pub struct PresetDto {
     pub ftype: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vendor: Option<String>,
+    /// Filaments only: the least it purges on the prime tower at a tool
+    /// change (`filament_minimal_purge_on_wipe_tower`, mm³), which 2.4.1's
+    /// tower honors: Prepare's tower estimate (tower-logic.js ptEstimate).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub purge: Option<f64>,
 }
 
 fn read_json(p: &Path) -> Option<Value> {
@@ -412,7 +417,7 @@ impl Index {
         let mut v: Vec<PresetDto> = self
             .selectable(Kind::Machine)
             .into_iter()
-            .map(|(n, e)| PresetDto { name: n.clone(), kind: Kind::Machine, user: e.user, ftype: None, vendor: None })
+            .map(|(n, e)| PresetDto { name: n.clone(), kind: Kind::Machine, user: e.user, ftype: None, vendor: None, purge: None })
             .collect();
         sort_presets(&mut v);
         v
@@ -463,12 +468,13 @@ impl Index {
                 if !ok {
                     return None;
                 }
-                let (ftype, vendor) = if kind == Kind::Filament {
-                    (first_str(&flat, "filament_type"), first_str(&flat, "filament_vendor"))
+                let (ftype, vendor, purge) = if kind == Kind::Filament {
+                    let purge = first_str(&flat, "filament_minimal_purge_on_wipe_tower").and_then(|v| v.trim().parse().ok());
+                    (first_str(&flat, "filament_type"), first_str(&flat, "filament_vendor"), purge)
                 } else {
-                    (None, None)
+                    (None, None, None)
                 };
-                Some(PresetDto { name: n.clone(), kind, user: e.user, ftype, vendor })
+                Some(PresetDto { name: n.clone(), kind, user: e.user, ftype, vendor, purge })
             })
             .collect();
         sort_presets(&mut v);

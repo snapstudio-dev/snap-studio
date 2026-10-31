@@ -22,51 +22,65 @@ assert.deepStrictEqual(T.ptState({ heads: 0, on: true }), { show: false, reason:
 assert.deepStrictEqual(T.ptState({ heads: 3, on: true, sequence: "by object" }), { show: false, reason: "by_object" });
 assert.deepStrictEqual(T.ptState({ heads: 1, on: false, sequence: "by object" }).reason, "single", "the first reason");
 
-// Estimate, against real Snapmaker Orca 2.4.0 slices (0.4 nozzle, 10 mm
-// parts): a plain wall without brim is exactly the tower.
+// Estimate, against real Snapmaker Orca 2.4.1 slices (slice.rs
+// engine_tower_sizes: 0.4 nozzle, 0.20mm Standard, 10 mm cubes, one per
+// head): never smaller than the real box, within about a line per tool
+// change. A plain wall without brim is exactly the tower's width.
 assert.strictEqual(T.ptEstimate({ heads: 1 }), null, "one head, no tower");
-const rect = (heads, layer, width, volume) => T.ptEstimate({ heads, layer, width, volume, brim: 0, height: 10 });
+const fits = (e, real, changes, what) => {
+  assert.ok(e >= real - 0.2, `${what}: ${e} smaller than the real ${real}`);
+  assert.ok(e <= real + changes * 1.1 + 0.5, `${what}: ${e} too wide of the real ${real}`);
+};
+const rect = (heads, layer, width, volume, more = {}) => T.ptEstimate({ heads, layer, width, volume, brim: 0, height: 10, ...more });
+// One category (two to four PLA heads, 15 mm³ least purge).
 for (const [heads, layer, width, volume, real] of [
-  [2, 0.2, 40, 45, 9.5], [3, 0.2, 40, 45, 18.5], [4, 0.2, 40, 45, 27.5],
-  [2, 0.2, 60, 45, 6.5], [4, 0.2, 60, 45, 18.5], [2, 0.2, 40, 90, 17.3], [4, 0.2, 40, 90, 50.9],
-  [2, 0.12, 40, 45, 14.3], [4, 0.12, 40, 45, 41.9], [4, 0.12, 40, 90, 79.7],
+  [2, 0.2, 40, 45, 8.3], [3, 0.2, 40, 45, 16.1], [4, 0.2, 40, 45, 23.9], [2, 0.2, 60, 45, 5.9], [4, 0.2, 60, 45, 16.7],
+  [2, 0.2, 40, 90, 16.1], [4, 0.2, 40, 90, 47.3], [2, 0.12, 40, 45, 13.1], [4, 0.12, 40, 45, 38.3], [4, 0.12, 40, 90, 76.1],
+  [2, 0.2, 40, 15, 3.5], [4, 0.2, 40, 15, 9.5], [2, 0.2, 40, 30, 5.9], [4, 0.2, 40, 30, 16.7],
 ]) {
-  const e = rect(heads, layer, width, volume);
+  const e = rect(heads, layer, width, volume, { purge: 15 });
   assert.strictEqual(e.w, width, "plain wall: the width asked for");
-  near(e.d, real, (heads - 1) * 0.65, `depth, ${heads} heads, ${layer} mm, ${width} mm wide, ${volume} mm³`);
+  fits(e.d, real, heads - 1, `depth, ${heads} heads, ${layer} mm, ${width} mm wide, ${volume} mm³`);
   assert.deepStrictEqual([e.x0, e.y0, e.h], [0, 0, 10]);
 }
-// More heads, more volume, thinner layers, a narrower tower: deeper.
+// Several categories (2.4.1's blocks): one more tool change's worth of
+// depth, whatever their number; PETG's least purge (50 mm³) over 45.
+for (const [mats, heads, categories, real] of [
+  ["PLA+PETG", 2, 2, 17.3], ["PLA+PLA+PETG", 3, 2, 26.3], ["PLA+PETG+TPU", 3, 3, 27.5],
+  ["PLA+PLA+PETG+PETG", 4, 2, 35.3], ["PLA+PETG+PETG+PETG", 4, 2, 37.7],
+]) {
+  fits(rect(heads, 0.2, 40, 45, { categories, purge: 50 }).d, real, heads, `depth, ${mats}`);
+}
+// More heads, more volume, thinner layers, a narrower tower, a second
+// category, a larger least purge: deeper.
 assert.ok(rect(3, 0.2, 40, 45).d > rect(2, 0.2, 40, 45).d);
 assert.ok(rect(2, 0.2, 40, 90).d > rect(2, 0.2, 40, 45).d);
 assert.ok(rect(2, 0.12, 40, 45).d > rect(2, 0.2, 40, 45).d);
 assert.ok(rect(2, 0.2, 40, 45).d > rect(2, 0.2, 60, 45).d);
+assert.ok(rect(2, 0.2, 40, 45, { categories: 2 }).d > rect(2, 0.2, 40, 45).d);
+assert.strictEqual(rect(3, 0.2, 40, 45, { categories: 3 }).d, rect(3, 0.2, 40, 45, { categories: 2 }).d, "one more change, not one per category");
+assert.ok(rect(2, 0.2, 40, 45, { purge: 50 }).d > rect(2, 0.2, 40, 45).d);
+assert.strictEqual(rect(2, 0.2, 40, 45, { purge: 15 }).d, rect(2, 0.2, 40, 45).d, "a smaller least purge changes nothing");
 // Brim margin: all around, from the corner.
 const brim = T.ptEstimate({ heads: 2, width: 40, brim: 5, height: 10 });
 assert.deepStrictEqual([brim.x0, brim.y0, brim.w], [-5, -5, 50]);
 near(brim.d, rect(2, 0.2, 40, 45).d + 10, 0.01, "brim on both sides");
-// The U1's rib tower: square, ribs and brim beyond the corner; never
-// smaller than the real one (38.3 × 38.4 from −9.7, two heads; 52.3 × 52.2
-// with four), within 3 mm.
-const u1 = (heads) => T.ptEstimate({ heads, width: 35, volume: 45, brim: 5, wall: "rib", height: 10 });
-for (const [heads, w, d, x0] of [[2, 38.3, 38.4, -9.7], [3, 46.8, 45.0, -9.7], [4, 52.3, 52.2, -9.7]]) {
-  const e = u1(heads);
-  assert.ok(e.w >= w - 0.5 && e.w <= w + 3, `rib width, ${heads} heads: ${e.w} vs ${w}`);
-  assert.ok(e.d >= d - 0.5 && e.d <= d + 3, `rib depth, ${heads} heads: ${e.d} vs ${d}`);
-  assert.ok(e.x0 <= x0 + 0.5 && e.x0 >= x0 - 2, `rib margin: ${e.x0} vs ${x0}`);
-}
-// Less purge (Prepare's prime volume slider, down to 15 mm³): a smaller
-// tower, the estimate still never smaller than the real one.
-for (const [heads, volume, w, d, real] of [
-  [2, 15, 30.6, 28.0, 4.1], [2, 20, 32.3, 31.4, 4.7], [2, 30, 35.7, 34.7, 6.5],
-  [4, 15, 40.8, 37.8, 11.3], [4, 20, 43.3, 41.4, 13.1], [4, 30, 47.3, 45.0, 18.5],
+// The U1's rib tower: square; since 2.4.1 only the brim reaches out of the
+// corner (2.4.0's box started 9.7 mm out); never smaller than the real
+// one, within 5.5 mm.
+const u1 = (heads, volume, more = {}) => T.ptEstimate({ heads, volume, width: 35, brim: 5, wall: "rib", ribExtra: 8, ribWidth: 8, spacing: 1.2, height: 10, ...more });
+for (const [what, heads, volume, more, w, d] of [
+  ["2 heads", 2, 45, {}, 37.84, 37.22], ["3 heads", 3, 45, {}, 45.34, 44.99], ["4 heads", 4, 45, {}, 50.8, 50.4],
+  ["2 heads, 15 mm³", 2, 15, {}, 29.02, 28.05], ["4 heads, 15 mm³", 4, 15, {}, 37.8, 37.8], ["4 heads, 30 mm³", 4, 30, {}, 45.34, 44.99],
+  ["PLA+PETG", 2, 45, { categories: 2, purge: 50 }, 45.84, 44.98], ["PLA+PETG+TPU", 3, 45, { categories: 3, purge: 50 }, 52.8, 52.2],
+  ["PLA+PETG+PETG+PETG", 4, 45, { categories: 2, purge: 50 }, 58.34, 57.6],
 ]) {
-  const rib = T.ptEstimate({ heads, volume, width: 35, brim: 5, wall: "rib", ribExtra: 8, ribWidth: 8, spacing: 1.2 });
-  assert.ok(rib.w >= w - 0.5 && rib.w <= w + 3 && rib.d >= d - 0.5 && rib.d <= d + 3, `rib, ${heads} heads, ${volume} mm³: ${rib.w} × ${rib.d} vs ${w} × ${d}`);
-  const plain = T.ptEstimate({ heads, volume, width: 40, brim: 0, spacing: 1.2 });
-  assert.ok(plain.d >= real - 0.2 && plain.d <= real + 1.5, `plain, ${heads} heads, ${volume} mm³: ${plain.d} vs ${real}`);
+  const e = u1(heads, volume, more);
+  assert.ok(e.w >= w - 0.5 && e.w <= w + 5.5, `rib width, ${what}: ${e.w} vs ${w}`);
+  assert.ok(e.d >= d - 0.5 && e.d <= d + 5.5, `rib depth, ${what}: ${e.d} vs ${d}`);
+  assert.deepStrictEqual([e.x0, e.y0], [-5, -5], `rib box from the brim: ${what}`);
 }
-assert.ok(u1(2).w > T.ptEstimate({ heads: 2, width: 35, volume: 15, brim: 5, wall: "rib", ribExtra: 8, ribWidth: 8, spacing: 1.2 }).w, "less purge, smaller");
+assert.ok(u1(2, 45).w > u1(2, 15).w, "less purge, smaller");
 assert.strictEqual(T.ptEstimate({ heads: 2, height: 42.4 }).h, 42.4, "as tall as the tallest part");
 
 // The sliced box replaces it as it is.

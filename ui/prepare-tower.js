@@ -155,7 +155,20 @@ function prTowerKey(heads = prTowerHeads().size) {
   const parts = plSliced(PR.objects, bedState).map((o) => [meshKey(o), o.rot, o.scale]);
   const p = prTowerProfileName();
   const settings = ["prime_tower_width", "prime_volume", "prime_tower_brim_width", "wipe_tower_wall_type", "wipe_tower_rib_width", "wipe_tower_extra_rib_length", "wipe_tower_extra_spacing", "layer_height"].map(prTowerSetting);
-  return ptSizeKey(parts, [heads, p?.machine, p?.process, settings]);
+  return ptSizeKey(parts, [heads, p?.machine, p?.process, settings, prTowerMaterials()]);
+}
+
+/* What the heads' materials change in the tower (Snapmaker Orca 2.4.1):
+   its blocks, one per adhesiveness category (spoolcheck.js spCategory; a
+   material without one goes to the engine's default, 100), and the largest
+   least purge of their filaments. */
+function prTowerMaterials(set = prTowerHeads()) {
+  if (typeof prPillarHeads !== "function") return { categories: 1, purge: 0 };
+  const heads = prPillarHeads(set);
+  return {
+    categories: new Set(heads.map((h) => spCategory(h.material) ?? 100)).size,
+    purge: Math.max(0, ...heads.map((h) => +h.purge || 0)),
+  };
 }
 
 /* The tower's box: the slice's while nothing it depends on changed,
@@ -182,6 +195,7 @@ function prTowerBox() {
     ribWidth: prTowerNum("wipe_tower_rib_width", 8),
     ribExtra: prTowerNum("wipe_tower_extra_rib_length", 0),
     spacing: prTowerNum("wipe_tower_extra_spacing", 100) / 100,
+    ...prTowerMaterials(set),
   });
   return e && { ...e, est: true };
 }

@@ -19,7 +19,9 @@ function prPillarHeads(set = prTowerHeads()) {
   const ftype = typeof spFtypeOf === "function" ? spFtypeOf(pid) : () => null;
   return [...set].sort((a, b) => a - b).map((n) => {
     const name = live ? headsProfile(pid, n, list).name || "" : "";
-    return { n, material: (name && ftype(name)) || spMaterialFromName(name) };
+    // Its least purge on the tower (presets.rs PresetDto), for the estimate.
+    const purge = (name && list?.find((p) => p.name === name)?.purge) || 0;
+    return { n, material: (name && ftype(name)) || spMaterialFromName(name), purge };
   });
 }
 

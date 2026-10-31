@@ -25,24 +25,33 @@ const PT_C = 1 - Math.PI / 4;
 
 /* Estimated box before slicing, as WipeTower2 (the engine's tower for the
    U1 and other non-Bambu printers) lays it out: each tool change of a layer
-   fills `prime_volume` in lines across the tower, spaced by
+   fills its volume in lines across the tower, spaced by
    `wipe_tower_extra_spacing`, plus a ramming line; the deepest layer gives
    the depth (Orca's PartPlate::estimate_wipe_tower_size and
-   Print::wipe_tower_data do the same with Bambu's tower). A rib wall makes
-   the tower a square of the same area, its ribs reaching out of the
-   corners along the diagonals; the brim goes around. Calibrated on
-   Snapmaker Orca 2.4.0 slices: within a line per tool change, the rib
-   margin a little wide (on the safe side). null below two heads. */
+   Print::wipe_tower_data do the same with Bambu's tower). A tool change
+   purges at least each filament's minimal purge (`purge`, the largest of
+   the plate's; Print.cpp effective_wipe_tower_volume, 2.4.1). Since 2.4.1
+   the tower has a block per adhesiveness category: with `categories` ≥ 2,
+   one more tool change's worth of depth, whatever their number. A rib wall
+   makes the tower a square of the same area, its ribs reaching out of the
+   corners along the diagonals; since 2.4.1 the engine shifts it so that
+   only the brim reaches out of the corner. Calibrated on Snapmaker Orca
+   2.4.1 slices (engine_tower_sizes): never smaller than the real box,
+   within a line per tool change, the rib box a little wide (on the safe
+   side). null below two heads. */
 function ptEstimate({
   heads = 2, height = 0, layer = 0.2, width = 60, volume = 45, brim = 3, nozzle = 0.4,
-  wall = "rectangle", ribWidth = 8, ribExtra = 8, spacing = 1.2,
+  wall = "rectangle", ribWidth = 8, ribExtra = 8, spacing = 1.2, categories = 1, purge = 0,
 }) {
   if (heads < 2) return null;
   const pw = nozzle * 1.25;
   const lh = Math.max(0.01, layer);
-  const perChange = (w) => spacing * pw * (volume / (lh * (pw - lh * PT_C) * Math.max(w - 3 * pw, pw)) + 2);
-  const depth = (w) => (heads - 1) * perChange(w) + pw;
-  let bw = Math.max(width, 2), bd = depth(bw), m = Math.max(0, brim);
+  const vol = Math.max(volume, purge || 0);
+  const changes = heads - 1 + (categories > 1 ? 1 : 0);
+  const perChange = (w) => spacing * pw * (vol / (lh * (pw - lh * PT_C) * Math.max(w - 3 * pw, pw)) + 2);
+  const depth = (w) => changes * perChange(w) + pw;
+  const b = Math.max(0, brim);
+  let bw = Math.max(width, 2), bd = depth(bw), m = b;
   if (wall === "rib") {
     bw = Math.ceil(Math.sqrt(bw * bd) / pw - 1e-9) * pw;
     bd = depth(bw);
@@ -50,7 +59,7 @@ function ptEstimate({
     m += (Math.max(0, ribExtra) / 2 + rib / 2) / Math.SQRT2;
   }
   const r = (v) => Math.round(v * 100) / 100 + 0;
-  return { x0: r(-m), y0: r(-m), w: r(bw + 2 * m), d: r(bd + 2 * m), h: r(height) };
+  return { x0: r(-b), y0: r(-b), w: r(bw + 2 * m), d: r(bd + 2 * m), h: r(height) };
 }
 
 /* The box as sliced (gcode.rs TowerBox): the same shape. */
