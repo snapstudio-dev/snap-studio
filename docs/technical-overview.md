@@ -22,7 +22,8 @@ plan: [plans/prime-tower-per-material.md](plans/prime-tower-per-material.md)).
   still printed by whichever head ends the layer, so materials that don't
   bond still meet there, unless one head prints the whole wall
   (`wipe_tower_filament`; measured in
-  [plans/engine-orca-2.4.1.md](plans/engine-orca-2.4.1.md), T2). Separate
+  [plans/engine-orca-2.4.1.md](plans/engine-orca-2.4.1.md), T2). Snap
+  Studio sets that head itself on such plates (`advTowerAutoWall`). Separate
   towers are an open request upstream
   ([OrcaSlicer #8474](https://github.com/SoftFever/OrcaSlicer/issues/8474)).
 - *Snap Studio*: groups the plate's heads into cliques of materials that

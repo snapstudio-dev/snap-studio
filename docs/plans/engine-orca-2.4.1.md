@@ -1,11 +1,10 @@
 # Engine: Snapmaker Orca 2.4.0 → 2.4.1
 
-**State: implemented in draft PR #86** (steps 2–10 and the review's
-gaps within D1–D7), **except step 1**: the `engine-orca-2.4.1` release is
-not published and `src-tauri/engine.json` still points at 2.4.0 —
-kameka22 runs `scripts/engine.sh 2.4.1` once #86 is merged. D2 waits for
-kameka22's decision on T2's answer (finding 9); the support transition
-settings (finding 11) too.
+**State: implemented in draft PR #86** (steps 2–10, the review's gaps,
+and D2 to D10 decided after the review), **except step 1**: the
+`engine-orca-2.4.1` release is not published and `src-tauri/engine.json`
+still points at 2.4.0 — kameka22 runs `scripts/engine.sh 2.4.1` once #86
+is merged.
 
 ## Goal
 
@@ -233,16 +232,18 @@ Decided by kameka22 on 2026-10-31, except D2. The implementation go has
   block tower becomes the default "One tower" mode, also on plates whose
   materials don't bond. The per-material pillars stay available as a
   choice next to it.
-- **D2. The conflict message (#35): open, to decide after T2.** If
-  2.4.1's blocks keep materials that don't bond apart, the choice is
-  between two options:
-  - drop `slice.tower.conflict` in "One tower" mode, or turn it into an
-    information line;
-  - drop the "outer wall in one material" fix.
-
-  If the shared outer wall still mixes them, the warning is rewritten
-  instead. kameka22 decides once T2's results are in. Until then the
-  implementation keeps today's strings and behavior.
+- **D2. The conflict message (#35): decided after T2 (finding 9).** The
+  2.4.1 tower separates the purges but its shared outer wall still mixes
+  the materials; with the wall in one material they never meet. So in
+  "One tower" mode, on a plate whose materials don't bond and with no wall
+  chosen, Snap Studio sets `wipe_tower_filament` itself (the first head of
+  the first material, in the plate's order), and the warning becomes an
+  information line (`slice.tower.apart`) with the other walls, "No tower"
+  and "Per material". `slice.tower.walled` ("its inside still mixes",
+  false on 2.4.1) and its Undo are gone; `slice.tower.conflict` remains
+  only for a wall chosen on a head with no known material. The automatic
+  wall is sent to the engine but is not one of the user's differences (not
+  counted, not saved in a preset).
 - **D3. Default tower position: ours is kept.** That is X 15, Y 220, the
   back-left corner first, then the other corners and the first free
   spot (`ptSpot`). The new GUI default (middle of the left edge) is not
@@ -281,6 +282,16 @@ Decided by kameka22 on 2026-10-31, except D2. The implementation go has
   The options Orca shows only in Developer mode (tower interface
   features, adhesiveness category) are not shown, because the category
   is handled by D6.
+
+Decided by kameka22 after the review (2026-10-31):
+
+- **D8. Support transition settings: not exposed** (finding 11), as Orca
+  shows them in no tab; their engine defaults apply.
+- **D9. The Developer-mode settings shown before stay in the profile
+  details**; only those 2.4.1 added are kept out (finding 12).
+- **D10. First layer travel acceleration and jerk in Quality › First
+  layer**, the sheet's Speed panel being a percentage of the profile's
+  speeds.
 
 ## Implementation plan (after the go)
 
@@ -321,10 +332,10 @@ Decided by kameka22 on 2026-10-31, except D2. The implementation go has
 7. **Tower estimate**: `ptEstimate` takes the heads' categories (D6's
    value). Its depth is the sum of the blocks. Recalibrate on 2.4.1
    slices (T1).
-8. **Warnings** (D2): keep `slice.tower.conflict` and `slice.tower.walled`
-   as they are until kameka22 decides after T2. Then reword in English
-   and French first, the other seven languages after, and update
-   `test-adv.js`.
+8. **Warnings** (D2, decided after T2): the automatic outer wall in one
+   material (`advTowerAutoWall`), the information line
+   `slice.tower.apart` in the nine languages, `prepare.tower.per_material_why`
+   reworded, `slice.tower.walled` and its Undo removed, `test-adv.js`.
 9. **Tests**:
    - `node scripts/test-tower.js`, `test-adv.js`, `test-pillars.js`,
      `test-spoolcheck.js` and the other `scripts/test-*.js`;
@@ -396,7 +407,7 @@ at 300), Snap Studio's engine pipeline run on the official 2.4.1 macOS
 package, and real slices on both engines through two opt-in tests
 (`engine_prime_tower_position`, and `engine_tower_sizes`, added for this
 review). Links point at the tags. "Within D1–D7" gaps are implemented in
-#86; the others wait for a decision.
+#86; the others were decided after it (D2, D8–D10) and implemented too.
 
 ### Engine pipeline and profiles
 
@@ -493,9 +504,7 @@ review). Links point at the tags. "Within D1–D7" gaps are implemented in
    Each material purges into its own block (PETG Y 200–209, PLA 209–218
    in the plain case), but the shared outer wall and the seam between
    blocks still alternate heads layer after layer. With the wall in one
-   material, 2.4.1 keeps the materials fully apart. **Needs a decision
-   from kameka22 (D2)** — see the questions below. Today's strings and
-   behavior are kept.
+   material, 2.4.1 keeps the materials fully apart. **Decided: D2.**
 10. **Travel moves avoid the tower** (`detour_around_wipe_tower`,
     `get_wipe_avoid_pos_x` in
     [GCode.cpp](https://github.com/Snapmaker/OrcaSlicer/blob/v2.4.1/src/libslic3r/GCode.cpp)):
@@ -509,9 +518,9 @@ review). Links point at the tags. "Within D1–D7" gaps are implemented in
     `support_transition_speed` (a legacy key ignored by 2.4.0, live again)
     and `support_transition_flow_ratio` are engine options without a line
     in [Tab.cpp](https://github.com/Snapmaker/OrcaSlicer/blob/v2.4.1/src/slic3r/GUI/Tab.cpp):
-    D7's "in the groups Orca puts them in" cannot apply. **Needs a
-    decision from kameka22.** Not exposed meanwhile; their engine defaults
-    (2 layers, perimeter on, 50 mm/s, 100 %) apply.
+    D7's "in the groups Orca puts them in" cannot apply. **Decided: D8,
+    not exposed**; their engine defaults (2 layers, perimeter on,
+    50 mm/s, 100 %) apply.
 12. **Developer-mode options enter the catalog.** Regenerated from 2.4.1,
     the catalog gains 16 settings (785 → 801), among them the tower
     interface options and `filament_adhesiveness_category`, which
