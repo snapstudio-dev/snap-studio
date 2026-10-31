@@ -384,3 +384,174 @@ Decided by kameka22 on 2026-10-31, except D2. The implementation go has
   changes were not all read. They don't affect the command line, but a
   CLI change outside the files read above could have been missed. The
   four-platform test slice in `engine.yml` and T1–T7 are the safety net.
+
+## Review findings / additional needs
+
+Second pass, after the plan: the whole `v2.4.0...v2.4.1` diff read from a
+local clone of Snapmaker/OrcaSlicer (463 files; the GitHub compare stopped
+at 300), Snap Studio's engine pipeline run on the official 2.4.1 macOS
+package, and real slices on both engines through two opt-in tests
+(`engine_prime_tower_position`, and `engine_tower_sizes`, added for this
+review). Links point at the tags. "Within D1–D7" gaps are implemented in
+#86; the others wait for a decision.
+
+### Engine pipeline and profiles
+
+1. **2.4.1 profiles start with a UTF-8 BOM — the upgrade fails without a
+   fix.** `0.20mm Standard @Snapmaker U1 (0.4 nozzle).json`, the U1's
+   default process, and `fdm_process_common.json` now begin with
+   `EF BB BF`
+   ([file](https://github.com/Snapmaker/OrcaSlicer/blob/v2.4.1/resources/profiles/Snapmaker/process/fdm_process_common.json)).
+   Orca reads them; `serde_json` refuses them and `presets.rs` `read_json`
+   skipped them silently, so every process inheriting
+   `fdm_process_common` became "missing parent" and `engine_smoke` — the
+   test slice `engine.yml` runs before publishing — failed on 2.4.1. Files:
+   `presets.rs`, `model3mf.rs`, `plate.rs` (a 3MF's
+   `project_settings.config` may come from Orca too). **Within D1–D7
+   (implemented):** `util::strip_bom` before parsing, with a test. With it,
+   `engine_smoke` passes on 2.4.1. This was the only blocker found for
+   publishing; it must be merged before `scripts/engine.sh 2.4.1` runs,
+   since the workflow tests `main`.
+2. **Packaging:** every `engine/keep.txt` pattern still matches the 2.4.1
+   macOS package (666 files). The asset names are the ones `engine.yml`
+   builds. No new runtime folder is needed: the engine slices with the
+   pruned resources. Windows and Linux were not pruned locally; the
+   workflow's four-platform test slice covers them. `crashpad_handler`
+   was already shipped with 2.4.0. **No change.**
+3. **Profiles: no preset added, removed or renamed** in
+   `resources/profiles/Snapmaker` (166 files modified only), so every name
+   Snap Studio refers to stays valid. Value changes besides the plan's
+   bridge values (D5) and penetration layers:
+   - bed temperatures of a few U1 filaments: ASA hot plate 110 → 100, PLA
+     SnapSpeed (0.6/0.8) hot plate 55 → 65, PLA Matte 0.6 textured
+     45 → 65, PVA 65 → 70 (hot and textured);
+   - Snapmaker PLA Translucent: `close_fan_the_first_x_layers` 3;
+   - `graphic_effect_plate_temp(_initial_layer)` (a plate type the U1
+     profiles carry) in 23 files;
+   - the high-flow nozzle's list of not-recommended filaments
+     (`filament_allow_list`).
+
+   They come with the engine like the bridge values. **Within D1–D7
+   (D5's logic, implemented as a CHANGELOG mention):** nothing pinned.
+4. **Upstream's category table is wider than § 1's**, and a family is
+   decided by the base profile, not by `filament_type`
+   ([`fdm_filament_*_category.json`](https://github.com/Snapmaker/OrcaSlicer/tree/v2.4.1/resources/profiles/Snapmaker/filament)):
+   PLA, PLA-CF, PLA HS/Matte/Silk 100; ABS, ASA 200; PETG, PETG-CF/GF/HF,
+   PET, PCTG 300; PA, PA-CF 400; PC 500; **TPU (90A, 95A HF, unspecified)
+   and PEBA 600**; PVA 704; **BVOH 797**. `fdm_filament_common` has none
+   (engine default 100). For D4: PEBA now bonds with TPU, BVOH is its own
+   category. **Within D1–D7 (implemented).**
+5. **`filament_adhesiveness_category` is a filament key**
+   (`s_Preset_filament_options` in
+   [Preset.cpp](https://github.com/Snapmaker/OrcaSlicer/blob/v2.4.1/src/libslic3r/Preset.cpp)),
+   so D6's value goes into each filament JSON `presets::prepare` writes
+   (`filament_extra`), not into the process overrides as step 5 of the
+   plan says. **Within D6 (implemented there).**
+
+### Prime tower (T1, T2, T5 run on 2.4.1)
+
+6. **Purge per filament (fix 38) changes the tower:** each tool change
+   purges `max(prime_volume, filament_minimal_purge_on_wipe_tower[new
+   filament])`, and the depth estimate takes the maximum over all
+   filaments
+   ([Print.cpp](https://github.com/Snapmaker/OrcaSlicer/blob/v2.4.1/src/libslic3r/Print.cpp),
+   `effective_wipe_tower_volume`). The U1's PETG HF profile purges at
+   least 50 mm³, PLA and TPU 15. `ptEstimate` used `prime_volume` only.
+   **Within D1–D7 (step 7, implemented):** the estimate takes the largest
+   of the volume and the plate's filaments' minimal purges.
+7. **Tower size, measured (T1).** One category: identical to 2.4.0 to the
+   tenth of a millimetre on every plain-wall case of `test-tower.js`
+   (2–4 heads, 0.2/0.12 mm, 40/60 mm, 30/45/90 mm³), 0.6–1.8 mm deeper at
+   15 mm³. Several categories: **one more tool change's worth of depth,
+   whatever the number of categories** (two heads PLA + PETG 9.5 → 17.3 mm,
+   PLA + PETG + TPU 18.5 → 27.5, PLA + PLA + PETG + PETG 26.3 → 35.3; rib
+   tower PLA + PETG 38.8 → 45.8). **Within D1–D7 (step 7, implemented):**
+   `ptEstimate` takes the number of categories and adds that change.
+8. **The rib tower moved (T5).** WipeTower2 now offsets the rib tower by
+   its ribs' extent (`m_rib_offset`, `generate_new`), so the U1's tower
+   box starts **−4.9 mm** from the requested corner instead of −9.7 mm
+   (same width and depth): the ribs no longer reach out beyond the corner,
+   only the brim does. Plain-wall towers are unchanged (position, rotation,
+   size). `ptEstimate` placed the box with 2.4.0's rib margin, and
+   `engine_prime_tower_position` asserted `x0 < −5`. **Within D3
+   (implemented):** the estimate's rib box starts at −brim; the test
+   checks a box from about −brim. `ptSpot` and the 15/220 fallback are
+   unchanged.
+9. **Does the 2.4.1 tower still mix materials? (T2, answers D2).** G-code
+   of a two-head PLA + PETG plate, rasterized per layer and head (cells of
+   0.25 mm), counting the cells a head prints over the other material's
+   cells of the layer below:
+
+   | | Engine's own wall | `wipe_tower_filament` = PLA head ("outer wall in one material") |
+   |---|---|---|
+   | 2.4.0, plain / rib | ~75,000 / ~95,000 cells, inside and out | ~54,000 / ~59,000, all inside (the purges mix) |
+   | 2.4.1, plain / rib | ~21,500 / ~33,500: the outer wall and the line between the two blocks, printed by whichever head ends the layer | **0 / 0** |
+
+   Each material purges into its own block (PETG Y 200–209, PLA 209–218
+   in the plain case), but the shared outer wall and the seam between
+   blocks still alternate heads layer after layer. With the wall in one
+   material, 2.4.1 keeps the materials fully apart. **Needs a decision
+   from kameka22 (D2)** — see the questions below. Today's strings and
+   behavior are kept.
+10. **Travel moves avoid the tower** (`detour_around_wipe_tower`,
+    `get_wipe_avoid_pos_x` in
+    [GCode.cpp](https://github.com/Snapmaker/OrcaSlicer/blob/v2.4.1/src/libslic3r/GCode.cpp)):
+    parked beside it at tool changes. Nothing to do; #37's pillars are
+    plain objects and not concerned.
+
+### Settings and catalog (D7)
+
+11. **The support transition settings are in no tab of Orca's.**
+    `tree_support_transition_layers`, `support_transition_perimeter`,
+    `support_transition_speed` (a legacy key ignored by 2.4.0, live again)
+    and `support_transition_flow_ratio` are engine options without a line
+    in [Tab.cpp](https://github.com/Snapmaker/OrcaSlicer/blob/v2.4.1/src/slic3r/GUI/Tab.cpp):
+    D7's "in the groups Orca puts them in" cannot apply. **Needs a
+    decision from kameka22.** Not exposed meanwhile; their engine defaults
+    (2 layers, perimeter on, 50 mm/s, 100 %) apply.
+12. **Developer-mode options enter the catalog.** Regenerated from 2.4.1,
+    the catalog gains 16 settings (785 → 801), among them the tower
+    interface options and `filament_adhesiveness_category`, which
+    `Tab.cpp` adds but Orca hides outside Developer mode (`comDevelop`).
+    **Within D7 (implemented):** `gen-orca-settings.py` skips `comDevelop`
+    options, as Orca's GUI does.
+13. **Other catalog changes**, all generated, no product choice:
+    - `prime_tower_brim_chamfer` and `…_max_width` leave the Prime tower
+      group (commented out in `Tab.cpp`; still engine options, never shown
+      by Snap Studio);
+    - the four `adaptive_pressure_advance*` settings appear in the
+      filament tab (uncommented), so they show in a filament's details;
+    - `wipe_tower_max_purge_speed` is now labelled "Max speed";
+    - `raft_first_layer_expansion` becomes Developer-only (and auto, −1);
+      the slice sheet never listed it.
+
+    **Within D7 (implemented by the regeneration).**
+14. **New engine warnings**, relayed as Orca writes them like the others
+    (`slice.rs`, `message`/`warning`): the Lightning base pattern with a
+    support type that does not take it, the Hollow pattern with normal
+    supports, two walls on Organic supports without the Hollow pattern.
+    The check on the tip diameter is gone. **No change.**
+
+### Corrections to the sections above
+
+- § 2: the **command line** also moved its default tower to the middle of
+  the left edge (`y = plate_depth * 0.5`,
+  [Snapmaker_Orca.cpp](https://github.com/Snapmaker/OrcaSlicer/blob/v2.4.1/src/Snapmaker_Orca.cpp)),
+  but only on its arrange paths, which Snap Studio turns off
+  (`--arrange 0`). The conclusion holds: no impact.
+- § 6: a 2.4.1 3MF also writes `Snapmaker_Orca:3mfVersion` instead of
+  `BambuStudio:3mfVersion`, Snapmaker relationship types for thumbnails
+  and G-code, `X-SM-Client-*` headers, no `xmlns:BambuStudio`, and a
+  versioned `layer_heights_profile.txt` keyed by 3MF object id
+  ([bbs_3mf.cpp](https://github.com/Snapmaker/OrcaSlicer/blob/v2.4.1/src/libslic3r/Format/bbs_3mf.cpp)).
+  Snap Studio's readers find thumbnails by entry path and metadata by
+  name and depend on none of these; our writers write none of them. The
+  only reading risk found was the BOM (finding 1). The virtual heads'
+  `mixed_filament_definitions` format is unchanged (locale-safe parsing
+  only).
+- Impact table: `engine.sh` / `engine.yml` need no change, but the engine
+  test slice needed finding 1's fix; `ptEstimate` "a plate with a single
+  category should keep today's size" is true for the plain wall only
+  (finding 8).
+- Implementation step 5: the category goes into the filament JSON
+  (finding 5).
