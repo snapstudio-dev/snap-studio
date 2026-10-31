@@ -2165,14 +2165,172 @@ mod tests {
         let t = slice("tower-b", &at("60", "150", "90")).expect("a tower");
         println!("at (60, 150), 90°: {t:?}");
         assert!(near(t.x0, 0.0) && near(t.y0, 0.0) && near(t.w, 40.0), "turned around that corner: {t:?}");
-        // The U1's own tower (rib walls, 5 mm brim): a square around the
-        // corner, ribs and brim beyond it.
+        // The U1's own tower (rib walls, 5 mm brim): a square from the
+        // corner, only the brim beyond it (2.4.1 offsets the ribs inside:
+        // 2.4.0's box started 9.7 mm out).
         let t = slice("tower-rib", &[("enable_prime_tower", s("1")), ("wipe_tower_x", list("150")), ("wipe_tower_y", list("200"))])
             .expect("a tower");
         println!("U1 tower at (150, 200): {t:?}");
-        assert!(t.x0 < -5.0 && t.y0 < -5.0 && (t.w - t.d).abs() < 3.0, "{t:?}");
+        assert!((t.x0 + 5.0).abs() < 0.5 && (t.y0 + 5.0).abs() < 0.5 && (t.w - t.d).abs() < 3.0, "{t:?}");
         // Off: none, though the U1's profiles turn it on.
         assert_eq!(slice("tower-off", &[("enable_prime_tower", s("0"))]), None);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Tower sizes on the engine in SNAPSTUDIO_ENGINE, for `ptEstimate`'s
+    /// calibration (scripts/test-tower.js): one box per head, a material per
+    /// head (`PLA`, `PETG`, `TPU`: one adhesiveness category each on 2.4.1).
+    /// Prints one line per case; `TOWER_GCODE_DIR` keeps each case's G-code.
+    /// `cargo test --lib engine_tower_sizes -- --ignored --nocapture`
+    #[test]
+    #[ignore = "needs a slicing engine (SNAPSTUDIO_ENGINE)"]
+    fn engine_tower_sizes() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles");
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.20mm Standard")).unwrap_or(&l.processes[0]).name.clone();
+        let find = |m: &str| {
+            l.filaments
+                .iter()
+                .find(|f| f.ftype.as_deref() == Some(m) && f.vendor.as_deref() != Some("Generic"))
+                .or_else(|| l.filaments.iter().find(|f| f.ftype.as_deref() == Some(m)))
+                .unwrap_or_else(|| panic!("a {m} profile"))
+                .name
+                .clone()
+        };
+        let idx = index_for(&app).unwrap();
+        for m in ["PLA", "PETG", "TPU"] {
+            let f = idx.flatten(&find(m)).unwrap_or_default();
+            println!(
+                "{m}: {} · category {:?} · minimal purge {:?}",
+                find(m),
+                f.get("filament_adhesiveness_category"),
+                f.get("filament_minimal_purge_on_wipe_tower")
+            );
+        }
+        use crate::mesh::{Mat, Tri};
+        let tmp = std::env::temp_dir().join("snapstudio-engine-tower-sizes");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        #[rustfmt::skip]
+        let p = [[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [10.0, 10.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0], [10.0, 0.0, 10.0], [10.0, 10.0, 10.0], [0.0, 10.0, 10.0]];
+        #[rustfmt::skip]
+        let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
+                 [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+        let cube: Vec<Tri> = f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect();
+        let src = tmp.join("cube.3mf");
+        crate::write3mf::write_scene(
+            &src,
+            &[crate::write3mf::SceneObject { name: "c".into(), tris: cube, transform: Mat::IDENTITY, extruder: None }],
+        )
+        .unwrap();
+        let keep = std::env::var_os("TOWER_GCODE_DIR").map(PathBuf::from);
+        let s = |v: &str| Value::String(v.into());
+        let run = |label: &str, mats: &[&str], set: &[(&str, &str)]| {
+            let mut overrides = Map::new();
+            overrides.insert("enable_prime_tower".into(), s("1"));
+            overrides.insert("wipe_tower_x".into(), Value::Array(vec![s("150")]));
+            overrides.insert("wipe_tower_y".into(), Value::Array(vec![s("200")]));
+            for (k, v) in set {
+                overrides.insert((*k).into(), s(v));
+            }
+            let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+            let sink = seen.clone();
+            let id = format!("tower-{}", label.replace(' ', "-"));
+            let scene = (0..mats.len())
+                .map(|i| crate::plate::SceneItem {
+                    path: src.to_string_lossy().to_string(),
+                    item: 0,
+                    name: format!("o{i}"),
+                    pos: [60.0 + 25.0 * i as f32, 100.0],
+                    rot: [0.0; 3],
+                    scale: [1.0; 3],
+                    extruder_map: vec![i as u8],
+                    piece: None,
+                })
+                .collect();
+            run_job(
+                binary(&app).unwrap(),
+                index_for(&app).unwrap(),
+                Request {
+                    machine: machine.clone(),
+                    process: process.clone(),
+                    filaments: mats.iter().map(|m| find(m)).collect(),
+                    scene,
+                    overrides,
+                    name: Some(id.clone()),
+                    ..Default::default()
+                },
+                id.clone(),
+                &move |p| sink.lock().unwrap().push(p),
+            );
+            let last = seen.lock().unwrap().last().cloned().unwrap();
+            if last.phase != "preview" {
+                println!("{label} [{}]: failed: {:?}", mats.join("+"), last.message);
+                return;
+            }
+            if let (Some(dir), Some(g)) = (&keep, &last.gcode) {
+                let _ = std::fs::create_dir_all(dir);
+                let _ = std::fs::copy(g, dir.join(format!("{id}-{}.gcode", mats.join("-"))));
+            }
+            let t = last.stats.and_then(|s| s.tower);
+            match t {
+                Some(t) => println!("{label} [{}]: x0 {:.2} y0 {:.2} w {:.2} d {:.2}", mats.join("+"), t.x0, t.y0, t.w, t.d),
+                None => println!("{label} [{}]: no tower", mats.join("+")),
+            }
+            discard(&id);
+        };
+        let plain = |layer: &'static str, width: &'static str, volume: &'static str| {
+            [
+                ("wipe_tower_wall_type", "rectangle"),
+                ("prime_tower_brim_width", "0"),
+                ("layer_height", layer),
+                ("prime_tower_width", width),
+                ("prime_volume", volume),
+            ]
+        };
+        // One category: test-tower.js's plain-wall cases.
+        for (heads, layer, width, volume) in [
+            (2, "0.2", "40", "45"),
+            (3, "0.2", "40", "45"),
+            (4, "0.2", "40", "45"),
+            (2, "0.2", "60", "45"),
+            (4, "0.2", "60", "45"),
+            (2, "0.2", "40", "90"),
+            (4, "0.2", "40", "90"),
+            (2, "0.12", "40", "45"),
+            (4, "0.12", "40", "45"),
+            (4, "0.12", "40", "90"),
+            (2, "0.2", "40", "15"),
+            (4, "0.2", "40", "15"),
+            (2, "0.2", "40", "30"),
+            (4, "0.2", "40", "30"),
+        ] {
+            let mats = vec!["PLA"; heads];
+            run(&format!("plain {heads}h {layer} {width}w {volume}v"), &mats, &plain(layer, width, volume));
+        }
+        // The U1's own tower (rib walls, its brim): one category.
+        for heads in [2, 3, 4] {
+            for volume in ["45", "15", "30"] {
+                run(&format!("rib {heads}h {volume}v"), &vec!["PLA"; heads], &[("prime_volume", volume)]);
+            }
+        }
+        // Several categories.
+        for mats in [
+            vec!["PLA", "PETG"],
+            vec!["PLA", "PLA", "PETG"],
+            vec!["PLA", "PETG", "TPU"],
+            vec!["PLA", "PLA", "PETG", "PETG"],
+            vec!["PLA", "PETG", "PETG", "PETG"],
+        ] {
+            run("plain 0.2 40w 45v", &mats, &plain("0.2", "40", "45"));
+            run("rib 45v", &mats, &[("prime_volume", "45")]);
+        }
+        // The outer wall in one material (`wipe_tower_filament`, 1-based).
+        let mut walled = plain("0.2", "40", "45").to_vec();
+        walled.push(("wipe_tower_filament", "1"));
+        run("plain walled T1", &["PLA", "PETG"], &walled);
+        run("rib walled T1", &["PLA", "PETG"], &[("prime_volume", "45"), ("wipe_tower_filament", "1")]);
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
