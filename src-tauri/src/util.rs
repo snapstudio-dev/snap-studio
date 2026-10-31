@@ -159,6 +159,13 @@ pub fn b64_encode(data: &[u8]) -> String {
     out
 }
 
+/// JSON bytes without a leading UTF-8 byte order mark: serde_json refuses
+/// one, Snapmaker Orca accepts it, and some of its profiles start with one
+/// since 2.4.1 (`0.20mm Standard @Snapmaker U1 (0.4 nozzle).json`).
+pub fn strip_bom(data: &[u8]) -> &[u8] {
+    data.strip_prefix(b"\xEF\xBB\xBF".as_slice()).unwrap_or(data)
+}
+
 /// An error as the UI shows it: the message and its causes
 /// (`copying a to b: Permission denied`), where `to_string()` would keep
 /// only the first.

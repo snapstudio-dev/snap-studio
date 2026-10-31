@@ -496,8 +496,8 @@ pub fn tower_of(path: &Path) -> Option<FileTower> {
         return None;
     }
     let mut zip = crate::model3mf::open(path).ok()?;
-    let settings =
-        crate::model3mf::read_entry(&mut zip, PROJECT_SETTINGS).and_then(|data| serde_json::from_slice::<serde_json::Value>(&data).ok());
+    let settings = crate::model3mf::read_entry(&mut zip, PROJECT_SETTINGS)
+        .and_then(|data| serde_json::from_slice::<serde_json::Value>(crate::util::strip_bom(&data)).ok());
     let place = settings.as_ref().and_then(|v| {
         let num = |k: &str| -> Option<f32> {
             let x = v.get(k)?;

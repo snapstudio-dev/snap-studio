@@ -470,7 +470,7 @@ pub fn project_filaments(zip: &mut Zip) -> Vec<ProjectFilament> {
     let Some(data) = read_entry(zip, "Metadata/project_settings.config") else {
         return Vec::new();
     };
-    let Ok(v) = serde_json::from_slice::<serde_json::Value>(&data) else {
+    let Ok(v) = serde_json::from_slice::<serde_json::Value>(crate::util::strip_bom(&data)) else {
         return Vec::new();
     };
     let list = |k: &str| -> Vec<String> {

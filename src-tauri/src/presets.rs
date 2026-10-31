@@ -148,7 +148,7 @@ pub struct PresetDto {
 }
 
 fn read_json(p: &Path) -> Option<Value> {
-    serde_json::from_slice(&std::fs::read(p).ok()?).ok()
+    serde_json::from_slice(crate::util::strip_bom(&std::fs::read(p).ok()?)).ok()
 }
 
 /// Snapmaker Orca's data folder.
@@ -967,6 +967,19 @@ mod inheritance_tests {
         let whole = idx.flatten("Whole").unwrap();
         assert_eq!(whole["wall_loops"], "2");
         assert_eq!(whole["layer_height"], "0.2");
+    }
+
+    /// Snapmaker Orca 2.4.1 ships profiles that start with a UTF-8 BOM (the
+    /// U1's 0.20 mm Standard among them): they must still be read.
+    #[test]
+    fn a_profile_with_a_byte_order_mark_is_read() {
+        let dir = std::env::temp_dir().join("snapstudio-bom-profile");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("p.json");
+        std::fs::write(&p, b"\xEF\xBB\xBF{\"name\": \"With BOM\"}").unwrap();
+        assert_eq!(super::read_json(&p).unwrap()["name"], "With BOM");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
