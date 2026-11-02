@@ -1,9 +1,9 @@
 # Dev: printer simulator and full simulation mode
 
-Plan only: nothing is implemented. Written against `main` at `26add37`
-(0.18.0); line numbers are those of that commit. kameka22's decisions are at
-the end (2026-11-02) and the plan follows them; the implementation waits for
-a go.
+Implemented in draft PR #87 (phases 1 to 5), following kameka22's decisions
+at the end (2026-11-02); how to use it is in
+[DEVELOPMENT.md](../DEVELOPMENT.md#simulated-printers). Written against
+`main` at `26add37` (0.18.0); line numbers are those of that commit.
 
 ## Why
 
@@ -507,4 +507,4 @@ without a printer).
 12. **Pull request template:** a "simulator up to date" checkbox, added as
     part of the implementation, not now.
 
-The implementation go is not given yet.
+The implementation go was given on 2026-11-02.
