@@ -139,7 +139,7 @@ function prnRenderList() {
     el.dataset.id = p.id;
     el.title = `${p.host}${p.port && p.port !== 80 ? ":" + p.port : ""}`;
     el.innerHTML = `<span class="glyph" style="color: #34C759">${SIDE_PRINTER}</span>
-      <span class="lbl">${esc(p.name || p.host)}</span><span class="led ${ledClass(st, p.id)}"></span>`;
+      <span class="lbl">${esc(p.name || p.host)}</span>${simBadge(p.id)}<span class="led ${ledClass(st, p.id)}"></span>`;
     el.onclick = () => {
       P.sel = p.id;
       prnRenderDetail();
@@ -231,7 +231,7 @@ function prnRenderDetail() {
     prnCamHome();
     return;
   }
-  tbSet("printers", p.name || p.host, `${p.host}:${p.port}${p.model ? " · " + p.model : ""}`);
+  tbSet("printers", p.name || p.host, `${p.host}:${p.port}${p.model ? " · " + p.model : ""}${simOf(p.id) ? " · " + window.SIM.label : ""}`);
   if (typeof p3dShow === "function") p3dShow(p);
   // The camera follows the printer shown (camera.js: switching printer
   // turns it off, unless pinned).
@@ -684,8 +684,19 @@ function discoverStop() {
 /* Model suggested for a printer found. */
 const discModel = (f) => f.model || (f.service === "snapmaker" ? "Snapmaker U1" : "Klipper / Moonraker");
 
+/* A found printer's address: its host, and its port when the address
+   carries one ("host:port", printers sharing an address); Moonraker's
+   usual port otherwise. */
+function discAddr(f) {
+  const m = /^([^:]+):(\d+)$/.exec(f.ip);
+  return m ? { host: m[1], port: +m[2] } : { host: f.ip, port: 7125 };
+}
+
 /* Already saved: same address. */
-const discKnown = (f) => P.list.some((p) => p.host === f.ip);
+const discKnown = (f) => {
+  const a = discAddr(f);
+  return P.list.some((p) => p.host === f.ip || (p.host === a.host && p.port === a.port));
+};
 
 listen("printer-found", (e) => {
   const { search, printer: f } = e.payload;
@@ -755,9 +766,10 @@ function openForm(printer) {
   $("pf-disc").classList.toggle("hidden", !!printer);
   if (!printer) {
     discoveryList($("pf-disc"), (f) => {
+      const a = discAddr(f);
       $("pf-name").value = f.name;
-      $("pf-host").value = f.ip;
-      $("pf-port").value = 7125;
+      $("pf-host").value = a.host;
+      $("pf-port").value = a.port;
       $("pf-model").value = discModel(f);
       probeForm();
     });

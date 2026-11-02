@@ -158,15 +158,120 @@ src-tauri/src/
                   (GTK), edge resizing, rounded corners, system title bar
                   switch (tauri.windows.conf.json, tauri.linux.conf.json)
   scan.rs util.rs folder scanning, small shared helpers
+  sim/            simulated U1 printers, development builds only (feature
+                  `sim`): fake Moonraker (server.rs), machine, print runner,
+                  G-code interpreter, scenarios, faults, Settings › Developer
+  bin/u1-sim.rs   the simulated printers alone
+src-tauri/sim/    the simulator's scenarios, U1 fixtures and Settings ›
+                  Developer (ui/developer.js), outside the bundled ui/
 ```
 
 Snap Studio used to be called 3MF Studio: its data (settings, printers,
 favorites, conversations) is carried over on first launch.
 
+## Simulated printers
+
+Every printer screen can be tried without a Snapmaker U1. A development
+build made with the Cargo feature `sim` runs **simulated U1 printers**:
+each one is a small fake Moonraker on `127.0.0.1`, on a random port, with a
+simulated machine behind it (heaters, four heads and their spools, toolhead,
+print runner, bed mesh, counters, history, camera). The app's own printer
+code reaches them over the wire, exactly as it reaches a real U1: Printers,
+Prints and the queue, printer Files and timelapses, Control, Bed leveling,
+Maintenance, the spool check and the camera all work against them. The
+simulator exists only in `sim` builds: a release build never carries it
+(`src-tauri/src/sim/mod.rs` refuses to compile without debug assertions, and
+the release workflow checks the binary).
+
+```sh
+cd src-tauri
+cargo tauri dev --features sim                                   # then Settings › Developer
+SNAP_SIM=farm SNAP_SIM_SPEED=60 cargo tauri dev --features sim   # straight into simulation
+cargo run --features sim --bin u1-sim -- farm --speed 60         # the printers alone
+cargo test --lib --features sim                                  # the end-to-end tests
+```
+
+**Settings › Developer** (in `sim` builds only) turns simulation on and
+off, picks the scenario, edits its printers (name, state at launch, the
+spool of each head; add or remove one) and sets the time factor. These
+choices are saved in a `sim.json` of the app's data folder, never in
+`settings.json`, and the app restarts to apply them. While simulation runs,
+the same section injects faults on a running printer and loads spools (to end
+a filament runout, or to give the spool check something new to read).
+`SNAP_SIM=<scenario>` (with `SNAP_SIM_SPEED=1|10|60|600`) starts straight in
+simulation, for scripts, the CI and screenshots; it wins over `sim.json` for
+that launch, and a build without the feature ignores it.
+
+**Full simulation.** While it runs, the app keeps everything tied to a
+printer (the saved printers, the queue and history of prints, the bed mesh
+history, the maintenance log) in a `sim` folder of the app's data folder,
+**emptied at every launch** and filled from the scenario. Your own printers
+are not shown and their records are never written. Settings, profiles, the
+engine, the library and AI conversations stay shared. The network search
+lists the simulated printers without asking the network: nothing is ever
+announced on the local network. A **SIMULATION** pill sits in the sidebar,
+the window title ends with "Simulation", each simulated printer carries a
+**SIMULATED** badge (sidebar, title bar, send sheet, Prints), notifications
+start with "[SIM]" and the camera shows a card with SIMULATED across it.
+
+**Scenarios** (`src-tauri/sim/scenarios/`; a file of the same shape can be
+given instead):
+
+| Scenario | Printers |
+|---|---|
+| `solo` | One idle U1, four PLA spools of different colours, three files, a short history |
+| `farm` | Four U1: one idle with a print queued, one printing at 40 %, one paused on a filament runout, one whose spool does not match its queued print (and an empty head) |
+| `trouble` | One that drops its connection every few minutes, one whose uploads fail halfway, one with Klipper shut down |
+
+Names, hostnames and serials are made up (`Sim U1 Alpha`, `sim-alpha`,
+`SIM-0000-0001`), so screenshots of printer screens have nothing to blur: take
+them against `farm`.
+
+**Time.** The time factor (×1, ×10, ×60, ×600) speeds up heating, homing,
+leveling and prints. A print follows the G-code it was sent, read by the
+app's own `gcode.rs`: its duration, its layers, its tool changes and its
+filament; leveling and flow calibration add their time before the first
+layer. Whatever the factor, a print lasts at least **2 minutes of real
+time**: the queue monitor polls every 8 s and leaves a print alone for 90 s
+after its launch, it must see it run, then end.
+
+**Faults**, from a scenario (`"faults": [{"fault": "disconnect", "secs": 20,
+"after": 90, "every": 240}]`), from Settings › Developer, with `u1-sim fault
+PORT FAULT [key=value…]` (`clear` removes them), or by `POST /sim/fault` on
+the printer's port:
+
+| Fault | Parameters | Effect |
+|---|---|---|
+| `disconnect` | `secs` (30) | WebSocket closed, connections refused meanwhile |
+| `unreachable` | `secs` (60; 0 until cleared) | Port closed |
+| `slow` | `ms` (3000) | Every answer late |
+| `klippy_shutdown`, `klippy_error` | `message` | Klipper shut down, or disconnected; a firmware restart brings it back |
+| `runout` | `head` (0) | The head's filament gone; a print pauses |
+| `upload_fail` | `at` (50 %) | Uploads cut at that point |
+| `start_refused` | `message` | `start_local_print` refuses |
+| `no_start_local_print` | | A firmware without it: the legacy start route |
+| `camera_off` | | The camera does not start |
+| `head_pick_fail` | | The next tool change fails (error counters) |
+| `print_error` | `message` | The print ends in error |
+| `disk_full` | | Little free space, uploads refused |
+
+**Tests.** `cargo test --lib --features sim` starts simulators on a virtual
+clock the tests move by hand and runs the app's real functions against them:
+probe and status, the live feed and its reconnection, upload and start on
+both routes, the queue monitor closing a job and offering the next, printer
+files, Control, bed mesh, maintenance and each fault. The CI runs them next to
+the usual `cargo test --lib`.
+
+The simulator is plausible, not exact: it does not replace the checks on a
+real machine (see the [plans index](plans/README.md)). When a feature starts
+using another part of the printer's API, the simulator gets it too (the pull
+request template asks).
+
 ## Tests
 
 ```sh
 cd src-tauri && cargo fmt --check && cargo test --lib   # formatting: rustfmt.toml
+cd src-tauri && cargo test --lib --features sim         # with the printer simulator
 for t in scripts/test-*.js; do node "$t"; done   # interface logic
 python3 scripts/check-i18n.py                    # missing or unused texts
 ```

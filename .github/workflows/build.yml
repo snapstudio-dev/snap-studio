@@ -110,6 +110,26 @@ jobs:
           npx --yes @tauri-apps/cli@^2 build ${{ matrix.args }} \
             --config '{"bundle":{"createUpdaterArtifacts":true}}'
 
+      # The printer simulator is for development builds only (Cargo feature
+      # `sim`, docs/DEVELOPMENT.md): neither its server nor its code may
+      # reach a release.
+      - name: No simulator in the release
+        working-directory: src-tauri
+        run: |
+          if cargo tree -e normal --prefix none | grep -qE '^axum v'; then
+            echo "::error::axum, the simulator's server, is among the release's dependencies"
+            exit 1
+          fi
+          bins=$(find target -type f \( -name snap-studio -o -name snap-studio.exe \) -path '*/release/*' -not -path '*/deps/*' -not -path '*/bundle/*')
+          [ -n "$bins" ] || { echo "::error::no release binary found"; exit 1; }
+          for b in $bins; do
+            if grep -aqE 'sim_status|SIMULATED' "$b"; then
+              echo "::error::$b carries the printer simulator"
+              exit 1
+            fi
+            echo "$b: no simulator"
+          done
+
       - name: Packages (macOS)
         if: runner.os == 'macOS'
         run: |

@@ -307,9 +307,7 @@ pub async fn stop(host: &str, port: u16) -> Result<()> {
 type Store = HashMap<String, Vec<Mesh>>;
 
 fn store_path() -> PathBuf {
-    let dir = dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio");
-    let _ = std::fs::create_dir_all(&dir);
-    dir.join("bed_mesh.json")
+    crate::util::app_dir().join("bed_mesh.json")
 }
 
 fn read_store(path: &Path) -> Store {

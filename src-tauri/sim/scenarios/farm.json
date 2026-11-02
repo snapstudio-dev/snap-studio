@@ -1,0 +1,87 @@
+{
+  "name": "farm",
+  "description": "Four U1: one idle, one printing at 40 %, one paused on a filament runout, one with a spool that does not match its queued print.",
+  "speed": 1,
+  "printers": [
+    {
+      "id": "sim-alpha",
+      "name": "Sim U1 Alpha",
+      "hostname": "sim-alpha",
+      "serial": "SIM-0000-0001",
+      "files": [
+        { "name": "Calibration_Cube.gcode", "tools": [0], "minutes": 24, "layers": 100 },
+        { "name": "Four_Color_Coaster.gcode", "tools": [0, 1, 2, 3], "minutes": 95, "layers": 16 }
+      ],
+      "history": [
+        { "file": "Calibration_Cube.gcode", "status": "completed", "days_ago": 0.8, "minutes": 24, "filament_m": 2.1 }
+      ],
+      "switch_counts": [1210, 1102, 870, 655],
+      "mesh_seed": 1,
+      "mesh_history": 2,
+      "queue": ["Calibration_Cube.gcode"]
+    },
+    {
+      "id": "sim-bravo",
+      "name": "Sim U1 Bravo",
+      "hostname": "sim-bravo",
+      "serial": "SIM-0000-0002",
+      "start": "printing",
+      "progress": 0.4,
+      "print": "Planter_Two_Tone.gcode",
+      "spools": [
+        { "type": "PETG", "color": "#2b8c4a" },
+        { "type": "PETG", "color": "#f2f2f2" },
+        { "type": "PLA", "color": "#f0b400" },
+        { "type": "PLA", "color": "#1a1a1a" }
+      ],
+      "files": [
+        { "name": "Planter_Two_Tone.gcode", "tools": [0, 1], "minutes": 180, "layers": 240 },
+        { "name": "Hook.gcode", "tools": [2], "minutes": 12, "layers": 40 }
+      ],
+      "history": [
+        { "file": "Hook.gcode", "status": "completed", "days_ago": 2, "minutes": 12, "filament_m": 1.4 },
+        { "file": "Hook.gcode", "status": "error", "days_ago": 2.1, "minutes": 3, "filament_m": 0.3 }
+      ],
+      "switch_counts": [2240, 2238, 310, 280],
+      "mesh_seed": 2,
+      "mesh_history": 4
+    },
+    {
+      "id": "sim-charlie",
+      "name": "Sim U1 Charlie",
+      "hostname": "sim-charlie",
+      "serial": "SIM-0000-0003",
+      "start": "printing",
+      "progress": 0.55,
+      "print": "Gear_Set.gcode",
+      "spools": [
+        { "type": "PLA", "color": "#e8e8e8" },
+        { "type": "PLA", "color": "#7a3fb8" },
+        { "type": "TPU", "color": "#1a1a1a" },
+        { "type": "PLA", "color": "#d93a2b" }
+      ],
+      "files": [{ "name": "Gear_Set.gcode", "tools": [0, 1], "minutes": 70, "layers": 120 }],
+      "switch_counts": [905, 899, 12, 640],
+      "mesh_seed": 3,
+      "faults": [{ "fault": "runout", "head": 1, "after": 0 }]
+    },
+    {
+      "id": "sim-delta",
+      "name": "Sim U1 Delta",
+      "hostname": "sim-delta",
+      "serial": "SIM-0000-0004",
+      "spools": [
+        { "type": "PETG", "color": "#1a1a1a" },
+        { "type": "PLA", "color": "#e8e8e8" },
+        { "type": "", "color": "#ffffff", "present": false },
+        { "type": "PLA", "color": "#2f6fd6" }
+      ],
+      "files": [
+        { "name": "Name_Tag.gcode", "tools": [0], "minutes": 18, "layers": 24, "materials": ["PLA"], "colors": ["#e8e8e8"] }
+      ],
+      "switch_counts": [330, 290, 0, 120],
+      "mesh_seed": 4,
+      "queue": ["Name_Tag.gcode"]
+    }
+  ]
+}

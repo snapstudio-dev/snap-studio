@@ -1,0 +1,8 @@
+{
+  "version": "0.0.10",
+  "PLA": { "vendor_generic": { "sub_generic": { "load_temp": 220 }, "sub_Silk": { "load_temp": 220 }, "sub_Matte": { "load_temp": 220 } } },
+  "PETG": { "vendor_generic": { "sub_generic": { "load_temp": 240 }, "sub_HF": { "load_temp": 245 } } },
+  "ABS": { "vendor_generic": { "sub_generic": { "load_temp": 255 } } },
+  "TPU": { "vendor_generic": { "sub_generic": { "load_temp": 225 }, "sub_95A HF": { "load_temp": 230 } } },
+  "PLA-CF": { "vendor_generic": { "sub_generic": { "load_temp": 230 } } }
+}

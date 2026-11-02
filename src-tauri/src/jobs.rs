@@ -121,7 +121,7 @@ fn now() -> u64 {
 }
 
 fn dir() -> PathBuf {
-    let d = dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio").join("jobs");
+    let d = crate::util::app_dir().join("jobs");
     let _ = std::fs::create_dir_all(&d);
     d
 }
@@ -515,7 +515,7 @@ pub struct Live {
 }
 
 #[derive(Serialize, Clone)]
-struct QueueNext {
+pub(crate) struct QueueNext {
     printer_id: String,
     printer_name: String,
     /// Print that just finished, if it was seen finishing.
@@ -573,7 +573,7 @@ pub fn ask_again(app: &AppHandle) {
     }
 }
 
-fn offer_next(app: &AppHandle, live: &Live, finished: Option<Job>) {
+fn offer_next(app: &impl Report, live: &Live, finished: Option<Job>) {
     let Some(next) = next_for(&live.printer_id) else { return };
     {
         let mut m = mon();
@@ -581,8 +581,7 @@ fn offer_next(app: &AppHandle, live: &Live, finished: Option<Job>) {
             return;
         }
     }
-    let _ =
-        app.emit("queue-next", QueueNext { printer_id: live.printer_id.clone(), printer_name: live.printer_name.clone(), finished, next });
+    app.queue_next(QueueNext { printer_id: live.printer_id.clone(), printer_name: live.printer_name.clone(), finished, next });
 }
 
 /// Background task: one pass every `POLL` seconds, while the app lives.
@@ -633,7 +632,7 @@ async fn tick(app: &AppHandle) {
 /// a complete state: an incomplete answer or a Klipper hiccup must not close a
 /// print that is still running. True when a print started with a
 /// substitution was just closed.
-fn observe(app: &AppHandle, live: &Live) -> bool {
+fn observe(app: &impl Report, live: &Live) -> bool {
     if live.status.partial {
         return false;
     }
@@ -683,7 +682,7 @@ fn observe(app: &AppHandle, live: &Live) -> bool {
     let closed = if pending { close_printing(id, outcome) } else { vec![] };
     let reset = closed.iter().any(|j| j.remapped);
     if was_busy || !closed.is_empty() {
-        let _ = app.emit("jobs-changed", ());
+        app.jobs_changed();
         let name = closed.first().map(|j| j.name.clone()).or_else(|| live.status.job.clone()).unwrap_or_else(|| crate::t!("prints.print"));
         let key = match outcome {
             "cancelled" => "queue.done.cancelled",
@@ -691,15 +690,34 @@ fn observe(app: &AppHandle, live: &Live) -> bool {
             _ => "queue.done.ok",
         };
         let next = next_for(id).map(|j| format!(" {}", crate::t!("notify.next", name = j.name))).unwrap_or_default();
-        notify(app, &crate::t!(key, name = name), &format!("{}.{next}", live.printer_name));
+        app.notify(&crate::t!(key, name = name), &format!("{}.{next}", live.printer_name));
     }
     offer_next(app, live, closed.into_iter().next());
     reset
 }
 
-fn notify(app: &AppHandle, title: &str, body: &str) {
-    use tauri_plugin_notification::NotificationExt;
-    let _ = app.notification().builder().title(title).body(body).show();
+/// Where the monitor reports: the app (events, notifications), or a test.
+trait Report {
+    fn jobs_changed(&self);
+    fn notify(&self, title: &str, body: &str);
+    fn queue_next(&self, q: QueueNext);
+}
+
+impl Report for AppHandle {
+    fn jobs_changed(&self) {
+        let _ = self.emit("jobs-changed", ());
+    }
+
+    fn notify(&self, title: &str, body: &str) {
+        use tauri_plugin_notification::NotificationExt;
+        #[cfg(feature = "sim")]
+        let title = &crate::sim::tag(title);
+        let _ = self.notification().builder().title(title).body(body).show();
+    }
+
+    fn queue_next(&self, q: QueueNext) {
+        let _ = self.emit("queue-next", q);
+    }
 }
 
 #[cfg(test)]
@@ -854,5 +872,78 @@ mod tests {
         let r: PrintResult = serde_json::from_str(r#"{"success":false,"reason":"adhesion","note":"corner lifted"}"#).unwrap();
         assert_eq!((r.success, r.reason.as_deref()), (Some(false), Some("adhesion")));
         assert_eq!(r.at, 0);
+    }
+}
+
+/// The queue monitor against a simulated printer: a print ends, its job
+/// closes, the next one is offered.
+#[cfg(all(test, feature = "sim"))]
+mod sim_tests {
+    use super::*;
+    use crate::sim::tests::{data_dir, start};
+
+    #[derive(Default)]
+    struct Seen {
+        changed: Mutex<u32>,
+        notes: Mutex<Vec<(String, String)>>,
+        next: Mutex<Vec<QueueNext>>,
+    }
+
+    impl Report for Seen {
+        fn jobs_changed(&self) {
+            *self.changed.lock().unwrap() += 1;
+        }
+        fn notify(&self, title: &str, body: &str) {
+            self.notes.lock().unwrap().push((title.into(), body.into()));
+        }
+        fn queue_next(&self, q: QueueNext) {
+            self.next.lock().unwrap().push(q);
+        }
+    }
+
+    #[test]
+    fn the_queue_follows_a_simulated_print() {
+        data_dir();
+        let s = start("solo");
+        let p = s.printer(0);
+        let file = s.gcode("Queue.gcode", vec![0], 20, 10);
+        let new = |name: &str| NewJob { name: name.into(), printer_id: p.id.clone(), tools: vec![0], ..Default::default() };
+        let first = add(&file, new("First"), "queued", "").unwrap();
+        let second = add(&file, new("Second"), "queued", "").unwrap();
+        // Launched as the app does: sent under its own name, then marked.
+        let remote = remote_name(&first.name, &first.id);
+        let sent = s.dir.join(&remote);
+        std::fs::copy(&file, &sent).unwrap();
+        s.send(0, &sent, StartOptions::default(), &[0]).unwrap();
+        mark_started(&first.id, &remote).unwrap();
+        let live = || Live { printer_id: p.id.clone(), printer_name: p.name.clone(), status: s.status(0) };
+        let seen = Seen::default();
+        observe(&seen, &live());
+        assert!(seen.next.lock().unwrap().is_empty(), "printing: nothing offered");
+        // The print ends (20 min, a minute of heating first).
+        s.advance(21.0 * 60.0 + 5.0);
+        assert_eq!(s.status(0).state, "complete");
+        // Out of the 90 s given to a print just launched.
+        update(|list| {
+            list.iter_mut().filter(|j| j.id == first.id).for_each(|j| j.started = Some(now() - 2 * GRACE_S));
+            Ok(())
+        })
+        .unwrap();
+        observe(&seen, &live());
+        assert_eq!(get(&first.id).unwrap().state, "printing", "one pass is not enough");
+        observe(&seen, &live());
+        assert_eq!(get(&first.id).unwrap().state, "complete");
+        assert_eq!(seen.notes.lock().unwrap().len(), 1);
+        assert!(seen.notes.lock().unwrap()[0].1.contains("Second"), "{:?}", seen.notes.lock().unwrap());
+        let next = seen.next.lock().unwrap();
+        assert_eq!(next.len(), 1);
+        assert_eq!(
+            (next[0].next.id.as_str(), next[0].finished.as_ref().map(|j| j.id.as_str())),
+            (second.id.as_str(), Some(first.id.as_str()))
+        );
+        // Asked once.
+        drop(next);
+        observe(&seen, &live());
+        assert_eq!(seen.next.lock().unwrap().len(), 1);
     }
 }
