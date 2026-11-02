@@ -49,6 +49,9 @@ pub struct SimPrinter {
     tx: broadcast::Sender<Push>,
     net: watch::Sender<Net>,
     scripts: tokio::sync::Mutex<()>,
+    /// One push at a time: changes computed by one `sync` go out before
+    /// the next one computes its own (the clients' snapshots stay in order).
+    pushing: Mutex<()>,
     conns: AtomicU64,
 }
 
@@ -61,6 +64,7 @@ impl SimPrinter {
 
     /// Brings the machine to now and pushes what changed.
     pub fn sync(&self) {
+        let _in_order = self.pushing.lock().unwrap_or_else(|e| e.into_inner());
         let now = self.clock.now();
         let (events, changes, net, timelapses, eventtime) = {
             let mut m = self.lock();
@@ -248,6 +252,7 @@ async fn build(spec: PrinterSpec, factor: f64, epoch: f64, dir: PathBuf, clock: 
         tx,
         net,
         scripts: tokio::sync::Mutex::new(()),
+        pushing: Mutex::new(()),
         conns: AtomicU64::new(1),
     };
     // Each past video's picture.

@@ -760,6 +760,10 @@ impl Machine {
         }
         match plan {
             Ok(plan) => {
+                // A tool past the four heads, unmapped: no such head.
+                if let Some(t) = plan.tools.iter().find(|t| self.map[(**t as usize).min(15)] > 3) {
+                    return Err(format!("Tool T{t} has no extruder on this printer"));
+                }
                 // The heads used, after the mapping.
                 let mut used: Vec<u8> = plan.tools.iter().map(|t| self.map[(*t as usize).min(15)]).collect();
                 used.sort_unstable();

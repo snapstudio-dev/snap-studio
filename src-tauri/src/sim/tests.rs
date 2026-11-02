@@ -278,6 +278,21 @@ fn the_legacy_route_and_refusals() {
     assert!(e.to_string().contains("507"), "{e}");
     let o = s.run(crate::printer_files::overview("127.0.0.1", s.port(0), None)).unwrap();
     assert!(o.disk.unwrap().free <= 1_000_000);
+    // A tool past the four heads: refused, the printer still answers.
+    s.p(0).clear_faults();
+    let five = s.gcode("Five.gcode", vec![0, 4], 10, 5);
+    let port = s.port(0);
+    let e = s
+        .drive(
+            async move {
+                printers::upload("127.0.0.1", port, &five, "Five.gcode", false, |_, _| {}).await?;
+                printers::start_print("127.0.0.1", port, "Five.gcode", &StartOptions::default(), &[0, 4], &[]).await
+            },
+            0.5,
+        )
+        .unwrap_err();
+    assert!(e.to_string().contains("T4"), "{e}");
+    assert!(s.status(0).online);
     // An empty head is refused.
     s.p(0).clear_faults();
     s.p(0).set_spool(1, Spool::empty());

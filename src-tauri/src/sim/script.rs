@@ -65,8 +65,9 @@ pub fn params(rest: &str) -> HashMap<String, String> {
         } else {
             // Classic G-code: a letter and its number.
             let up = key.to_ascii_uppercase();
-            let (k, v) = up.split_at(1);
-            out.insert(k.to_string(), v.to_string());
+            let mut chars = up.chars();
+            let k = chars.next().map(String::from).unwrap_or_default();
+            out.insert(k, chars.as_str().to_string());
         }
     }
     out
@@ -461,6 +462,10 @@ mod tests {
     fn parameters_of_both_kinds() {
         let p = params(r#"CONFIG_EXTRUDER=2 VENDOR="Generic" FILAMENT_SUBTYPE="95A HF" FILAMENT_COLOR_RGBA=FF7A1AFF"#);
         assert_eq!((p["CONFIG_EXTRUDER"].as_str(), p["FILAMENT_SUBTYPE"].as_str(), p["VENDOR"].as_str()), ("2", "95A HF", "Generic"));
+        // A word that is not ASCII (a message) never splits inside a character.
+        let p = params("État 10");
+        assert_eq!((p["É"].as_str(), p["1"].as_str()), ("TAT", "0"));
+        assert!(alpha().exec("M117 État 2/3").exec == Exec::Done);
         let p = params("X10 Y-2.5 F6000");
         assert_eq!((p["X"].as_str(), p["Y"].as_str(), p["F"].as_str()), ("10", "-2.5", "6000"));
     }

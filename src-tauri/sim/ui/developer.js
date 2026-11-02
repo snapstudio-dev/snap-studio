@@ -260,8 +260,11 @@
     const dev = b.dataset.dev;
     try {
       if (dev === "add") {
+        // A number no printer has: after a removal, the count could repeat one.
+        const taken = D.printers.map((p) => +(/^sim-extra-(\d+)$/.exec(p.id)?.[1] || 0));
+        const n = Math.max(D.printers.length, ...taken) + 1;
         const names = ["Kilo", "Lima", "Mike", "November", "Oscar", "Papa"];
-        D.printers.push(await invoke("sim_new_printer", { n: D.printers.length + 1, name: `Sim U1 ${names[D.printers.length % names.length]}` }));
+        D.printers.push(await invoke("sim_new_printer", { n, name: `Sim U1 ${names[(n - 1) % names.length]}` }));
         return edit();
       }
       if (b.dataset.pRemove != null) {

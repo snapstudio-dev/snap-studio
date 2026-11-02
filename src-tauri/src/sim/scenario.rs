@@ -272,6 +272,9 @@ pub fn check(s: &Scenario) -> Result<()> {
                 return Err(anyhow!("scenario {}: printer {} prints {f}, which is not among its files", s.name, p.id));
             }
         }
+        if let Some(f) = p.files.iter().find(|f| f.tools.iter().any(|t| *t > 3)) {
+            return Err(anyhow!("scenario {}: printer {}: {} uses a tool past T3 (four heads)", s.name, p.id, f.name));
+        }
         for q in &p.queue {
             if !p.files.iter().any(|x| &x.name == q) {
                 return Err(anyhow!("scenario {}: printer {} queues {q}, which is not among its files", s.name, p.id));
@@ -323,6 +326,9 @@ mod tests {
         let mut s = load("solo").unwrap();
         s.printers[0].print = Some("missing.gcode".into());
         assert!(check(&s).is_err());
+        let mut s = load("solo").unwrap();
+        s.printers[0].files[0].tools = vec![0, 4];
+        assert!(check(&s).is_err(), "no fifth head");
         let p = PrinterSpec::new(3, "Sim U1 Kilo!");
         assert_eq!((p.id.as_str(), p.hostname.as_str(), p.serial.as_str()), ("sim-extra-3", "sim-u1-kilo", "SIM-0000-0103"));
     }
