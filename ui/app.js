@@ -173,6 +173,11 @@ function menuUnder(el, items) {
 /* Each view declares its title and subtitle; only the visible view shows
    them. Its controls live in a .tb-actions[data-for] slot. */
 const TB = {};
+/* Simulated printers, in a development build running them: the badge's
+   label comes with the list (window.SIM, set by that build), none in here. */
+const simOf = (id) => !!window.SIM?.on && !!window.SIM.printers?.includes(id);
+const simBadge = (id) => (simOf(id) ? `<span class="sim-badge">${esc(window.SIM.label)}</span>` : "");
+
 function tbSet(view, title, sub = "") {
   TB[view] = { title, sub };
   if ((window.currentView || "files") === view) tbRender();

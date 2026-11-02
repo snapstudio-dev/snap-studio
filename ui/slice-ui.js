@@ -313,7 +313,7 @@ function printerChips(list, selected, disabled = false) {
       const away = s === "offline" || s === "error";
       return `<button type="button" class="sl-pchip${on ? " on" : ""}${away ? " away" : ""}" role="radio" aria-checked="${on}" data-printer="${esc(p.id)}"${disabled ? " disabled" : ""}>
           <span class="sl-pchip-icon ${esc(s || "")}">${PRINTER_ICON}</span>
-          <span class="sl-pchip-text"><b>${esc(p.name || p.host)}</b><small class="st ${esc(s || "")}">${esc(s ? pstateLabel(s) : "—")}</small></span></button>`;
+          <span class="sl-pchip-text"><b>${esc(p.name || p.host)}${simBadge(p.id)}</b><small class="st ${esc(s || "")}">${esc(s ? pstateLabel(s) : "—")}</small></span></button>`;
     })
     .join("");
 }

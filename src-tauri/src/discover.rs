@@ -55,6 +55,18 @@ impl Discovery {
 #[tauri::command]
 pub fn printer_discover_start(app: AppHandle, state: State<'_, Discovery>, search: u64) -> Result<(), String> {
     state.stop();
+    // Simulation: the simulated printers, and nothing is asked of the network.
+    #[cfg(feature = "sim")]
+    if let Some(found) = crate::sim::discovered() {
+        std::thread::spawn(move || {
+            for f in found {
+                std::thread::sleep(Duration::from_millis(400));
+                let _ = app.emit("printer-found", serde_json::json!({ "search": search, "printer": f }));
+            }
+            let _ = app.emit("printer-discover-done", serde_json::json!({ "search": search }));
+        });
+        return Ok(());
+    }
     let daemon = ServiceDaemon::new().map_err(|e| crate::t!("err.discovery", err = e))?;
     let stop = Arc::new(AtomicBool::new(false));
     *state.0.lock().unwrap() = Some(stop.clone());

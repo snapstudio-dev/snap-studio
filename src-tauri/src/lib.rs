@@ -30,6 +30,9 @@ mod render;
 mod scan;
 mod setup;
 mod share;
+// Simulated printers: development builds only (docs/DEVELOPMENT.md).
+#[cfg(feature = "sim")]
+pub mod sim;
 mod slice;
 mod slicers;
 mod stl;
@@ -1338,6 +1341,8 @@ async fn bed_mesh_stop(printer_id: String) -> Result<(), String> {
 #[tauri::command]
 fn app_notify(app: tauri::AppHandle, title: String, body: String) {
     use tauri_plugin_notification::NotificationExt;
+    #[cfg(feature = "sim")]
+    let title = sim::tag(&title);
     let _ = app.notification().builder().title(title).body(body).show();
 }
 
@@ -1858,6 +1863,9 @@ fn language_set(app: tauri::AppHandle, lang: String) -> Result<(), String> {
 pub fn run() {
     // First of all: carry over the data of the former "3MF Studio".
     migrate::run();
+    // Simulated printers, before anything reads the saved printers.
+    #[cfg(feature = "sim")]
+    sim::boot();
     std::thread::spawn(thumbs::prune_old);
     std::thread::spawn(slice::cleanup_stale);
 
@@ -1922,6 +1930,9 @@ pub fn run() {
             // receive the translation catalogs before any of its scripts run.
             if let Some(cfg) = app.config().app.windows.iter().find(|w| w.label == "main") {
                 let builder = tauri::WebviewWindowBuilder::from_config(app.handle(), cfg)?.initialization_script(i18n::init_script());
+                // Settings › Developer and the simulation's badges.
+                #[cfg(feature = "sim")]
+                let builder = builder.initialization_script(sim::init_script());
                 // Linux: the system title bar when the user prefers it
                 // (titlebar.rs); the interface draws its own otherwise.
                 #[cfg(target_os = "linux")]
@@ -1929,6 +1940,10 @@ pub fn run() {
                 builder.build()?;
             }
             if let Some(window) = app.get_webview_window("main") {
+                #[cfg(feature = "sim")]
+                if sim::active() {
+                    let _ = window.set_title(&format!("{} — Simulation", window.title().unwrap_or_default()));
+                }
                 // Whole window vibrant: the CSS makes the content area opaque and leaves
                 // the sidebar translucent.
                 #[cfg(target_os = "macos")]
@@ -2103,7 +2118,19 @@ pub fn run() {
             printers_watch_stop,
             cache_info,
             clear_cache,
-            menu::popup_menu
+            menu::popup_menu,
+            #[cfg(feature = "sim")]
+            sim::sim_status,
+            #[cfg(feature = "sim")]
+            sim::sim_config,
+            #[cfg(feature = "sim")]
+            sim::sim_new_printer,
+            #[cfg(feature = "sim")]
+            sim::sim_set,
+            #[cfg(feature = "sim")]
+            sim::sim_fault,
+            #[cfg(feature = "sim")]
+            sim::sim_spool
         ])
         .build(tauri::generate_context!())
         .expect("error while starting the application")
@@ -2127,6 +2154,20 @@ mod tests {
         assert!(Response::builder().header("X-Error", msg).body(()).is_err(), "raw: refused by http");
         assert_eq!(header_text(msg), "line one line two  é");
         assert!(Response::builder().header("X-Error", header_text(msg)).body(()).is_ok());
+    }
+
+    /// The interface every build bundles names nothing of the simulator:
+    /// its labels come from `sim_status`, its Developer section lives in
+    /// `src-tauri/sim/ui/`, added by `sim` builds only.
+    #[test]
+    fn the_bundled_interface_has_no_simulator() {
+        let ui = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ui");
+        for e in walkdir::WalkDir::new(&ui).into_iter().flatten().filter(|e| e.file_type().is_file()) {
+            let Ok(text) = std::fs::read_to_string(e.path()) else { continue };
+            for word in ["SIMULATED", "SIMULATION", "sim_status", "sim_config", "sim_set", "sim_fault", "sim_spool"] {
+                assert!(!text.contains(word), "{} names {word}", e.path().display());
+            }
+        }
     }
 
     #[test]

@@ -24,9 +24,7 @@ pub struct Printer {
 }
 
 fn store_path() -> PathBuf {
-    let dir = dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio");
-    let _ = std::fs::create_dir_all(&dir);
-    dir.join("printers.json")
+    crate::util::app_dir().join("printers.json")
 }
 
 pub fn load() -> Vec<Printer> {

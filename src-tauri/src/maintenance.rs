@@ -107,9 +107,7 @@ pub struct Entry {
 type Log = HashMap<String, Vec<Entry>>;
 
 fn log_path() -> PathBuf {
-    let dir = dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio");
-    let _ = std::fs::create_dir_all(&dir);
-    dir.join("maintenance.json")
+    crate::util::app_dir().join("maintenance.json")
 }
 
 fn read_log(path: &std::path::Path) -> Log {

@@ -136,9 +136,10 @@ async function wSetDir(dir) {
 function wPick(f) {
   $("w-form").classList.remove("hidden");
   $("w-manual").classList.add("hidden");
+  const a = discAddr(f);
   $("w-pname").value = f.name;
-  $("w-phost").value = f.ip;
-  $("w-pport").value = 7125;
+  $("w-phost").value = a.host;
+  $("w-pport").value = a.port;
   wProbe();
 }
 
@@ -179,7 +180,7 @@ async function wProbe() {
 async function wAdd() {
   const host = $("w-phost").value.trim();
   if (!host) return wProbe();
-  const found = [...DISC.items.values()].find((f) => f.ip === host);
+  const found = [...DISC.items.values()].find((f) => discAddr(f).host === host);
   const printer = {
     id: "",
     name: $("w-pname").value.trim() || host,

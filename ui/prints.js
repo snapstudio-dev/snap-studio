@@ -327,14 +327,14 @@ function pjRenderList(key) {
     const pct = Math.round((st.progress || 0) * 100);
     const sub = paused ? tr("prints.pause_short") : st.remaining_s ? tr("prints.ends_at", { time: fmtClock(Date.now() + st.remaining_s * 1000) }) : "";
     running.push(
-      pjRow(k, job, k === key, `<b>${esc(job?.name || pjName(l))}</b><small>${esc([l.printer_name, sub].filter(Boolean).join(" · "))}</small>
+      pjRow(k, job, k === key, `<b>${esc(job?.name || pjName(l))}</b><small>${simBadge(l.printer_id)}${esc([l.printer_name, sub].filter(Boolean).join(" · "))}</small>
         <span class="pj-mini${paused ? " paused" : ""}"><i style="width:${pct}%"></i></span>`, `<span>${pct} %</span>`)
     );
   }
   for (const j of pjStarting()) {
     if (!pjlPasses(j, q)) continue;
     const off = pjLiveOf(j.printer_id)?.status.online === false;
-    running.push(pjRow("job:" + j.id, j, "job:" + j.id === key, `<b>${esc(j.name)}</b><small>${esc(pjPrinterName(j.printer_id))} · ${esc(tr(off ? "prints.unreachable" : "printers.cam.starting"))}</small>`, ""));
+    running.push(pjRow("job:" + j.id, j, "job:" + j.id === key, `<b>${esc(j.name)}</b><small>${simBadge(j.printer_id)}${esc(pjPrinterName(j.printer_id))} · ${esc(tr(off ? "prints.unreachable" : "printers.cam.starting"))}</small>`, ""));
   }
   if (running.length) html.push(pjGroup(tr("prints.running"), String(running.length)), ...running);
   // Queue, with its total time and each print's estimated start.
@@ -349,7 +349,7 @@ function pjRenderList(key) {
       const t = j.stats?.print_time_s;
       const at = fmtClock(starts.get(j.id));
       html.push(
-        pjRow("job:" + j.id, j, "job:" + j.id === key, `<b><span class="pj-qn">${i + 1}.</span>${esc(j.name)}</b><small>${esc([pjPrinterName(j.printer_id), t && fmtDuration(t)].filter(Boolean).join(" · "))}</small>`,
+        pjRow("job:" + j.id, j, "job:" + j.id === key, `<b><span class="pj-qn">${i + 1}.</span>${esc(j.name)}</b><small>${simBadge(j.printer_id)}${esc([pjPrinterName(j.printer_id), t && fmtDuration(t)].filter(Boolean).join(" · "))}</small>`,
           `<span title="${esc(tr("prints.starts_at", { time: at }))}">${esc(at)}</span>`)
       );
     }

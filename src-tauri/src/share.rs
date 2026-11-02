@@ -225,6 +225,8 @@ pub fn qr_stop() {
 /// The computer's address on the network that reaches `toward` (the
 /// printer: the phone is on that same network).
 fn local_ip(toward: &str) -> Result<IpAddr> {
+    #[cfg(feature = "sim")]
+    let toward = crate::sim::route_toward(toward);
     let s = UdpSocket::bind("0.0.0.0:0")?;
     s.connect((toward, 80))?;
     let ip = s.local_addr()?.ip();

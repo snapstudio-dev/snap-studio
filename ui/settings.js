@@ -7,6 +7,31 @@
 const SET_KEY = "snapstudio.setcat";
 const SET_CATS = [...document.querySelectorAll("#set-menu .set-cat")].map((b) => b.dataset.cat);
 let setCurrent = null;
+/* What a category does when it shows, for the ones added from outside. */
+const SET_SHOWN = {};
+
+/* A category's title: its key, or its own text (an added section). */
+const setTitleOf = (pane) => {
+  const t = pane.querySelector(".set-title");
+  return t?.dataset.i18n ? tr(t.dataset.i18n) : t?.textContent || "";
+};
+
+/* A section added from outside ui/ (a development build's own, injected
+   at its start): its menu entry goes before About. `pane` holds a
+   `.set-title`; `onShow` runs each time it shows. */
+function settingsAddPane({ cat, label, color, icon, pane, onShow }) {
+  const b = document.createElement("button");
+  b.className = "set-cat";
+  b.dataset.cat = cat;
+  b.innerHTML = `<span class="glyph" style="color: ${color}">${icon}</span><span class="lbl"></span><i class="set-dot"></i>`;
+  b.querySelector(".lbl").textContent = label;
+  $("set-menu").insertBefore(b, document.querySelector('#set-menu .set-cat[data-cat="about"]'));
+  pane.classList.add("set-pane");
+  pane.dataset.cat = cat;
+  $("set-stage").appendChild(pane);
+  SET_CATS.splice(SET_CATS.indexOf("about"), 0, cat);
+  if (onShow) SET_SHOWN[cat] = onShow;
+}
 
 /* Shows a category; `animate` slides from the previous one. */
 function setCategory(cat, animate = true) {
@@ -24,7 +49,8 @@ function setCategory(cat, animate = true) {
     p.classList.toggle("on", keep);
   });
   next.getAnimations().forEach((a) => a.cancel());
-  tbSet("settings", tr("nav.settings"), tr(next.querySelector(".set-title").dataset.i18n));
+  tbSet("settings", tr("nav.settings"), setTitleOf(next));
+  SET_SHOWN[cat]?.();
   if (cat === "ai") setAiRender();
   if (cat === "display") dispRender();
   if (cat === "about") aboutLoad();
@@ -113,7 +139,7 @@ window.addEventListener("aichange", () => {
 });
 
 window.addEventListener("langchange", () => {
-  if (setCurrent) tbSet("settings", tr("nav.settings"), tr(`${document.querySelector(`#set-stage .set-pane[data-cat="${setCurrent}"] .set-title`).dataset.i18n}`));
+  if (setCurrent) tbSet("settings", tr("nav.settings"), setTitleOf(document.querySelector(`#set-stage .set-pane[data-cat="${setCurrent}"]`)));
   if (setCurrent === "ai") setAiRender();
 });
 

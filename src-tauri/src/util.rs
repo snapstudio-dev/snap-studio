@@ -159,6 +159,27 @@ pub fn b64_encode(data: &[u8]) -> String {
     out
 }
 
+/// The app's data folder (settings, profiles, the engine, the library…).
+pub fn data_dir() -> std::path::PathBuf {
+    dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio")
+}
+
+/// The folder of what belongs to the printers: the saved printers, the
+/// prints and their queue, the bed mesh history, the maintenance log. The
+/// data folder itself, except in a development build running simulated
+/// printers (`sim`), where it is a `sim` folder of its own, emptied at each
+/// launch: the user's real printers and their records are never touched.
+pub fn app_dir() -> std::path::PathBuf {
+    #[cfg(feature = "sim")]
+    if let Some(dir) = crate::sim::app_dir() {
+        let _ = std::fs::create_dir_all(&dir);
+        return dir;
+    }
+    let dir = data_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
+
 /// An error as the UI shows it: the message and its causes
 /// (`copying a to b: Permission denied`), where `to_string()` would keep
 /// only the first.
