@@ -1,8 +1,9 @@
 # Dev: printer simulator and full simulation mode
 
 Plan only: nothing is implemented. Written against `main` at `26add37`
-(0.18.0); line numbers are those of that commit. The numbered questions at
-the end wait for kameka22's decisions, and the implementation waits for a go.
+(0.18.0); line numbers are those of that commit. kameka22's decisions are at
+the end (2026-11-02) and the plan follows them; the implementation waits for
+a go.
 
 ## Why
 
@@ -28,8 +29,7 @@ the whole app against them, a **full simulation mode**.
 ## Goals
 
 - In a **development build only**, start the app with one or several
-  **simulated printers** (Snapmaker U1, optionally a plain Klipper machine),
-  each with its own name, state, heads, spools, files, history and bed mesh.
+  **simulated Snapmaker U1 printers** (U1 only, decision 8), each with its own name, state, heads, spools, files, history and bed mesh.
 - Use **every printer feature** of the app against them, through the very
   code paths used with a real U1: add a printer (network search or address),
   status and live feed, send and queue, pause / resume / cancel, end of print
@@ -58,7 +58,13 @@ the whole app against them, a **full simulation mode**.
   update.
 - Announcing simulated printers on the local network (mDNS): they stay on
   this computer (see *Discovery*).
-- OctoPrint printers (the app only probes them, `printers.rs:769`).
+- OctoPrint printers (the app only probes them, `printers.rs:769`), and
+  other Klipper machines: only the U1 is simulated (decision 8).
+- Keeping simulated data between launches: it is reset at every launch
+  (decision 4).
+- Recording a real U1's answers to replay them (decision 9).
+- Translating the Developer section and the simulator's texts: English only
+  (decision 10).
 
 ## How the app talks to printers today (what we simulate)
 
@@ -125,10 +131,11 @@ app's printers are simply saved at `127.0.0.1:<port>`.
   same fixtures can be checked against real U1 answers. Disconnecting,
   slowing down or failing is done at the socket, where it really happens.
 - **Effort: medium.** The simulator is new code, but the app barely changes
-  (data folder, discovery, badge, Developer panel).
+  (data folder, discovery, badge, Developer section).
 - **Tests/CI:** the strongest: the existing `printers::status`,
   `watch::session_with`, `printer_files::overview`, `control::run`… are
-  tested end to end against it; the two ad hoc fakes can go.
+  tested end to end against it (the two ad hoc test fakes stay as they are,
+  decision 11).
 - Also works with other clients (Fluidd/Mainsail on the simulator, `curl`),
   handy to debug.
 
@@ -144,7 +151,7 @@ Answer `invoke("printer_status")` & co. with canned data in the JavaScript.
 - **Tests/CI:** only helps the `scripts/test-*.js` logic tests, which already
   test pure functions.
 
-### Recommendation: B, run inside the dev app and as a standalone tool
+### Chosen: B, run inside the dev app and as a standalone tool (decision 1)
 
 | | A | B | C |
 |---|---|---|---|
@@ -153,44 +160,67 @@ Answer `invoke("printer_status")` & co. with canned data in the JavaScript.
 | End-to-end Rust tests / CI | partial | **yes** | no |
 | Effort | high | medium | low → high |
 
-B is the only option that exercises what breaks in practice (the wire, the
+B (kameka22's choice) is the only option that exercises what breaks in practice (the wire, the
 timing, the U1's own methods) without touching the printer code that works.
 To make it as easy to use as A:
 
 - **Inside the app**: in a dev build with the simulator compiled in (Cargo
-  feature `sim`, decision 2), the app starts the simulated printers itself at
-  launch, on random local ports, before the printer list is read. Nothing to
-  run beside `cargo tauri dev`.
+  feature `sim`, decision 2), simulation is turned on in **Settings ›
+  Developer**; the app then starts the simulated printers itself at launch,
+  on random local ports, before the printer list is read. Nothing to run
+  beside `cargo tauri dev --features sim`.
 - **Standalone**: the same code as a small binary (`u1-sim`), for the tests,
   the CI, or to point another client at it.
 
 The simulator lives in `src-tauri/src/sim/`, compiled only with the `sim`
 feature, and reuses the app's own G-code reader (`gcode.rs` `SliceStats`) to
-run prints. The HTTP side needs a small server: `axum` as an optional
-dependency of the `sim` feature (decision 5); the WebSocket side reuses
+run prints. The HTTP side uses `axum`, an optional dependency pulled only by
+the `sim` feature, so only dev builds carry it (decision 5); the WebSocket side reuses
 `tokio-tungstenite`, already a dependency (`handshake` feature on).
 
 ## Full simulation mode
 
-### Turning it on (dev builds only)
+### Turning it on: Settings › Developer (dev builds only)
 
-- Built with `cargo tauri dev --features sim` and started with
-  `SNAP_SIM=<scenario>` (a name from `src-tauri/sim/scenarios/`, or a path
-  to a scenario file). Without `SNAP_SIM`, a `sim` build behaves exactly
-  like today.
-- A release build cannot contain it: the release workflow does not pass the
-  feature, and `sim/mod.rs` fails to compile with
-  `#[cfg(all(feature = "sim", not(debug_assertions)))] compile_error!(…)`.
-  The CI's release job also checks the binary carries no `SIMULATED` string.
-- Later (phase 4): a **Developer** section in Settings, shown only when the
-  backend reports the simulator (`sim_status` command present), to add or
-  remove simulated printers, change the time factor and inject faults.
+- The simulator and everything around it exist only in a build made with the
+  Cargo feature `sim`: `cargo tauri dev --features sim` (decision 2).
+- **Settings › Developer** (a new section of the Settings side menu) is
+  where simulation is turned on and the simulated printers are managed:
+  - **Simulation** on / off;
+  - **Scenario**: `solo`, `farm`, `trouble`, or a scenario file;
+  - **Simulated printers**: add, rename, remove one, set its state at launch
+    and its spools (on top of the chosen scenario);
+  - **Time factor**: ×1, ×10, ×60, ×600;
+  - **Faults**: inject one on a printer (phase 4);
+  - **Restart in simulation** / **Leave simulation**.
+- Turning simulation on or off, or changing the scenario, **restarts the
+  app** (`AppHandle::restart`): the printer list, the live feeds and the queue
+  monitor then start cleanly on the simulation data, and simulated data is
+  fresh at each launch anyway (decision 4). The choice (on/off, scenario,
+  extra printers, factor) is kept in a dev-only `sim.json` in the app's data
+  folder, not in `settings.json`, so a release build never reads it.
+- **The section exists only in `sim` builds**, front and back:
+  - the `sim_*` commands are registered only under `#[cfg(feature = "sim")]`;
+  - the section's script and markup are **not in `ui/`** (which every build
+    bundles): they live in `src-tauri/sim/ui/developer.js`, embedded with
+    `include_str!` and added to the main window as an initialization script
+    only under the feature. A release bundle contains none of it;
+  - `sim/mod.rs` refuses to compile with
+    `#[cfg(all(feature = "sim", not(debug_assertions)))] compile_error!(…)`;
+  - the CI guard stays: the release workflow never passes the feature, and
+    its build job checks the binary carries no `sim_status` nor
+    `SIMULATED` string.
+- **`SNAP_SIM` stays, as a secondary path** for automation:
+  `SNAP_SIM=<scenario>` (optionally `SNAP_SIM_SPEED=<factor>`) in a `sim`
+  build starts straight in simulation without going through Settings, for
+  the CI, the end-to-end tests, scripted screenshots and the standalone
+  `u1-sim` tool. It overrides `sim.json` for that launch only. Without the
+  `sim` feature the variable is ignored.
 
 ### Separate data
 
-In full simulation mode the app works in its own data folder,
-a `sim/` subfolder of the app's data folder (decision 4), for everything tied to a
-printer: `printers.json` (`printers.rs:27`), `jobs/` (`jobs.rs:124`), the
+In full simulation mode (decision 3) the app works in a `sim/` subfolder of
+its data folder for everything tied to a printer: `printers.json` (`printers.rs:27`), `jobs/` (`jobs.rs:124`), the
 bed mesh history (`bedmesh.rs:310`) and the maintenance log
 (`maintenance.rs:110`). The user's real printers are not shown and their
 queue, history and logs are never written. Settings, profiles, the engine,
@@ -198,11 +228,14 @@ the library and AI conversations stay shared (they do not depend on a
 printer). This needs one helper, `util::app_dir()`, used by those four
 places; outside simulation it returns the same folder as today.
 
-At each launch the simulator writes the scenario's printers into the
-simulation `printers.json` with **stable ids** and the ports of this run, so
-the history, meshes and logs kept per printer id follow the same simulated
-printer from one run to the next. `SNAP_SIM_RESET=1` (and a button in the
-Developer section) empties the simulation folder.
+**Reset at every launch (decision 4).** When the app starts in simulation it
+empties the `sim/` folder, then writes the chosen scenario's printers (plus
+the extra ones from the Developer section) into the simulation
+`printers.json`, with the ports of this run. Queue, history, bed meshes,
+maintenance log, printer files and timelapses of the simulated printers all
+start from the scenario each time; nothing carries over from one launch to
+the next. Ids stay stable within a scenario only so that the scenario's
+seeded history and meshes point at the right printer.
 
 ### Discovery
 
@@ -239,10 +272,10 @@ nozzles, bed, chamber) that move toward their target, a **toolhead**
 
 | Feature | Covered | How |
 |---|---|---|
-| Status, live feed | yes | `server/info`, `printer/info`, `objects/query` and `objects/subscribe` with `notify_status_update` pushed on change (at most every 250 ms, like Moonraker). Only the objects the scenario's model has (a plain Klipper has no `print_task_config`). |
+| Status, live feed | yes | `server/info`, `printer/info`, `objects/query` and `objects/subscribe` with `notify_status_update` pushed on change (at most every 250 ms, like Moonraker). The objects of a U1 (with `print_task_config`). |
 | Temperatures | yes | `M104`/`M109`/`M140`/`M190` (with `T<n>` and the U1's `A0`) set targets; heaters ramp at a plausible rate scaled by the clock. |
 | Heads / tools | yes | `T<n> A0` and the G-code's tool changes switch `toolhead.extruder`, increment `switch_count`; a scenario can make a head fail to pick (`error_count`, `retry_count`). |
-| Spools | yes | `print_task_config` from the scenario: type, sub-type, vendor, colour, present, official (RFID) or not; changed by `SET_PRINT_FILAMENT_CONFIG` (Control) and the Developer panel ("swap the spool on head 2") to trigger the spool check. |
+| Spools | yes | `print_task_config` from the scenario: type, sub-type, vendor, colour, present, official (RFID) or not; changed by `SET_PRINT_FILAMENT_CONFIG` (Control) and the Developer section ("swap the spool on head 2") to trigger the spool check. |
 | Send, start | yes | Multipart upload into `gcodes/`; `server.files.start_local_print` with options and head map, `SET_PRINT_USED_EXTRUDERS`, `extruder_map_table`; legacy route for a scenario "firmware without start_local_print". The start options (leveling, flow calibration, timelapse) show in `print_task_config`. |
 | Print progress | yes | See *A simulated print* below: `print_stats` (state, filename, `print_duration`, `filament_used`, `info.current_layer/total_layer`), `display_status.progress`, `virtual_sdcard`. |
 | Pause / resume / cancel | yes | Through `printer/print/*`; the clock stops while paused. |
@@ -276,8 +309,8 @@ tools used, filament per tool, and the tool changes in order. Then:
 - a file too short or empty fails like the U1 does (error state with a
   message).
 
-**Time factor**: ×1, ×10, ×60, ×600 (scenario, `SNAP_SIM_SPEED`, Developer
-panel). The app's queue monitor works in real time (8 s polling, 90 s grace
+**Time factor** (decision 6): ×1, ×10, ×60, ×600, set in the Developer
+section (or by the scenario, or `SNAP_SIM_SPEED`). The app's queue monitor works in real time (8 s polling, 90 s grace
 after a launch, `jobs.rs:29-32`), so a simulated print is never shorter than
 **2 min of real time**, whatever the factor: otherwise the monitor would not
 see it end. The Prints page's real-time records (started, ended) then differ
@@ -291,14 +324,14 @@ model, state at launch, spools, files, history, mesh seed and faults. They
 run independently (each its own clock and task). Example scenarios:
 
 - `solo`: one U1, idle, four PLA spools of different colours.
-- `farm`: three U1 (one idle, one printing at 40 %, one paused on a runout)
-  and one plain Klipper machine.
+- `farm`: four U1 (one idle, one printing at 40 %, one paused on a runout,
+  one with a mismatched spool).
 - `trouble`: a U1 that drops the connection every few minutes, one whose
   uploads fail halfway, one with Klipper in shutdown.
 
 ### Fault injection
 
-Set in the scenario (at launch or on a timer), from the Developer panel, or
+Set in the scenario (at launch or on a timer), from the Developer section, or
 with the standalone tool (`u1-sim fault <printer> <fault>`), through a
 `/sim/…` control path on each simulated printer (not a Moonraker path, so no
 real client uses it):
@@ -320,7 +353,7 @@ real client uses it):
 
 ## Data, fixtures and privacy
 
-- Names like "Sim U1 Alpha", "Sim U1 Bravo", "Sim Klipper"; hostnames
+- Names like "Sim U1 Alpha", "Sim U1 Bravo"; hostnames
   `sim-alpha`…; serials `SIM-0000-0001`…; addresses `127.0.0.1` only. No real
   name, address, serial, hostname or username in the fixtures, the
   scenarios, the tests or the generated images.
@@ -328,7 +361,7 @@ real client uses it):
   already in the tests (`printers.rs` `SAMPLE`, the `printer_files.rs`
   fake), and from Snapmaker's public sources (u1-klipper's `lava/` config,
   Snapmaker's Moonraker components). No capture of a real machine is
-  committed (decision 9).
+  committed: the fixtures are written by hand (decision 9).
 - Materials in fixtures are ordinary type names (they are data, not
   interface copy); the interface copy about the simulator stays generic.
 - The simulator binds to `127.0.0.1` only, never to `0.0.0.0`.
@@ -340,23 +373,44 @@ real client uses it):
 | `src-tauri/Cargo.toml` | Feature `sim = ["dep:axum"]` (and `tokio` `net`); `default-run = "snap-studio"`; `[[bin]] u1-sim` with `required-features = ["sim"]`. |
 | `src-tauri/src/sim/` (new) | `mod.rs` (start/stop, `compile_error!` guard), `scenario.rs`, `server.rs` (HTTP routes + `/websocket` JSON-RPC + `/sim/` control), `machine.rs` (clock, heaters, toolhead, heads, spools), `print.rs` (runner from `SliceStats`), `script.rs` (G-code/macro interpreter), `files.rs` (virtual roots, metadata, Range, timelapses), `camera.rs` (generated JPEG), `mesh.rs` (seeded meshes, U1 probing sequence), `faults.rs`. |
 | `src-tauri/src/bin/u1-sim.rs` (new) | Standalone: `u1-sim <scenario>` prints the ports; `u1-sim fault …`. |
+| `src-tauri/sim/ui/developer.js` (new) | Settings › Developer: markup and logic, English only, injected only in `sim` builds. |
 | `src-tauri/sim/scenarios/*.json`, `src-tauri/sim/fixtures/` (new) | `solo`, `farm`, `trouble`; U1 `configfile.settings`, `filament_parameters.json`, a fixture MP4, sample G-code. |
 | `src-tauri/src/util.rs` | `app_dir()`: the data folder, `sim/` under it in full simulation. |
 | `printers.rs:27`, `jobs.rs:124`, `bedmesh.rs:310`, `maintenance.rs:110` | Use `app_dir()` (same folder as today outside simulation). |
-| `src-tauri/src/lib.rs` | At setup, under `#[cfg(feature = "sim")]`: start the scenario, write the simulation `printers.json`; commands `sim_status`, `sim_fault`, `sim_speed`, `sim_reset`, `sim_spool` (registered only with the feature). |
+| `src-tauri/src/lib.rs` | Under `#[cfg(feature = "sim")]`: read `sim.json` / `SNAP_SIM`, empty `sim/`, start the scenario, write the simulation `printers.json`, add the Developer script to the main window; commands `sim_status`, `sim_config`, `sim_set` (on/off, scenario, printers, factor, then restart), `sim_fault`, `sim_spool` (registered only with the feature). |
 | `src-tauri/src/discover.rs` | In simulation, emit the scenario's printers instead of starting mDNS. |
 | `src-tauri/src/share.rs` | QR code: loopback target → default route interface (simulation only). |
 | `src-tauri/src/jobs.rs` | "[SIM]" prefix on notifications in simulation. Nothing else. |
 | `printers.rs`, `watch.rs`, `printer_files.rs`, `control.rs`, `bedmesh.rs`, `maintenance.rs` (network code) | **No change.** |
 | `ui/index.html`, `ui/style.css`, `ui/app.js` | SIMULATION pill in the title bar, window title. |
 | `ui/printers.js`, `ui/prints.js`, `ui/slice.js` (send sheet) | SIMULATED badge per printer from `sim_status`. |
-| `ui/settings.js` | Developer section (phase 4), shown only when `sim_status` exists. |
-| `ui/i18n/en.json`, `fr.json` | `sim.*` keys (the other languages fall back to English; decision 10). |
+| `ui/settings.js` | A small hook so an injected section can add itself to the side menu (no Developer code in `ui/`). |
+| `ui/i18n/*.json` | **No change** (decision 10, see *Texts* below). |
+| `.github/pull_request_template.md` | With the implementation (decision 12): a "Simulator updated if the printer API used changes" checkbox. |
 | `.github/workflows` (tests) | A `cargo test --lib --features sim` step; release job: guard that the binary has no simulator. |
 | `docs/DEVELOPMENT.md` | "Simulated printers" section: how to run, scenarios, faults, screenshots. |
 | `docs/technical-overview.md` | One paragraph on the simulator. |
 
 No CHANGELOG line: nothing changes for users of the released app.
+
+### Texts: English only, and the i18n checker
+
+The Developer section, the SIMULATION pill, the SIMULATED badges, the
+camera image and the "[SIM]" notification prefix are in English only, as
+plain strings, never through `tr()`, `data-i18n` or `t!()` (decision 10).
+That fits `scripts/check-i18n.py` without any exemption:
+
+- it only collects keys from `tr("…")`, `data-i18n…="…"` and `t!("…")`, so
+  plain strings add no key to `en.json` or `fr.json`;
+- its "French left in the UI code" check scans `ui/*.js` and
+  `ui/index.html` for accented letters; the Developer code lives in
+  `src-tauri/sim/ui/`, outside that scan, and is English anyway;
+- the badge and pill strings that `ui/` needs come from `sim_status` (the
+  backend sends the label), so `ui/` itself holds no simulator text.
+
+If a later change ever needs a simulator string in `ui/`, it stays English
+and unaccented, which the checker accepts as is; no `FRENCH_OK` or
+`DYNAMIC` entry is needed.
 
 ## Tests
 
@@ -369,8 +423,8 @@ No CHANGELOG line: nothing changes for users of the released app.
   offering the next one, `printer_files::overview`/`delete_video`/`rename`,
   `control::run` (accepted and refused actions, unknown command),
   `bedmesh` measurement and abort, `maintenance::usage`.
-- The two ad hoc fakes (`printer_files.rs:1129`, `watch.rs:295`) move to the
-  simulator once it covers them (decision 11).
+- The two ad hoc fakes (`printer_files.rs:1129`, `watch.rs:295`) stay as
+  they are (decision 11): their tests keep working unchanged.
 - **Simulator's own tests**: heater ramps, print runner against a sample
   G-code (layers, tool changes, duration at ×1 and ×600), scenario loading,
   each fault.
@@ -394,65 +448,63 @@ No CHANGELOG line: nothing changes for users of the released app.
   behaviours (the 90 s grace, the camera's 10 s auto-off, the 2 min
   preheat). Mitigation: ×1 by default, the 2 min floor, scenarios at ×1 for
   timing work.
-- **Mixing simulated and real data.** Mitigated by the separate data folder
-  and stable simulated ids; real printers are never listed in simulation.
+- **Mixing simulated and real data.** Mitigated by the separate data folder,
+  reset at each launch; real printers are never listed in simulation.
 - **Shipping it by accident.** Feature off by default, `compile_error!`
-  guard, release workflow check.
+  guard, Developer code outside `ui/`, release workflow check.
 - **Dependency weight.** `axum` only in `sim` builds; release builds and
   their size are unchanged.
-- **Ports.** Random free ports each run; the stable ids keep the per-printer
-  data.
+- **Ports.** Random free ports each run, written into the fresh
+  simulation `printers.json`.
+- **Lost simulated state.** Everything done in simulation is gone at the
+  next launch (decision 4): a long manual test that needs a restart starts
+  over from the scenario. Scenarios cover the starting states worth keeping.
 - **Maintenance cost.** Every new printer feature will need its simulator
   side. Mitigation: the plan's checklist adds "simulator updated if the
-  printer API used changes" to printer PRs (decision 12).
+  printer API used changes" checkbox in the pull request template, added
+  with the implementation (decision 12).
 
 ## Implementation plan
 
 | Phase | Content | Rough effort |
 |---|---|---|
-| 1. Skeleton | `sim` feature and guard, `app_dir()`, scenario loader, fake Moonraker for status (`server/info`, `printer/info`, `objects/query`, WebSocket subscribe), idle U1 with spools, several printers, simulated discovery, SIMULATED badge and pill, `sim_status`. The app runs on the `solo` and `farm` scenarios (idle). | 2–3 days |
-| 2. Printing | Files roots (list, metadata, upload, download with Range, move, delete), print runner from `SliceStats` with time factor, `start_local_print` and legacy route, pause / resume / cancel, history, queue end to end, notifications, tool changes and counters, spool changes and the spool check. | 3–4 days |
+| 1. Skeleton and Developer section | `sim` feature and guards, `app_dir()`, `sim.json`, reset at launch, `SNAP_SIM`, scenario loader, fake Moonraker for status (`server/info`, `printer/info`, `objects/query`, WebSocket subscribe), idle U1 with spools, several printers, simulated discovery, SIMULATED badge and pill, **Settings › Developer** (on/off, scenario, printers, time factor, restart), injected only in `sim` builds. The app runs on the `solo` and `farm` scenarios (idle). | 3–4 days |
+| 2. Printing | Files roots (list, metadata, upload, download with Range, move, delete), print runner from `SliceStats` with time factor and 2 min floor, `start_local_print` and legacy route, pause / resume / cancel, history, queue end to end, notifications, tool changes and counters, spool changes and the spool check. | 3–4 days |
 | 3. Machine | Script interpreter for Control, `configfile` and materials fixtures, bed mesh measurement with the U1 sequence, camera image, timelapses, share QR in simulation. | 2–3 days |
-| 4. Faults and panel | Fault injection (scenario, `/sim/` control, `u1-sim` binary), Developer section in Settings (printers, time factor, faults, spools, reset). | 2 days |
-| 5. Tests and docs | End-to-end Rust tests, CI step and release guard, migrate the two ad hoc fakes, `DEVELOPMENT.md` and technical overview. | 1–2 days |
+| 4. Faults | Fault injection (scenario, `/sim/` control, `u1-sim` binary, Faults in the Developer section). | 1–2 days |
+| 5. Tests and docs | End-to-end Rust tests, CI step and release guard, the pull request template checkbox, `DEVELOPMENT.md` and technical overview. | 1 day |
 
-About 10 to 14 days in all; each phase is usable on its own (phase 1 already
-gives screenshots without a printer).
+About 10 to 14 days in all. Compared with the first version of the plan, the
+Developer section moves into phase 1 (it is the way in), while the plain
+Klipper profile, persistence and the migration of the test fakes are
+dropped. Each phase is usable on its own (phase 1 already gives screenshots
+without a printer).
 
-## Decisions for kameka22
+## Decisions (kameka22, 2026-11-02)
 
-1. **Architecture.** B (fake Moonraker on `127.0.0.1`, run inside the dev
-   app and as a standalone tool), A (fake transport behind a trait) or C
-   (interface mocks)? *Recommended: B.*
-2. **How to turn it on.** Cargo feature `sim` plus `SNAP_SIM=<scenario>` in
-   a dev build, or always compiled into dev builds with a Settings switch?
-   *Recommended: feature + variable now, the Developer section in phase 4.*
-3. **Full or mixed.** Simulated printers only (real ones hidden, separate
-   data), or simulated next to real ones? *Recommended: full simulation
-   only; mixed can come later if needed.*
-4. **Simulation data.** Kept between runs in `sim/` (with a reset), or fresh
-   at each launch? *Recommended: kept, with `SNAP_SIM_RESET=1` and a reset
-   button.*
-5. **HTTP server.** `axum` as an optional dependency of `sim`, or a
-   hand-written HTTP server like the test fakes? *Recommended: `axum`
-   (multipart, Range and WebSocket upgrade done right), only in `sim`
-   builds.*
-6. **Time factor.** Default and choices? *Recommended: ×1 by default; ×10,
-   ×60, ×600 available; never under 2 min of real time per print.*
-7. **Camera.** Generated placeholder image, or a render of the current layer
-   of the toolpath? *Recommended: placeholder now (name, state, layer,
-   SIMULATED), toolpath render later.*
-8. **Plain Klipper machine.** Simulate a non-U1 Klipper printer too (no
-   spools, standard commands)? *Recommended: yes, one profile; cheap and it
-   covers the "other Klipper" branches.*
-9. **Record and replay a real U1.** A tool to capture a real machine's
-   answers into fixtures? *Recommended: not now (private data to scrub);
-   fixtures written by hand from public sources and the existing samples.*
-10. **Developer strings.** Translated in English and French only (the other
-    languages fall back to English)? *Recommended: yes.*
-11. **Existing test fakes.** Replace the ad hoc fakes of `printer_files.rs`
-    and `watch.rs` with the simulator? *Recommended: yes, in phase 5, once
-    it covers them.*
-12. **Keeping it up to date.** Add "simulator updated if the printer API
-    used changes" to the pull request template? *Recommended: yes, with
-    phase 5.*
+1. **Architecture: B.** A local fake Moonraker per simulated printer, on
+   `127.0.0.1`, run inside the dev app and as the standalone `u1-sim` tool.
+2. **Activation: Settings › Developer.** A Developer section in the app's
+   settings turns simulation on and manages the simulated printers. It
+   exists only in `sim` builds (compile-time feature), never in release
+   builds; the CI guard stays. `SNAP_SIM` remains as a secondary path for
+   the CI, the tests, scripted screenshots and `u1-sim` (see *Turning it
+   on*).
+3. **Full simulation.** Real printers hidden, separate data.
+4. **No persistence.** Simulated data is reset at every launch; the scenario
+   is chosen in the Developer section.
+5. **HTTP server: `axum`**, in dev (`sim`) builds only.
+6. **Time factor:** ×1, ×10, ×60, ×600; at least 2 min of real time per
+   print.
+7. **Camera:** generated image (name, state, layer, SIMULATED); the render of
+   the current layer later.
+8. **U1 only.** No plain Klipper printer.
+9. **No recording** of a real U1's answers for now; fixtures written by hand.
+10. **English only** for the Developer section and the simulator's texts, no
+    translation (how it fits the i18n checker: *Texts* above).
+11. **Existing test fakes** (`printer_files.rs`, `watch.rs`) are left as
+    they are.
+12. **Pull request template:** a "simulator up to date" checkbox, added as
+    part of the implementation, not now.
+
+The implementation go is not given yet.
