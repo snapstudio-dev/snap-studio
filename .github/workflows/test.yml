@@ -48,6 +48,15 @@ jobs:
         working-directory: src-tauri
         run: cargo test --lib
 
+      # The printer simulator (development builds only, docs/DEVELOPMENT.md)
+      # and the end-to-end tests of the printer code against it; its own
+      # tool builds too.
+      - name: cargo test --lib --features sim
+        working-directory: src-tauri
+        run: |
+          cargo test --lib --features sim
+          cargo check --features sim --bin u1-sim
+
   interface:
     name: Interface logic and catalogs
     runs-on: ubuntu-22.04
