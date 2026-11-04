@@ -4,7 +4,9 @@ In Explore, when a site is shown (Snapmaker Space, MakerWorld, Printables…),
 the Back, Forward and Reload buttons at the top left of the page can hardly be
 seen when the site has a dark background.
 
-Plan only: nothing is implemented until the owner picks an option.
+Plan only: nothing is implemented until the owner gives the go. The owner's
+choice is **[D. Adaptive pill](#d-adaptive-pill-owners-choice)**: the
+floating pill stays, dark on a light site and light on a dark site.
 
 ## Where the buttons are
 
@@ -74,7 +76,7 @@ light pill on a light site, or a dark pill on a dark site, still needs the
 border of A to be seen. More work (theme passed to a separate view) for the
 same contrast as A.
 
-### C. Move the buttons into the tab strip (recommended)
+### C. Move the buttons into the tab strip
 
 In Explore, the tab strip already stands in for the toolbar, and while a site
 is shown it already has buttons of ours on the right: Add to favorites and
@@ -100,11 +102,151 @@ vertical space is lost: the strip is already there.
 Downside: the buttons move from the page to the strip above it, so a user used
 to the floating pill has to find them again (the arrow icons are the same).
 
+### D. Adaptive pill (owner's choice)
+
+The pill stays where it is, floating over the site, and takes the color that
+contrasts with what is under it: **dark on a light site, light on a dark
+site**. A's border and "no fade" are kept as the baseline, so that the pill
+never disappears, even before the site's color is known, while it changes, or
+when it cannot be read.
+
+#### The difficulty: the site is in another view
+
+The pill's page (`overlay.html`) cannot see the site: it is a separate native
+view, and its own page is transparent. Only the site's view knows its colors.
+So the site's view measures, Rust carries the answer, the pill applies it.
+
+#### 1. Measure in the site's view (read-only script)
+
+A script injected with `WebviewBuilder::initialization_script` in `open_tab`
+(`src-tauri/src/library.rs:324`; already done for the camera view at `:153`).
+It runs in the main frame only (not in ads' iframes), before the site's own
+scripts, on every page load of the tab. It keeps one value up to date,
+`"light"`, `"dark"` or nothing:
+
+- **Where to look:** a few points under the pill, in the page's CSS pixels,
+  which match the app's logical points at the site's default zoom. The pill
+  covers x 10–122, y 10–50 from the view's corner (`nav_rect`, `NAV_SIZE`):
+  for example (24, 30), (66, 30) and (108, 30).
+- **What color is there:** for each point, `document.elementsFromPoint(x, y)`
+  gives the stack of elements, top first. Walk it (and each element's
+  ancestors) and blend the `getComputedStyle(…).backgroundColor` values until
+  the color is opaque. Then compute its relative luminance (sRGB, as in
+  WCAG).
+- **When that fails:** a point is "unknown" when it lands on a
+  `background-image` (gradient or picture), an `<img>`, `<video>`,
+  `<canvas>` or `<iframe>`. The script cannot read their pixels (cross-origin
+  images are locked, and reading would be heavy anyway). Then it falls back,
+  in this order, to:
+  1. the page's `<meta name="theme-color">` (the one whose `media` matches);
+  2. the computed background of `<body>`, then of `<html>`;
+  3. the page's `color-scheme` (`dark` → dark);
+  4. otherwise nothing: the pill keeps its current color, dark at first, as
+     today.
+- **The decision:** the majority of the points. Two thresholds with a gap
+  (dark below 0.4, light above 0.6) keep a mid-grey header from making the
+  pill flicker.
+- **When to measure again:** on load, `scroll` and `resize` (passive
+  listeners), when the system's light/dark mode changes (`matchMedia`), and
+  on DOM changes (`MutationObserver` on `childList`, `class` and `style`, for
+  sites that change pages without loading, menus and sticky headers). All of
+  it goes through one throttle: at most one measure every 250 ms, done in
+  `requestAnimationFrame`.
+
+The script only reads. It does not touch the page, make any request or store
+anything, and its only output is that one word.
+
+#### 2. Carry the answer to Rust, without giving the site our bridge
+
+The sites must not get Tauri's IPC. Today they do not have it (`command`,
+`:640`: "the remote view does not have our bridge"), and opening it to remote
+origins through a capability (`remote.urls`) would let any script of those
+pages, ads included, call the commands allowed. **That is not needed:**
+Tauri 2.12, the version in `Cargo.lock`, has `Webview::eval_with_callback`,
+which runs a line of JavaScript in a view and hands its result back to Rust
+(macOS, Windows and Linux). So Rust **reads** the value; the page never
+sends anything:
+
+- While a tab is shown (`visible_tab`), Rust reads the value of the tab shown
+  every 300 ms or so, plus right away on page load (`on_page_load`), on a
+  title change, on a tab switch (`show_only`) and after Back, Forward or
+  Reload. Reading means evaluating a tiny expression of the script's variable.
+  No tab is shown → no reading. Hidden tabs are never read.
+- The answer is checked strictly: only `"light"` or `"dark"` is kept;
+  anything else (missing, a site that overwrote the value, an error, Windows
+  ignoring exceptions) changes nothing.
+- Only a change is passed on, to the pill's view, which is our own page:
+  `wv.eval("setTone('dark')")` on the `lib-nav-*` view, or an event to that
+  label. The current tone is also given to a new pill made by `ensure_nav`
+  (`:76`, after each new tab), so it does not start dark on a dark site.
+
+A push from the page (a fake navigation to a custom address caught in
+`on_navigation`, or a title change) was also considered, and set aside. It
+depends on each site's Content-Security-Policy, which can block it. It would
+also show up in the site's history and title.
+
+#### 3. The pill applies it (`ui/overlay.html`, `ui/overlay.js`)
+
+- **Baseline, always:** opacity 1 at rest (no more 0.45), no
+  `backdrop-filter` (it never worked here), and a double edge, a 1 px light
+  ring inside a 1 px dark ring plus a soft shadow. One of the two rings
+  always contrasts with the site, even when the tone is wrong or not known
+  yet.
+- `.pill.on-light` (light site): dark pill, `rgba(28, 28, 30, 0.88)`, white
+  icons, as today but solid.
+- `.pill.on-dark` (dark site): light pill, `rgba(245, 245, 247, 0.92)`, dark
+  icons (`#1c1c1e`), hover and press shades in black instead of white.
+- The change fades over 150 ms (`background-color` and `color`).
+- `setTone(t)` in `overlay.js` swaps the class; nothing else changes there.
+
+#### Feasibility
+
+Possible with what the app already has. There is no new dependency, no
+change to the capabilities, and no IPC for the sites.
+
+- `eval_with_callback` is in tauri 2.12.2 (`Cargo.lock`). Its result comes
+  back as JSON on a thread of its own, and Rust only compares a short
+  string.
+- `initialization_script` is already used for the camera view.
+- The pill view is already ours, and Rust already finds it by its label.
+
+The work: about 60 lines of injected script (a `const` in `library.rs`, or a
+file read with `include_str!`), a reading loop of about 40 lines in
+`library.rs`, and about 20 lines of CSS and JS in `overlay.*`. The detection
+rules (blending, luminance, thresholds, majority) go in a pure function with
+`scripts/test-*.js` tests on color samples.
+
+#### Risks and limits
+
+- **Pictures under the corner** (a banner, a model's cover photo): their
+  pixels cannot be read, so the fallback chain decides (`theme-color`, page
+  background). The pill may be the "page" color rather than the picture's.
+  The double edge keeps it visible all the same.
+- **Up to about half a second of delay** after a scroll or a page change. The
+  baseline edge covers that moment.
+- **The site can see the variable** (same JavaScript world as its scripts).
+  It could tell that it is shown in Snap Studio, or overwrite it. The worst
+  case is a pill of the wrong color, still outlined. To limit this, the
+  variable is non-enumerable, under a name of its own.
+- **Cost:** a measure at most every 250 ms, only when something changes, and
+  a 300 ms read of the tab shown only. It is negligible, but to be checked on
+  heavy pages (MakerWorld's endless lists) with the `MutationObserver`.
+- **Zoom:** if the site's page is zoomed (Ctrl/Cmd +), the CSS pixels no
+  longer match the pill's points exactly. The points can be scaled by
+  `visualViewport.scale` / `devicePixelRatio`, to be checked at
+  implementation.
+- **Other sites:** it works on every site, including those opened by
+  address ("Open a site"). Nothing is specific to one site.
+
+The tooltips' language ("Back", "Forward", "Reload", in English today) stays
+out of scope unless the owner asks for it: it is a small extra (passing the
+language to `overlay.html`).
+
 ## Recommendation
 
-**C**: it removes the cause instead of tuning colors, and follows the
-toolbar the app already has in this view. If the owner prefers to keep the
-floating pill, **A** is the fix (one CSS block).
+**D**, the owner's choice (it keeps the floating pill). C was the first
+recommendation and stays here for the record; A is D without the adaptive
+color (its baseline).
 
 ## Checks at implementation
 
@@ -112,23 +254,21 @@ floating pill, **A** is the fix (one CSS block).
   light and dark mode, on macOS, Windows and Linux.
 - Back, Forward and Reload act on the tab shown, after switching tabs and
   after reopening the app (restored tabs).
-- C only: nothing is left floating over the site; the pinned camera still
-  shows over a site; `python3 scripts/check-i18n.py` is clean.
+- D: the pill is dark on a light site (Printables) and light on a dark
+  site (Snapmaker Space, MakerWorld's dark mode); it follows a scroll under
+  a sticky header, a page change without loading, a tab switch, and Back /
+  Forward between a light and a dark page; a new tab starts with the right
+  tone; with the site's color unreadable (picture under the corner) it stays
+  visible; no request or change of the page from the script (devtools); no
+  `__TAURI__` in the sites' pages.
+- Pure detection rules tested in `scripts/test-*.js` (blending,
+  luminance, thresholds, majority, fallbacks).
 - Screenshots before and after on a dark site.
 
 ## CHANGELOG line (added at implementation, under *Unreleased › Fixed*)
 
-C:
-
 ```
-- **Explore**: Back, Forward and Reload are in the tab strip, in the app's
-  colors, instead of floating over the site, where they could hardly be seen
-  on dark sites.
-```
-
-A:
-
-```
-- **Explore**: the Back, Forward and Reload buttons over a site stay visible
-  on dark sites.
+- **Explore**: the Back, Forward and Reload buttons over a site stay
+  visible on any site: the pill turns light on dark sites and dark on light
+  ones, and no longer fades out.
 ```
