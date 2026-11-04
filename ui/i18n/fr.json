@@ -2490,5 +2490,6 @@
   "supports.badge.go": "Activer les supports",
   "supports.on_toast": "Supports activés pour le prochain découpage",
   "prepare.overhangs": "Afficher les surplombs",
-  "prepare.overhangs.title": "Afficher les surplombs : les faces qui pointent vers le bas plus que l'angle de support du profil, en rouge"
+  "prepare.overhangs.title": "Afficher les surplombs : les faces qui pointent vers le bas plus que l'angle de support du profil, en rouge",
+  "library.forward": "Suivant"
 }

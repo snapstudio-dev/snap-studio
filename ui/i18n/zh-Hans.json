@@ -2448,5 +2448,6 @@
   "supports.badge.go": "开启支撑",
   "supports.on_toast": "下次切片将开启支撑",
   "prepare.overhangs": "显示悬垂",
-  "prepare.overhangs.title": "显示悬垂：朝下超过配置文件支撑角度的面以红色显示"
+  "prepare.overhangs.title": "显示悬垂：朝下超过配置文件支撑角度的面以红色显示",
+  "library.forward": "前进"
 }

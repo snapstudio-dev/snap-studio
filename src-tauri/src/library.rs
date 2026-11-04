@@ -59,6 +59,11 @@ fn label(id: &str) -> String {
 const NAV_SIZE: (f64, f64) = (112.0, 40.0);
 
 fn nav_rect(r: Rect) -> Rect {
+    // Linux: the view is the pill itself, at the same place (overlay.html
+    // `.solid`): see `nav_setup`.
+    if cfg!(target_os = "linux") {
+        return Rect { x: r.x + 14.0, y: r.y + 14.0, w: 88.0, h: 32.0 };
+    }
     Rect { x: r.x + 10.0, y: r.y + 10.0, w: NAV_SIZE.0, h: NAV_SIZE.1 }
 }
 
@@ -73,23 +78,165 @@ fn visible_tab() -> &'static Mutex<Option<String>> {
     V.get_or_init(Default::default)
 }
 
+/// The pill's tooltips, in the interface's language.
+fn nav_labels() -> serde_json::Value {
+    serde_json::json!({
+        "lang": crate::i18n::lang(),
+        "back": crate::t!("common.back"),
+        "forward": crate::t!("library.forward"),
+        "reload": crate::t!("library.reload"),
+    })
+}
+
+/// What the pill's page starts with (`window.__NAV__`): its tooltips, the
+/// site's tone and the color under the pill.
+///
+/// Linux: the pill's view is opaque, the pill's size, its corners in the
+/// color under it (`solid`). A transparent view laid over the site shows
+/// the desktop through its transparent pixels each time it repaints on its
+/// own (hovering a button, a tooltip, a change of tone): WebKitGTK replaces
+/// what is under it rather than drawing over it, and the window is
+/// see-through (rounded corners). That was the pill's flicker on Linux.
+fn nav_setup() -> String {
+    let mut v = nav_labels();
+    let (tone, under) = nav_tone().lock().unwrap().clone().map_or((None, None), |(t, u)| (Some(t), u));
+    v["tone"] = serde_json::json!(tone);
+    v["under"] = serde_json::json!(under);
+    v["solid"] = serde_json::json!(cfg!(target_os = "linux"));
+    v.to_string()
+}
+
+/// The interface's language changed: the pill shown takes it at once (the
+/// next ones start with it).
+pub fn nav_relabel(app: &AppHandle) {
+    let lbl = nav_label().lock().unwrap().clone();
+    if let Some(wv) = app.get_webview(&lbl) {
+        let _ = wv.eval(format!("typeof setLabels === 'function' && setLabels({});", nav_labels()));
+    }
+}
+
 fn ensure_nav(app: &AppHandle) -> Result<()> {
     use std::sync::atomic::{AtomicU64, Ordering};
     static N: AtomicU64 = AtomicU64::new(1);
     let old = nav_label().lock().unwrap().clone();
     let lbl = format!("lib-nav-{}", N.fetch_add(1, Ordering::Relaxed));
     let window = app.get_window("main").ok_or_else(|| anyhow!("main window not found"))?;
-    let builder = tauri::WebviewBuilder::new(&lbl, WebviewUrl::App("overlay.html".into())).transparent(true);
+    // A new pill starts with the tone known: not dark for a moment on a
+    // dark site.
+    let tone = nav_tone().lock().unwrap().clone();
+    let builder = tauri::WebviewBuilder::new(&lbl, WebviewUrl::App("overlay.html".into()))
+        .initialization_script(&format!("window.__NAV__ = {};", nav_setup()))
+        .transparent(true);
     let r = nav_rect(*last_rect().lock().unwrap());
     let dy = title_offset(&window);
     let _view = window.add_child(builder, LogicalPosition::new(r.x, r.y + dy), LogicalSize::new(r.w, r.h))?;
     #[cfg(target_os = "linux")]
     gtk_layer::adopt(app, &_view);
+    *nav_told().lock().unwrap() = (lbl.clone(), tone);
     *nav_label().lock().unwrap() = lbl;
     if let Some(wv) = app.get_webview(&old) {
         let _ = wv.close();
     }
     Ok(())
+}
+
+/// The tone of the site under the floating navigation, measured in the
+/// site's own view by `nav-tone.js` (injected, main frame, read-only):
+/// "light" or "dark", none until one is read. Rust reads it with
+/// `eval_with_callback`, so the sites never get our bridge; the pill, our
+/// own page, is told when it changes.
+const TONE_JS: &str = include_str!("../../ui/nav-tone.js");
+
+/// The expression read in the tab shown: what the script keeps, if it is
+/// a string, or "".
+const TONE_READ: &str = "(function () { try { var t = window[Symbol.for('snapstudio.navTone')]; \
+                         return typeof t === 'string' ? t.slice(0, 32) : ''; } catch (e) { return ''; } })()";
+
+/// The site's tone, and the color under the pill ("#rrggbb").
+type Tone = (&'static str, Option<String>);
+
+fn nav_tone() -> &'static Mutex<Option<Tone>> {
+    static T: OnceLock<Mutex<Option<Tone>>> = OnceLock::new();
+    T.get_or_init(Default::default)
+}
+
+/// The pill last told, and what it was told: nothing is sent (or redrawn)
+/// again while neither changes.
+fn nav_told() -> &'static Mutex<(String, Option<Tone>)> {
+    static T: OnceLock<Mutex<(String, Option<Tone>)>> = OnceLock::new();
+    T.get_or_init(Default::default)
+}
+
+/// A view's answer (JSON) to `TONE_READ`: "light" or "dark", and maybe a
+/// "#rrggbb" color after it; anything else (nothing measured yet, a page
+/// that overwrote it, an error) is none.
+fn parse_tone(json: &str) -> Option<Tone> {
+    let s = serde_json::from_str::<String>(json).ok()?;
+    let mut words = s.split(' ');
+    let tone = match words.next()? {
+        "light" => "light",
+        "dark" => "dark",
+        _ => return None,
+    };
+    let under = match (words.next(), words.next()) {
+        (None, _) => None,
+        (Some(c), None) if c.len() == 7 && c.starts_with('#') && c[1..].bytes().all(|b| b.is_ascii_hexdigit()) => {
+            Some(c.to_ascii_lowercase())
+        }
+        _ => return None,
+    };
+    Some((tone, under))
+}
+
+/// Reads the tone of the tab shown, if any (hidden tabs never are).
+fn read_tone(app: &AppHandle) {
+    let Some(id) = visible_tab().lock().unwrap().clone() else { return };
+    let Some(wv) = app.get_webview(&label(&id)) else { return };
+    let app = app.clone();
+    let _ = wv.eval_with_callback(TONE_READ, move |json| {
+        // Another tab shown meanwhile: its own reading will tell.
+        if visible_tab().lock().unwrap().as_deref() != Some(id.as_str()) {
+            return;
+        }
+        if let Some(t) = parse_tone(&json) {
+            *nav_tone().lock().unwrap() = Some(t);
+        }
+        tell_tone(&app);
+    });
+}
+
+/// Gives the pill the tone, once per pill and change. It answers once its
+/// page can take it; until then it is told again at the next reading.
+fn tell_tone(app: &AppHandle) {
+    let Some(tone) = nav_tone().lock().unwrap().clone() else { return };
+    let lbl = nav_label().lock().unwrap().clone();
+    if *nav_told().lock().unwrap() == (lbl.clone(), Some(tone.clone())) {
+        return;
+    }
+    let Some(wv) = app.get_webview(&lbl) else { return };
+    // Both checked by `parse_tone`: a word and a hexadecimal color.
+    let under = tone.1.as_deref().map_or("null".to_string(), |c| format!("'{c}'"));
+    let js = format!("typeof setTone === 'function' ? (setTone('{}', {under}), 1) : 0", tone.0);
+    let _ = wv.eval_with_callback(js, move |r| {
+        if r.trim() == "1" {
+            *nav_told().lock().unwrap() = (lbl.clone(), Some(tone.clone()));
+        }
+    });
+}
+
+/// Reads the tab shown about three times a second, from the first tab
+/// opened on: a scroll, a page change without loading, Back or Forward
+/// show within about half a second (the page measures at most every
+/// 250 ms). Nothing is read while no site is shown.
+fn start_tone_reading(app: &AppHandle) {
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    STARTED.call_once(|| {
+        let app = app.clone();
+        std::thread::spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            read_tone(&app);
+        });
+    });
 }
 
 /// The pinned camera over a site (`camview.html`). The interface's pinned
@@ -322,13 +469,17 @@ pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
     let title_app = handle.clone();
     let title_id = tab_id.clone();
 
+    let tone_app = handle.clone();
     let builder = tauri::WebviewBuilder::new(&lbl, WebviewUrl::External(target))
         .user_agent(UA)
+        // Light or dark under the floating navigation: read by Rust only.
+        .initialization_script(TONE_JS)
         // The address shown is the page's: frames navigate too (ads,
         // `about:blank`…), so it is taken when the main page loads, and
         // when its title changes (sites that change pages without loading).
         .on_page_load(move |webview, _payload| {
             emit_url(&handle, &nav_id, &webview);
+            read_tone(&handle);
         })
         .on_download(move |_webview, event| download_hook(&dl_app, &dl_id, event))
         // Sites happily open a side window — third-party login, or starting a
@@ -344,6 +495,7 @@ pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
         .on_document_title_changed(move |webview, title| {
             let _ = title_app.emit("lib-title", serde_json::json!({ "id": title_id, "title": title }));
             emit_url(&title_app, &title_id, &webview);
+            read_tone(&tone_app);
         });
 
     let r = *last_rect().lock().unwrap();
@@ -362,6 +514,7 @@ pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
             eprintln!("[lib] camera view: {e}");
         }
     }
+    start_tone_reading(app);
     show_only(app, Some(id));
     Ok(())
 }
@@ -606,6 +759,8 @@ pub fn show_only(app: &AppHandle, id: Option<&str>) {
         }
     }
     sync_cam(app);
+    // The tab now shown tells its own tone.
+    read_tone(app);
 }
 
 /// Remembers the browsing area and puts the visible view back in it.
@@ -648,6 +803,7 @@ pub fn command(app: &AppHandle, id: &str, what: &str) -> Result<()> {
         _ => return Err(anyhow!("unknown command: {what}")),
     };
     wv.eval(js)?;
+    read_tone(app);
     Ok(())
 }
 
@@ -698,6 +854,47 @@ pub fn logout(app: &AppHandle, tab: &str, site: &str) -> Result<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Only "light" or "dark", and a plain "#rrggbb", from a site's view
+    /// are taken.
+    #[test]
+    fn tone_answers_are_checked() {
+        assert_eq!(parse_tone(r#""light""#), Some(("light", None)));
+        assert_eq!(parse_tone(r#""dark #12AB9f""#), Some(("dark", Some("#12ab9f".into()))));
+        for bad in [
+            r#""""#,
+            "null",
+            "",
+            "1",
+            r#""Dark""#,
+            r#""dark ""#,
+            r#""dark #12345""#,
+            r#""dark #1234567""#,
+            r#""dark #12345g""#,
+            r#""dark #123456 x""#,
+            r#""dark red""#,
+            r#"{"t":"dark"}"#,
+            r#"["dark"]"#,
+            "undefined",
+            r#""light'); alert(1); ('""#,
+            r#""dark #12345');""#,
+        ] {
+            assert_eq!(parse_tone(bad), None, "{bad}");
+        }
+    }
+
+    /// The script injected in the sites is the tested one, and keeps to
+    /// the main frame.
+    #[test]
+    fn tone_script_is_read_only() {
+        assert!(TONE_JS.contains("window.top !== window"));
+        assert!(TONE_JS.contains("snapstudio.navTone") && TONE_READ.contains("snapstudio.navTone"));
+        for call in
+            ["fetch(", "XMLHttpRequest", "localStorage", "sessionStorage", "document.cookie", "__TAURI__", "appendChild", "postMessage"]
+        {
+            assert!(!TONE_JS.contains(call), "{call} in nav-tone.js");
+        }
+    }
 
     #[test]
     fn sites_are_well_formed() {

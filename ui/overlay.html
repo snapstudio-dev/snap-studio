@@ -6,24 +6,40 @@
 <title>Navigation</title>
 <style>
   /* A small transparent web view laid over a site's view: Back, Forward
-     and Reload, discreet until the pointer comes. Everything else of this
-     page is see-through, and the view is only the size of the pill. */
+     and Reload. Everything else of this page is see-through, and the view
+     is only the size of the pill. The site is in another native view: this
+     page cannot see or blur it, so the pill's tone comes from the site's
+     view (nav-tone.js, through library.rs): dark on a light site, light on
+     a dark one. A double edge (a light ring inside a dark one) keeps it
+     visible whatever is under it, the tone not known yet included. It never
+     fades: on a dark site a faded pill was close to nothing. */
   html, body { margin: 0; background: transparent; overflow: hidden; }
   body { font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; -webkit-user-select: none; user-select: none; }
+  /* The interface's language (overlay.js): its own fonts, as style.css. */
+  :lang(ja) body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Meiryo, "Noto Sans CJK JP", sans-serif; line-break: strict; }
+  :lang(zh-Hans) body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; line-break: strict; }
+  :lang(ko) body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", sans-serif; word-break: keep-all; overflow-wrap: anywhere; }
   .pill {
     display: inline-flex;
     gap: 2px;
     margin: 4px;
     padding: 3px;
     border-radius: 999px;
-    background: rgba(28, 28, 30, 0.55);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25), inset 0 0 0 0.5px rgba(255, 255, 255, 0.18);
-    -webkit-backdrop-filter: blur(14px) saturate(140%);
-    backdrop-filter: blur(14px) saturate(140%);
-    opacity: 0.45;
-    transition: opacity 160ms ease;
+    /* Light site, or not known yet: dark pill, white icons. */
+    background: rgba(28, 28, 30, 0.88);
+    color: #fff;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
+    /* Background and color only: repainted, never a layer of its own
+       (WebKitGTK flickered on the old hover fade). */
+    transition: background-color 150ms ease, color 150ms ease;
   }
-  .pill:hover { opacity: 1; }
+  /* Dark site: light pill, dark icons. */
+  .pill.on-dark { background: rgba(245, 245, 247, 0.92); color: #1c1c1e; }
+  /* Linux: the view is the pill itself and opaque (library.rs nav_setup),
+     its corners in the color under the pill (--under); the rings inside. */
+  .solid, .solid body { background: var(--under, #fff); }
+  .solid .pill { margin: 0; background: rgb(28, 28, 30); box-shadow: inset 0 0 0 1px #000, inset 0 0 0 2px rgba(255, 255, 255, 0.4); }
+  .solid .pill.on-dark { background: rgb(245, 245, 247); }
   button {
     appearance: none;
     width: 26px;
@@ -32,16 +48,18 @@
     border: 0;
     border-radius: 999px;
     background: transparent;
-    color: #fff;
+    color: inherit;
     cursor: default;
   }
   button:hover { background: rgba(255, 255, 255, 0.18); }
   button:active { background: rgba(255, 255, 255, 0.3); }
+  .on-dark button:hover { background: rgba(0, 0, 0, 0.1); }
+  .on-dark button:active { background: rgba(0, 0, 0, 0.18); }
   svg { width: 16px; height: 16px; fill: currentColor; vertical-align: middle; }
 </style>
 </head>
 <body>
-  <div class="pill">
+  <div class="pill" id="pill">
     <button data-nav="back" title="Back"><svg viewBox="0 0 24 24"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z"/></svg></button>
     <button data-nav="forward" title="Forward"><svg viewBox="0 0 24 24"><path d="M8.6 16.6 10 18l6-6-6-6-1.4 1.4 4.6 4.6z"/></svg></button>
     <button data-nav="reload" title="Reload"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>

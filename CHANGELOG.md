@@ -19,6 +19,12 @@ with its packages for macOS, Windows and Linux. What comes next:
   engine's warning that an object needs them is shown, with a button to
   turn supports on and slice again (#89).
 
+### Fixed
+- **Explore**: the Back, Forward and Reload buttons over a site stay
+  visible on any site: the pill turns light on dark sites and dark on light
+  ones, and no longer fades out. Their tooltips are translated, and the
+  pill no longer flickers on Linux (#88).
+
 ## [0.18.0] — 2026-10-31
 
 ### Added
