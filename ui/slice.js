@@ -528,6 +528,9 @@ $("smodal").addEventListener("change", (e) => {
   if (e.target.matches("#s-supports, #s-brim")) slSummary();
   // Supports on or off change the heads counted for the plate.
   if (e.target.matches("#s-supports")) pdBedLine();
+  // Switched by hand: kept at once, not only at the next slice, as
+  // Prepare's badge reads it (and its button writes it).
+  if (e.target.matches("#s-supports") && e.isTrusted) slSetSupports(e.target.checked);
 });
 
 function setRange(id, value, fmt) {
