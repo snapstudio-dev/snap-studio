@@ -10,6 +10,10 @@
 # Updates: packages are signed with the key from the secrets
 # TAURI_SIGNING_PRIVATE_KEY / TAURI_SIGNING_PRIVATE_KEY_PASSWORD, and the
 # release carries `latest.json`, which the installed app reads.
+#
+# Anonymous usage count (docs/privacy.md): the Aptabase app key, secret
+# APTABASE_APP_KEY, is read at build time by the Build step only. Without it
+# (a fork, a local build) the app sends nothing.
 
 name: Release
 
@@ -106,6 +110,8 @@ jobs:
       # key, stays possible.
       - name: Build
         working-directory: src-tauri
+        env:
+          APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
         run: |
           npx --yes @tauri-apps/cli@^2 build ${{ matrix.args }} \
             --config '{"bundle":{"createUpdaterArtifacts":true}}'
