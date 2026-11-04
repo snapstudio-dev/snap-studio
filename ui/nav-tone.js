@@ -65,6 +65,11 @@
     return l < DARK_BELOW ? "dark" : l > LIGHT_ABOVE ? "light" : "mid";
   }
 
+  /* A picture small enough to be a logo or an icon (CSS pixels): what is
+     under it, the header's background, tells more than the page's
+     fallbacks. A bigger one (a banner, a cover) leaves the point unread. */
+  const smallPicture = (w, h) => h <= 64 && w <= 320;
+
   /* When the points cannot be read: the page's theme-color, then the
      background of <body>, then of <html> (opaque ones only), then its
      color-scheme. null when none of them tells. */
@@ -88,7 +93,7 @@
     return current;
   }
 
-  const rules = { POINTS, parseColor, composite, luminance, toneOf, fallbackTone, decide };
+  const rules = { POINTS, parseColor, composite, luminance, toneOf, smallPicture, fallbackTone, decide };
   if (typeof module !== "undefined" && module.exports) {
     module.exports = rules;
     return;
@@ -124,7 +129,10 @@
     }
   }
 
-  const UNREADABLE = new Set(["IMG", "VIDEO", "CANVAS", "IFRAME", "EMBED", "OBJECT", "PICTURE"]);
+  /* Pixels a script cannot read; pictures (images, SVG) are looked under
+     when small. */
+  const MEDIA = new Set(["VIDEO", "CANVAS", "IFRAME", "EMBED", "OBJECT"]);
+  const PICTURE = new Set(["IMG", "PICTURE"]);
   const dark = () => matchMedia("(prefers-color-scheme: dark)").matches;
   const scheme = () => getComputedStyle(document.documentElement).colorScheme || "";
 
@@ -132,9 +140,19 @@
   function pointTone(x, y, canvas) {
     const layers = [];
     for (const el of document.elementsFromPoint(x, y)) {
-      if (UNREADABLE.has(el.tagName) || el instanceof SVGElement) return null;
+      if (MEDIA.has(el.tagName)) return null;
+      const svg = el instanceof SVGElement ? el.ownerSVGElement || el : null;
+      if (svg || PICTURE.has(el.tagName)) {
+        const r = (svg || el).getBoundingClientRect();
+        if (smallPicture(r.width, r.height)) continue;
+        return null;
+      }
       const cs = getComputedStyle(el);
-      if (cs.backgroundImage && cs.backgroundImage !== "none") return null;
+      if (cs.backgroundImage && cs.backgroundImage !== "none") {
+        const r = el.getBoundingClientRect();
+        if (smallPicture(r.width, r.height)) continue;
+        return null;
+      }
       const c = parseColor(cs.backgroundColor);
       if (!c || c[3] === 0) continue;
       layers.push(c);

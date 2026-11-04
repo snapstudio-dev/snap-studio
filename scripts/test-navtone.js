@@ -37,6 +37,12 @@ assert.strictEqual(T.toneOf([185, 185, 185]), "mid", "mid grey: undecided");
 assert.strictEqual(T.toneOf([0, 120, 215]), "dark", "a saturated blue bar");
 assert.strictEqual(T.toneOf([255, 214, 10]), "light", "a yellow bar");
 
+// A logo or an icon under a point: looked under; a banner: unread.
+assert.strictEqual(T.smallPicture(48, 48), true);
+assert.strictEqual(T.smallPicture(140, 32), true, "a wordmark");
+assert.strictEqual(T.smallPicture(1200, 400), false, "a banner");
+assert.strictEqual(T.smallPicture(200, 120), false, "a cover");
+
 // Fallbacks, in order: theme-color, body, html, color-scheme.
 assert.strictEqual(T.fallbackTone({ themeColor: [0, 0, 0, 1], body: white }), "dark", "theme-color first");
 assert.strictEqual(T.fallbackTone({ themeColor: null, body: [20, 20, 20, 1], html: white }), "dark", "then <body>");
