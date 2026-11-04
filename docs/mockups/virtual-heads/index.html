@@ -1,0 +1,142 @@
+<!doctype html>
+<!-- Mockup only (spec of the virtual heads PR): the creation sheet and
+     Prepare's single head token with its popover. Static colours; the app
+     computes the mix with the Rust port of Orca's mixer. Open in a browser. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Virtual heads — mockup</title>
+<style>
+  :root { --bg:#f4f4f6; --card:#fff; --line:#d9d9de; --text:#1d1d1f; --muted:#6e6e73; --accent:#0a84ff; --warn:#c77700; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#1c1c1e; --card:#2c2c2e; --line:#3a3a3c; --text:#f2f2f7; --muted:#98989d; } }
+  body { margin:0; padding:32px; background:var(--bg); color:var(--text); font:13px/1.4 -apple-system, "Segoe UI", system-ui, sans-serif; display:flex; gap:40px; flex-wrap:wrap; align-items:flex-start; }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:0 0 10px; }
+  .sheet { width:460px; background:var(--card); border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,.18); padding:18px 22px 18px; position:relative; }
+  .sheet h1 { font-size:15px; margin:0 0 6px; }
+  .x { position:absolute; right:16px; top:14px; color:var(--muted); }
+  .stage { position:relative; height:250px; }
+  .stage svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+  .hc { position:absolute; top:6px; width:128px; border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--card); cursor:pointer; }
+  .hc:hover { border-color:var(--accent); }
+  .hc.a { left:0; } .hc.b { right:0; }
+  .spool { width:34px; height:34px; border-radius:50%; background:var(--c); box-shadow: inset 0 0 0 6px rgba(255,255,255,.35), 0 0 0 1px rgba(0,0,0,.12); float:left; margin-right:10px; }
+  .hc b { display:block; } .hc small { color:var(--muted); display:block; }
+  .hc i { position:absolute; right:10px; top:10px; font-style:normal; color:var(--muted); }
+  .mix { position:absolute; left:50%; top:142px; transform:translateX(-50%); text-align:center; }
+  .mixdot { width:64px; height:64px; border-radius:50%; margin:0 auto 6px; background:var(--m);
+            box-shadow: 0 0 0 4px var(--card), 0 0 0 7px transparent; position:relative; }
+  .mixdot::after { content:""; position:absolute; inset:-7px; border-radius:50%; background:conic-gradient(var(--ca) 0 50%, var(--cb) 50% 100%); z-index:-1; }
+  .mix b { font-size:14px; } .mix small { display:block; color:var(--muted); }
+  .slider { margin:8px 0 2px; display:flex; align-items:center; gap:10px; }
+  .end { width:14px; height:14px; border-radius:50%; flex:none; }
+  .end + span, .lbl { font-weight:600; }
+  .track { flex:1; position:relative; height:24px; }
+  .bar { position:absolute; left:0; right:0; top:10px; height:4px; border-radius:2px; background:linear-gradient(90deg, var(--ca), var(--m), var(--cb)); }
+  .tick { position:absolute; top:6px; width:2px; height:12px; background:var(--line); transform:translateX(-1px); }
+  .thumb { position:absolute; top:2px; width:20px; height:20px; border-radius:50%; background:var(--m); border:3px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.35); transform:translateX(-10px); }
+  .cap { text-align:center; color:var(--text); margin-top:4px; }
+  .note { color:var(--muted); font-size:11.5px; margin:12px 0 14px; display:flex; gap:6px; }
+  .btns { display:flex; justify-content:flex-end; gap:8px; }
+  .btn { border:1px solid var(--line); background:var(--card); color:var(--text); border-radius:7px; padding:5px 14px; }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  /* Prepare */
+  .list { width:330px; background:var(--card); border-radius:12px; padding:10px 12px; box-shadow:0 6px 24px rgba(0,0,0,.12); }
+  .row { display:flex; align-items:center; gap:8px; padding:6px 4px; border-bottom:1px solid var(--line); }
+  .row:last-child { border:0; }
+  .sw { width:12px; height:12px; border-radius:3px; background:var(--c); }
+  .row .k { flex:1; }
+  .tok { display:inline-flex; align-items:center; gap:5px; border:1px solid var(--line); border-radius:999px; padding:2px 8px 2px 4px; background:var(--card); color:var(--text); font-weight:600; }
+  .tok .d { width:14px; height:14px; border-radius:50%; background:var(--c); }
+  .tok .d.v { background:radial-gradient(circle, var(--m) 0 45%, var(--card) 46% 58%, transparent 59%), conic-gradient(var(--ca) 0 50%, var(--cb) 50% 100%); }
+  .tok .d { position:relative; z-index:0; }
+  .tok em { font-style:normal; color:var(--muted); font-weight:400; }
+  .tok.open { border-color:var(--accent); box-shadow:0 0 0 3px rgba(10,132,255,.2); }
+  .tok.choose { border-style:dashed; color:var(--warn); }
+  .pop { margin:6px 0 0 120px; width:220px; background:var(--card); border:1px solid var(--line); border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.2); padding:8px; }
+  .sec { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:4px 4px 6px; }
+  .opts { display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:6px; }
+  .opt { display:flex; align-items:center; gap:6px; padding:5px 6px; border-radius:7px; }
+  .opt.on { background:rgba(10,132,255,.14); }
+  .opt small { color:var(--muted); display:block; font-size:10.5px; }
+  .foot { border-top:1px solid var(--line); padding:7px 6px 2px; color:var(--accent); }
+  .tag { font-size:10.5px; color:var(--warn); border:1px solid var(--warn); border-radius:4px; padding:0 4px; }
+</style>
+</head>
+<body>
+<section>
+  <h2>Heads and spools → + Virtual head</h2>
+  <div class="sheet" style="--ca:#00AEEF;--cb:#FFE100;--m:#5DB548">
+    <span class="x">✕</span>
+    <h1>New virtual head</h1>
+    <div class="stage">
+      <svg viewBox="0 0 416 250" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="ga" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#00AEEF"/><stop offset="1" stop-color="#5DB548"/></linearGradient>
+          <linearGradient id="gb" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE100"/><stop offset="1" stop-color="#5DB548"/></linearGradient>
+          <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#5DB548"/></marker>
+        </defs>
+        <path d="M64 78 C 64 128, 150 150, 176 168" fill="none" stroke="url(#ga)" stroke-width="2.5" marker-end="url(#ah)"/>
+        <path d="M352 78 C 352 128, 266 150, 240 168" fill="none" stroke="url(#gb)" stroke-width="2.5" marker-end="url(#ah)"/>
+      </svg>
+      <div class="hc a" style="--c:#00AEEF" title="Change head"><span class="spool"></span><b>T0</b><small>PLA</small><small>Cyan</small><i>▾</i></div>
+      <div class="hc b" style="--c:#FFE100" title="Change head"><span class="spool"></span><b>T2</b><small>PLA</small><small>Yellow</small><i>▾</i></div>
+      <div class="mix"><div class="mixdot"></div><b>V1</b><small>Green · #5DB548</small></div>
+    </div>
+    <div class="slider">
+      <span class="end" style="background:#00AEEF"></span><span class="lbl">T0</span>
+      <div class="track" role="slider" aria-valuemin="1" aria-valuemax="7" aria-valuenow="4" aria-valuetext="1 layer of each">
+        <div class="bar"></div>
+        <div class="tick" style="left:0%"></div><div class="tick" style="left:16.66%"></div><div class="tick" style="left:33.33%"></div>
+        <div class="tick" style="left:50%"></div><div class="tick" style="left:66.66%"></div><div class="tick" style="left:83.33%"></div><div class="tick" style="left:100%"></div>
+        <div class="thumb" style="left:50%"></div>
+      </div>
+      <span class="lbl">T2</span><span class="end" style="background:#FFE100"></span>
+    </div>
+    <div class="cap">1 layer of each · 50 % / 50 %</div>
+    <div class="note"><span>Indicative preview: the mix is made layer by layer and depends on the filaments, the layer height and the light.</span><span>ⓘ</span></div>
+    <div class="btns"><button class="btn">Cancel</button><button class="btn primary">Create</button></div>
+  </div>
+  <p style="color:var(--muted);max-width:460px">Seven notches: 4:1, 3:1, 2:1, 1:1, 1:2, 1:3, 1:4 (share of T2: 20, 25, 33, 50, 67, 75, 80 %), the cadences Snapmaker Orca prints. Each head card opens the head popover; the other card's head is disabled.</p>
+</section>
+
+<section>
+  <h2>Prepare — one token per colour, popover on click</h2>
+  <div class="list" style="--ca:#00AEEF;--cb:#FFE100;--m:#5DB548">
+    <div class="row"><b>Frog.3mf</b></div>
+    <div class="row"><span class="sw" style="--c:#2E7D32"></span><span class="k">Color 1</span>
+      <button class="tok open"><span class="d v"></span>V1 <em>▾</em></button></div>
+    <div class="row"><span class="sw" style="--c:#111"></span><span class="k">Color 2</span>
+      <button class="tok" style="--c:#222"><span class="d"></span>T1 <em>▾</em></button></div>
+    <div class="row"><span class="sw" style="--c:#eee"></span><span class="k">Color 3 <span class="tag">no head</span></span>
+      <button class="tok choose">Choose <em>▾</em></button></div>
+  </div>
+  <div class="pop" style="--ca:#00AEEF;--cb:#FFE100;--m:#5DB548">
+    <div class="sec">Heads</div>
+    <div class="opts">
+      <div class="opt"><span class="tok" style="--c:#00AEEF;border:0;padding:0"><span class="d"></span></span><div>T0<small>PLA · Cyan</small></div></div>
+      <div class="opt"><span class="tok" style="--c:#222;border:0;padding:0"><span class="d"></span></span><div>T1<small>PLA · Black</small></div></div>
+      <div class="opt"><span class="tok" style="--c:#FFE100;border:0;padding:0"><span class="d"></span></span><div>T2<small>PLA · Yellow</small></div></div>
+      <div class="opt"><span class="tok" style="--c:#E6007E;border:0;padding:0"><span class="d"></span></span><div>T3<small>PLA · Magenta</small></div></div>
+    </div>
+    <div class="sec">Virtual heads</div>
+    <div class="opts">
+      <div class="opt on"><span class="tok" style="border:0;padding:0"><span class="d v"></span></span><div>V1<small>T0 + T2 · 1:1</small></div></div>
+      <div class="opt" style="--ca:#E6007E;--cb:#FFE100;--m:#F26B2C"><span class="tok" style="border:0;padding:0"><span class="d v"></span></span><div>V2<small>T3 + T2 · 1:2</small></div></div>
+    </div>
+    <div class="foot">Create a virtual head…</div>
+  </div>
+</section>
+
+<section>
+  <h2>Shown once, on the first Create</h2>
+  <div class="sheet" style="width:360px">
+    <h1>A virtual head depends on its two spools</h1>
+    <p>V1 mixes T0 and T2. If you unload one of the two spools, V1 is deleted automatically: what used it is left without a head, and slicing waits until you choose one.</p>
+    <div class="btns" style="justify-content:space-between;align-items:center">
+      <label><input type="checkbox" /> Don't show this again</label>
+      <button class="btn primary">Got it</button>
+    </div>
+  </div>
+</section>
+</body>
+</html>

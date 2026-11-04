@@ -19,9 +19,7 @@ pub struct Favorite {
 }
 
 fn dir() -> PathBuf {
-    let d = dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("fr.carlini.snapstudio");
+    let d = dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio");
     let _ = std::fs::create_dir_all(&d);
     d
 }
@@ -44,19 +42,13 @@ fn forget_old_thumbnails() {
 /// read: the fields that went are ignored.
 pub fn list() -> Vec<Favorite> {
     forget_old_thumbnails();
-    let mut v: Vec<Favorite> = std::fs::read(store_path())
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default();
+    let mut v: Vec<Favorite> = std::fs::read(store_path()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
     v.sort_by(|a, b| b.added_at.cmp(&a.added_at));
     v
 }
 
 fn save(list: &[Favorite]) -> Result<()> {
-    let tmp = store_path().with_extension("tmp");
-    std::fs::write(&tmp, serde_json::to_vec_pretty(list)?)?;
-    std::fs::rename(&tmp, store_path())?;
-    Ok(())
+    crate::util::write_atomic(&store_path(), &serde_json::to_vec_pretty(list)?)
 }
 
 pub fn remove(id: &str) -> Result<Vec<Favorite>> {
@@ -87,16 +79,8 @@ fn site_name(host: &str) -> String {
 /// Last URL segment turned into a title: "1284937-vase-spirale" gives
 /// "Vase spirale". For a page whose title is not known yet.
 fn title_from_url(u: &url::Url) -> String {
-    let seg = u
-        .path_segments()
-        .and_then(|s| s.filter(|x| !x.is_empty()).next_back())
-        .unwrap_or("");
-    let cleaned = seg
-        .split('-')
-        .filter(|p| !p.chars().all(|c| c.is_ascii_digit()))
-        .collect::<Vec<_>>()
-        .join(" ")
-        .replace('_', " ");
+    let seg = u.path_segments().and_then(|s| s.filter(|x| !x.is_empty()).next_back()).unwrap_or("");
+    let cleaned = seg.split('-').filter(|p| !p.chars().all(|c| c.is_ascii_digit())).collect::<Vec<_>>().join(" ").replace('_', " ");
     let t = cleaned.trim();
     if t.is_empty() {
         return u.host_str().unwrap_or("Model").to_string();
@@ -133,19 +117,13 @@ pub fn add(url: &str, title: Option<&str>) -> Result<Vec<Favorite>> {
         return Err(anyhow!(crate::t!("err.fav_exists", name = existing.title)));
     }
     let site = site_name(parsed.host_str().unwrap_or(""));
-    let title = title
-        .map(|t| clean_title(t, &site))
-        .filter(|t| !t.is_empty())
-        .unwrap_or_else(|| title_from_url(&parsed));
+    let title = title.map(|t| clean_title(t, &site)).filter(|t| !t.is_empty()).unwrap_or_else(|| title_from_url(&parsed));
     v.push(Favorite {
         id: format!("{:x}", crate::util::fnv1a(&[url.as_bytes()])),
         url: url.to_string(),
         site,
         title,
-        added_at: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0),
+        added_at: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
     });
     save(&v)?;
     Ok(list())

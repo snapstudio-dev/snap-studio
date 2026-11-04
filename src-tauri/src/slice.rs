@@ -47,21 +47,15 @@ pub fn engine() -> Option<PathBuf> {
     if crate::engine::referenced() {
         return crate::engine::installed();
     }
-    let list = crate::slicers::list();
-    list.iter()
-        .find(|s| s.name == "Snapmaker Orca")
-        .or_else(|| list.first())
-        .map(|s| PathBuf::from(&s.path))
+    // Snapmaker Orca only: another slicer's profiles are not the U1's, and
+    // its command line may differ (`err.not_orca` says so otherwise).
+    crate::slicers::list().iter().find(|s| s.name == "Snapmaker Orca").map(|s| PathBuf::from(&s.path))
 }
 
 /// Engine data folder (logs, cache): Snap Studio's own, so as never to write
 /// into Snapmaker Orca's nor create one.
 fn engine_datadir() -> PathBuf {
-    let d = dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("fr.carlini.snapstudio")
-        .join("engine")
-        .join("data");
+    let d = dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio").join("engine").join("data");
     let _ = std::fs::create_dir_all(&d);
     d
 }
@@ -103,7 +97,11 @@ pub fn details(
             }
             presets::process_extra(&idx, machine, &o)
         }
-        Some(presets::Kind::Filament) => presets::filament_extra(color),
+        Some(presets::Kind::Filament) => {
+            let mut e = presets::filament_extra(color);
+            e.extend(presets::filament_overrides(overrides));
+            e
+        }
         _ => Map::new(),
     };
     idx.details(name, &extra).ok_or_else(|| anyhow!(crate::t!("err.unknown_preset", name = name)))
@@ -116,8 +114,9 @@ pub fn save_process(name: &str, base: &str, simple: Option<Simple>, overrides: &
     let idx = index_for(&app)?;
     let mut values = simple.unwrap_or_default().to_overrides();
     for (k, v) in overrides {
-        // The plate is chosen per slice, not part of a process preset.
-        if k != "curr_bed_type" {
+        // The plate is chosen per slice, not part of a process preset; nor
+        // are the filaments' own keys.
+        if k != "curr_bed_type" && !presets::FILAMENT_OVERRIDES.contains(&k.as_str()) {
             values.insert(k.clone(), v.clone());
         }
     }
@@ -193,10 +192,7 @@ impl Simple {
             infill: num(cfg, "sparse_infill_density"),
             walls: num(cfg, "wall_loops").map(|w| w as u32),
             supports: flag(cfg, "enable_support"),
-            brim: cfg
-                .get("brim_type")
-                .and_then(|v| v.as_str())
-                .map(|t| t != "no_brim"),
+            brim: cfg.get("brim_type").and_then(|v| v.as_str()).map(|t| t != "no_brim"),
         }
     }
 
@@ -227,13 +223,12 @@ impl Simple {
 }
 
 /// Starting values of a given preset.
-pub fn defaults(machine: &str, process: &str) -> Result<Simple> {
+/// The quick settings of a process preset (the machine does not change
+/// them: a process is what it is whichever machine prints it).
+pub fn defaults(process: &str) -> Result<Simple> {
     let app = engine().ok_or_else(|| anyhow!(crate::engine::missing()))?;
     let idx = index_for(&app)?;
-    let _ = machine;
-    let cfg = idx
-        .flatten(process)
-        .ok_or_else(|| anyhow!(crate::t!("err.unknown_preset", name = process)))?;
+    let cfg = idx.resolve(process)?;
     Ok(Simple::from_config(&cfg))
 }
 
@@ -265,6 +260,90 @@ pub struct Request {
     /// Name given to a scene's result (G-code name).
     #[serde(default)]
     pub name: Option<String>,
+    /// The virtual heads the plate uses, in order: the `k`-th is head
+    /// `n + k` in the extruder maps (`n` physical heads), so the engine's
+    /// virtual filament `n + k + 1`.
+    #[serde(default)]
+    pub virtual_heads: Vec<VirtualHead>,
+    /// One prime tower per material: the pillars to print, first in the
+    /// object list, with the engine's tower off (`PILLAR_OVERRIDES`).
+    #[serde(default)]
+    pub pillars: Vec<crate::plate::Pillar>,
+    /// Smooth mix: with a virtual head, each layer of a mixed region is split
+    /// into sub-layers, one per head (`SMOOTH_MIX_OVERRIDES`). Absent: off.
+    #[serde(default)]
+    pub smooth_mix: bool,
+}
+
+/// What printing pillars needs from the engine: no tower of its own, the
+/// objects printed in the list's order (each head primes on its ring
+/// before the model), no support layer of its own between two object
+/// layers (it would change heads where no pillar layer is). They win over
+/// every other setting (the UI sends them too).
+pub const PILLAR_OVERRIDES: [(&str, &str); 3] =
+    [("enable_prime_tower", "0"), ("print_order", "as_obj_list"), ("independent_support_layer_height", "0")];
+
+/// Smooth mix, as Snapmaker's guide asks when a whole object uses a mixed
+/// color: "Subdivide Mix Layer", "Full domain" and "Apply subdivision to
+/// infill" (Snapmaker Orca's Color Mixing group). Every layer of a mixed
+/// region is split into sub-layers, one per head, walls and infill alike;
+/// their heights stay within the engine's Local-Z bounds (0.04 to 0.16 mm by
+/// default, not sent).
+pub const SMOOTH_MIX_OVERRIDES: [&str; 3] = ["dithering_local_z_mode", "dithering_local_z_whole_objects", "dithering_local_z_infill"];
+
+/// The settings a request sends on top of the profiles: its simplified
+/// settings, its own overrides (the sheet's differences), the virtual heads'
+/// mixes and smooth mix (a key set by hand wins), then the pillars' keys,
+/// which have the last word.
+pub fn request_overrides(req: &Request) -> Map<String, Value> {
+    let mut overrides = req.simple.clone().unwrap_or_default().to_overrides();
+    for (k, v) in &req.overrides {
+        overrides.insert(k.clone(), v.clone());
+    }
+    // Virtual heads: the engine's command line keeps the mixes from the
+    // process settings (checked by engine_virtual_head_alternates).
+    if !req.virtual_heads.is_empty() {
+        overrides.insert("mixed_filament_definitions".into(), Value::String(mixed_definitions(&req.virtual_heads)));
+        if req.smooth_mix {
+            for k in SMOOTH_MIX_OVERRIDES {
+                if !req.overrides.contains_key(k) {
+                    overrides.insert(k.into(), Value::String("1".into()));
+                }
+            }
+        }
+    }
+    if !req.pillars.is_empty() && !req.scene.is_empty() {
+        for (k, v) in PILLAR_OVERRIDES {
+            overrides.insert(k.into(), Value::String(v.into()));
+        }
+    }
+    overrides
+}
+
+/// A virtual head: two physical heads (from 0) the engine alternates layer
+/// by layer, `pct` the share of `b` (Snapmaker Orca's mixed filament), and
+/// its preview color for the G-code's images.
+#[derive(Deserialize, Serialize, Clone, Debug, Default, PartialEq)]
+pub struct VirtualHead {
+    pub a: u8,
+    pub b: u8,
+    pub pct: u8,
+    #[serde(default)]
+    pub color: Option<String>,
+}
+
+/// Orca's `mixed_filament_definitions`, one row per virtual head as its
+/// `serialize_custom_entries` writes them: components from 1, enabled,
+/// custom (the layer cadence comes from the percent), no pointillism, no
+/// gradient, `Simple` distribution, no Local-Z, no bias, not deleted, not
+/// auto-generated, a stable id.
+pub fn mixed_definitions(heads: &[VirtualHead]) -> String {
+    heads
+        .iter()
+        .enumerate()
+        .map(|(k, v)| format!("{},{},1,1,{},0,g,w,m2,z0,xa0,xb0,d0,o0,u{}", v.a + 1, v.b + 1, v.pct.min(100), k + 1))
+        .collect::<Vec<_>>()
+        .join(";")
 }
 
 /// Overhang angle of the print profile (`support_threshold_angle`), which
@@ -304,9 +383,7 @@ pub fn bed(machine: Option<&str>) -> Bed {
     let u1 = Bed { w: 270.0, d: 270.0, model: Some("Snapmaker U1".into()) };
     let Some(app) = engine() else { return u1 };
     let Ok(idx) = index_for(&app) else { return u1 };
-    let m = machine
-        .map(String::from)
-        .or_else(|| idx.selected.get("machine").cloned());
+    let m = machine.map(String::from).or_else(|| idx.selected.get("machine").cloned());
     match m {
         Some(m) => {
             let (w, d) = idx.plate_size(&m);
@@ -325,10 +402,61 @@ pub struct Progress {
     pub message: Option<String>,
     /// In the `preview` phase: temporary G-code, in the working folder.
     pub gcode: Option<String>,
-    /// Progress announced by the engine, from 0 to 100.
+    /// The job's progress, from 0 to 100, never going back.
     pub percent: Option<f32>,
+    /// The stage under way while slicing (`slice.stage.*`).
+    pub stage: Option<String>,
     /// Slicing summary, in the `preview` phase.
     pub stats: Option<crate::gcode::SliceStats>,
+    /// In the `preview` phase: the objects the engine says need supports
+    /// (sliced without them).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<SupportWarning>,
+}
+
+/// The engine's warning that an object needs supports: it slices anyway,
+/// supports off, and says so in its log ("It seems object X has floating
+/// regions"), the same check as Orca's.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct SupportWarning {
+    /// The object's name in the 3MF: the scene item's.
+    pub object: String,
+    /// floating | cantilever | overhangs | other
+    pub reason: String,
+    /// The engine's message, in English: shown when the reason is unknown.
+    pub text: String,
+}
+
+/// The engine's support warnings in its log, one per object and reason.
+/// A slice with supports off checks each object (`is_support_necessary`)
+/// and logs, on success:
+/// `[…] [warning] plate 1: found NON_CRITICAL slicing warnings: It seems
+/// object T.stl has floating cantilever. Please re-orient the object or
+/// enable support generation.`
+fn support_warnings(logs: &str) -> Vec<SupportWarning> {
+    const MARK: &str = "found NON_CRITICAL slicing warnings: ";
+    const START: &str = "It seems object ";
+    const REASONS: [(&str, &str); 3] =
+        [(" has floating regions", "floating"), (" has floating cantilever", "cantilever"), (" has large overhangs", "overhangs")];
+    let mut out: Vec<SupportWarning> = Vec::new();
+    for line in logs.lines() {
+        let Some(i) = line.find(MARK) else { continue };
+        let text = line[i + MARK.len()..].trim();
+        let Some(said) = text.strip_prefix(START) else { continue };
+        // The object's name may hold anything, " has " included: the known
+        // reasons are matched at the end of the sentence.
+        let said = said.split(". Please").next().unwrap_or(said).trim_end_matches('.');
+        let (object, reason) = REASONS
+            .iter()
+            .find_map(|(tail, r)| said.strip_suffix(tail).map(|o| (o, *r)))
+            .or_else(|| said.rfind(" has ").map(|k| (&said[..k], "other")))
+            .unwrap_or((said, "other"));
+        let w = SupportWarning { object: object.to_string(), reason: reason.into(), text: text.to_string() };
+        if !out.contains(&w) {
+            out.push(w);
+        }
+    }
+    out
 }
 
 /// Finished slice awaiting a decision: save, send, discard.
@@ -337,6 +465,10 @@ struct Preview {
     gcode: PathBuf,
     source: PathBuf,
     out_dir: Option<PathBuf>,
+    /// Order of arrival: the oldest go when there are too many.
+    seq: u64,
+    /// Where `save` last put it: saving again overwrites that copy only.
+    saved: Option<PathBuf>,
 }
 
 fn previews() -> &'static Mutex<std::collections::HashMap<String, Preview>> {
@@ -344,10 +476,44 @@ fn previews() -> &'static Mutex<std::collections::HashMap<String, Preview>> {
     P.get_or_init(Default::default)
 }
 
+/// Previews kept at once. The sheet shows one; a few more cover a print
+/// being sent while the next slice runs. Beyond that, the oldest working
+/// folders (a whole plate.3mf and its G-code each) would pile up in the
+/// temporary folder until `discard`, which only the sheet calls.
+const MAX_PREVIEWS: usize = 8;
+
+/// Keeps a finished slice, letting the oldest go past `MAX_PREVIEWS`.
+fn remember_preview(id: String, p: Preview) {
+    remember_in(&mut previews().lock().unwrap(), id, p, MAX_PREVIEWS);
+}
+
+fn remember_in(list: &mut std::collections::HashMap<String, Preview>, id: String, p: Preview, max: usize) {
+    list.insert(id, p);
+    while list.len() > max {
+        let Some(oldest) = list.iter().min_by_key(|(_, p)| p.seq).map(|(k, _)| k.clone()) else { break };
+        if let Some(p) = list.remove(&oldest) {
+            let _ = std::fs::remove_dir_all(&p.work);
+        }
+    }
+}
+
+fn next_seq() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(1);
+    N.fetch_add(1, Ordering::Relaxed)
+}
+
 /// Prefix of the working folders, in the system's temporary folder.
 const WORK_PREFIX: &str = "snapstudio_slice_";
 
-type Jobs = Mutex<std::collections::HashMap<String, u32>>;
+/// A slice under way: its engine process once started. Registered from the
+/// first step, so that `cancel` reaches a job still preparing (presets,
+/// scene written out), which can take a while on a dense plate.
+struct Job {
+    pid: Option<u32>,
+}
+
+type Jobs = Mutex<std::collections::HashMap<String, Job>>;
 
 fn jobs() -> &'static Jobs {
     static J: OnceLock<Jobs> = OnceLock::new();
@@ -373,23 +539,19 @@ fn engine_error(out: &str) -> String {
         .collect();
     // "run found error, exit" ends every output and tells nothing: the useful
     // message is the line just before.
-    let useful: Vec<&str> = lines
-        .iter()
-        .filter(|l| !l.contains("run found error"))
-        .cloned()
-        .collect();
+    let useful: Vec<&str> = lines.iter().filter(|l| !l.contains("run found error")).cloned().collect();
     let pick = useful
         .iter()
         .rev()
-        .find(|l| {
-            l.contains("[error]")
-                || l.contains("not compatible")
-                || l.contains("not in range")
-                || l.contains("Param values")
-        })
+        .find(|l| l.contains("[error]") || l.contains("not compatible") || l.contains("not in range") || l.contains("Param values"))
         .or_else(|| useful.last())
         .or_else(|| lines.last())
         .copied();
+    // Paths that cross (two objects, or an object and the prime tower):
+    // the engine only names the plate.
+    if pick.is_some_and(|l| l.contains("found slicing result conflict")) {
+        return crate::t!("err.slice_conflict");
+    }
     let silent = crate::t!("err.engine_silent");
     let raw = pick.unwrap_or(&silent).trim();
     // Remove the timestamp and thread, unreadable in the UI.
@@ -401,10 +563,7 @@ fn engine_error(out: &str) -> String {
 
 /// Output name enriched with the material and duration, as Orca does.
 fn output_name(source: &Path, gcode: &Path) -> String {
-    let stem = source
-        .file_stem()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| "piece".into());
+    let stem = source.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "piece".into());
     let mut bits = vec![stem];
     if let Ok(f) = std::fs::File::open(gcode) {
         if let Ok(d) = crate::gcode::parse(f) {
@@ -431,10 +590,7 @@ const SLICE_TRI_BUDGET: usize = 8_000_000;
 /// single object with several parts, each assigned to its head; otherwise, a
 /// single block left to the first head's filament.
 fn rewrite_centered(source: &Path, work: &Path, plate: (f32, f32), extruder_map: &[u8]) -> Result<PathBuf> {
-    let is_stl = source
-        .extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
+    let is_stl = source.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("stl"));
     let m = if is_stl {
         crate::stl::read(source)?
     } else {
@@ -459,21 +615,12 @@ fn rewrite_centered(source: &Path, work: &Path, plate: (f32, f32), extruder_map:
     t.0[10] = (plate.1 - size[1]) / 2.0 - m.min[1];
     t.0[11] = -m.min[2];
 
-    let name = source
-        .file_stem()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| "piece".into());
+    let name = source.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "piece".into());
     let dst = work.join(format!("{name}.3mf"));
 
     // Destination heads: one part per head, grouping the model extruders sent
     // to the same head; painting kept.
-    let head_of = |model_ext: u8| -> u8 {
-        extruder_map
-            .get(model_ext.saturating_sub(1) as usize)
-            .copied()
-            .unwrap_or(0)
-            .min(15)
-    };
+    let head_of = |model_ext: u8| -> u8 { extruder_map.get(model_ext.saturating_sub(1) as usize).copied().unwrap_or(0).min(15) };
     let parts = crate::plate::parts_by_head(&name, m, head_of, false);
     crate::write3mf::write_multipart(&dst, &name, &parts, &t)?;
     Ok(dst)
@@ -577,14 +724,13 @@ fn part_colors(zip: &mut crate::model3mf::Zip) -> Vec<crate::model3mf::ProjectFi
 
 /// Starts a slice. Returns the job id.
 pub fn start(app_handle: AppHandle, req: Request) -> Result<String> {
-    let id = format!("{:x}", crate::util::fnv1a(&[
-        req.source.as_bytes(),
-        &std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0)
-            .to_le_bytes(),
-    ]));
+    let id = format!(
+        "{:x}",
+        crate::util::fnv1a(&[
+            req.source.as_bytes(),
+            &std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0).to_le_bytes(),
+        ])
+    );
     let engine_app = engine().ok_or_else(|| anyhow!(crate::engine::missing()))?;
     let bin = binary(&engine_app)?;
     let idx = index_for(&engine_app)?;
@@ -599,13 +745,7 @@ pub fn start(app_handle: AppHandle, req: Request) -> Result<String> {
 }
 
 /// Full run of a slice, independent of Tauri to stay testable.
-pub fn run_job(
-    bin: PathBuf,
-    idx: Arc<Index>,
-    req: Request,
-    job_id: String,
-    report: &(dyn Fn(Progress) + Send + Sync),
-) {
+pub fn run_job(bin: PathBuf, idx: Arc<Index>, req: Request, job_id: String, report: &(dyn Fn(Progress) + Send + Sync)) {
     {
         let t0 = std::time::Instant::now();
         let el = |t: &std::time::Instant| t.elapsed().as_secs_f32();
@@ -619,6 +759,8 @@ pub fn run_job(
         });
 
         let work = std::env::temp_dir().join(format!("{WORK_PREFIX}{job_id}"));
+        // Nothing of a failed slice is worth keeping: its folder goes now,
+        // not with the day-old ones at the next start.
         let fail = |msg: String| {
             report(Progress {
                 id: job_id.clone(),
@@ -629,25 +771,32 @@ pub fn run_job(
                 ..Default::default()
             });
             jobs().lock().unwrap().remove(&job_id);
+            let _ = std::fs::remove_dir_all(&work);
         };
+        let cancelled_now = || {
+            let _ = std::fs::remove_dir_all(&work);
+            report(Progress {
+                id: job_id.clone(),
+                phase: "cancelled".into(),
+                elapsed_s: el(&t0),
+                message: None,
+                gcode: None,
+                ..Default::default()
+            });
+        };
+        // `cancel` removes the job: from here on, its absence means "stop".
+        jobs().lock().unwrap().insert(job_id.clone(), Job { pid: None });
+        let is_cancelled = || !jobs().lock().unwrap().contains_key(&job_id);
         let _ = std::fs::create_dir_all(&work);
 
-        let mut overrides = req.simple.clone().unwrap_or_default().to_overrides();
-        for (k, v) in &req.overrides {
-            overrides.insert(k.clone(), v.clone());
-        }
-        let prep = match presets::prepare(
-            &idx,
-            &work,
-            &req.machine,
-            &req.process,
-            &req.filaments,
-            &req.colors,
-            &overrides,
-        ) {
+        let overrides = request_overrides(&req);
+        let prep = match presets::prepare(&idx, &work, &req.machine, &req.process, &req.filaments, &req.colors, &overrides) {
             Ok(p) => p,
-            Err(e) => return fail(e.to_string()),
+            Err(e) => return fail(crate::util::ui_err(e)),
         };
+        if is_cancelled() {
+            return cancelled_now();
+        }
 
         // The engine crashes loading a 3MF with external geometry ("production"
         // extension), and on projects too. So the geometry is re-emitted into a
@@ -656,25 +805,29 @@ pub fn run_job(
         // A scene has no source file: the result takes the plate's name, in the
         // folder of its first object.
         let scene_source = req.scene.first().map(|it| {
-            let name = req.name.clone().unwrap_or_else(|| "plate".into());
+            // The plate's name becomes a file name: no separator, no control
+            // character (they would send the result to a folder that is not there).
+            let name = req
+                .name
+                .as_deref()
+                .map(|n| n.chars().map(|c| if c == '/' || c == '\\' || c.is_control() { '_' } else { c }).collect::<String>())
+                .filter(|n| !n.trim().is_empty())
+                .unwrap_or_else(|| "plate".into());
             Path::new(&it.path).with_file_name(format!("{name}.3mf"))
         });
         let source = scene_source.as_deref().unwrap_or(Path::new(&req.source));
         let mut arrange = "0";
-        let is_stl = source
-            .extension()
-            .and_then(|e| e.to_str())
-            .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
+        let is_stl = source.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("stl"));
         let input = if !req.scene.is_empty() {
             let dst = work.join("plate.3mf");
-            match crate::plate::write_scene(&req.scene, idx.plate_size(&req.machine), &dst) {
+            match crate::plate::write_scene(&req.scene, &req.pillars, idx.plate_size(&req.machine), &dst) {
                 Ok(_) => dst,
-                Err(e) => return fail(e.to_string()),
+                Err(e) => return fail(crate::util::ui_err(e)),
             }
         } else if crate::scan::kind_of(source) == Some("3mf") || is_stl {
             match rewrite_centered(source, &work, idx.plate_size(&req.machine), &req.extruder_map) {
                 Ok(p) => p,
-                Err(e) => return fail(e.to_string()),
+                Err(e) => return fail(crate::util::ui_err(e)),
             }
         } else {
             // Other formats go as is: it is up to the engine to put them on the bed.
@@ -682,15 +835,14 @@ pub fn run_job(
             source.to_path_buf()
         };
 
+        // Writing the scene out is the long part of the preparation.
+        if is_cancelled() {
+            return cancelled_now();
+        }
         let out = work.join("out");
         let _ = std::fs::create_dir_all(&out);
         let settings = format!("{};{}", prep.machine.display(), prep.process.display());
-        let fils = prep
-            .filaments
-            .iter()
-            .map(|f| f.display().to_string())
-            .collect::<Vec<_>>()
-            .join(";");
+        let fils = prep.filaments.iter().map(|f| f.display().to_string()).collect::<Vec<_>>().join(";");
 
         report(Progress {
             id: job_id.clone(),
@@ -704,74 +856,117 @@ pub fn run_job(
         let mut cmd = std::process::Command::new(&bin);
         crate::util::no_window(&mut cmd);
         cmd.args(["--arrange", arrange, "--allow-newer-file", "--slice", "0"])
-            .arg("--datadir").arg(engine_datadir())
-            .arg("--load-settings").arg(&settings)
-            .arg("--load-filaments").arg(&fils)
-            .arg("--outputdir").arg(&out);
-        // Real progress: the engine writes JSON lines into a named pipe. Without
-        // a pipe (creation impossible, other system), the counter is enough.
+            .arg("--datadir")
+            .arg(engine_datadir())
+            .arg("--load-settings")
+            .arg(&settings)
+            .arg("--load-filaments")
+            .arg(&fils)
+            .arg("--outputdir")
+            .arg(&out)
+            // Info level: the log announces each stage, read live for the
+            // progress (`Tracker`).
+            .args(["--debug", "3"]);
+        // The engine's JSON progress lines, where its build writes them
+        // (Linux): a floor under the log's stages.
         let pipe = progress_pipe(&work).and_then(|p| open_pipe(&p).map(|f| (p, f)));
         if let Some((p, _)) = &pipe {
             cmd.arg("--pipe").arg(p);
         }
-        let child = cmd
-            .arg(&input)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .spawn();
-        let child = match child {
+        let child = cmd.arg(&input).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn();
+        let mut child = match child {
             Ok(c) => c,
             Err(e) => return fail(crate::t!("err.engine_start", err = e)),
         };
-        jobs().lock().unwrap().insert(job_id.clone(), child.id());
-
-        // The pipe reader lives for the duration of the slice: a scoped thread can
-        // therefore borrow `report`.
-        let stop = std::sync::atomic::AtomicBool::new(false);
-        let output = std::thread::scope(|sc| {
-            if let Some((_, f)) = pipe {
-                let (stop, id) = (&stop, job_id.clone());
-                sc.spawn(move || {
-                    progress_loop(f, stop, |percent, message| {
-                        report(Progress {
-                            id: id.clone(),
-                            phase: "slicing".into(),
-                            elapsed_s: t0.elapsed().as_secs_f32(),
-                            message,
-                            percent: Some(percent),
-                            ..Default::default()
-                        })
-                    })
-                });
+        // Registered with its process, unless cancelled meanwhile: then the
+        // engine just started has nothing to do.
+        let registered = match jobs().lock().unwrap().get_mut(&job_id) {
+            Some(job) => {
+                job.pid = Some(child.id());
+                true
             }
-            let out = child.wait_with_output();
-            stop.store(true, std::sync::atomic::Ordering::Relaxed);
-            out
-        });
-        let output = match output {
-            Ok(o) => o,
-            Err(e) => return fail(e.to_string()),
+            None => false,
         };
-        let cancelled = !jobs().lock().unwrap().contains_key(&job_id);
-        jobs().lock().unwrap().remove(&job_id);
-        if cancelled {
-            let _ = std::fs::remove_dir_all(&work);
-            return report(Progress {
-                id: job_id.clone(),
-                phase: "cancelled".into(),
-                elapsed_s: el(&t0),
-                message: None,
-                gcode: None,
-                ..Default::default()
-            });
+        if !registered {
+            terminate(child.id());
+            let _ = child.wait();
+            return cancelled_now();
         }
 
-        let mut logs = String::from_utf8_lossy(&output.stdout).to_string();
-        logs.push_str(&String::from_utf8_lossy(&output.stderr));
-        if !output.status.success() {
+        // The engine's output is read as it comes (its stages move the
+        // progress), the pipe too; the progress is reported a few times a
+        // second, from here. Scoped threads borrow the tracker and the log.
+        let stop = std::sync::atomic::AtomicBool::new(false);
+        let tracker = Mutex::new(Tracker::new());
+        let logs = Mutex::new(String::new());
+        let (stdout, stderr) = (child.stdout.take(), child.stderr.take());
+        let status = std::thread::scope(|sc| {
+            if let Some((_, f)) = pipe {
+                let (stop, tracker) = (&stop, &tracker);
+                sc.spawn(move || progress_loop(f, stop, |p| tracker.lock().unwrap().pipe(p.overall)));
+            }
+            for (stream, live) in [
+                (stdout.map(|o| Box::new(o) as Box<dyn std::io::Read + Send>), true),
+                (stderr.map(|e| Box::new(e) as Box<dyn std::io::Read + Send>), false),
+            ] {
+                let Some(stream) = stream else { continue };
+                let (tracker, logs) = (&tracker, &logs);
+                sc.spawn(move || {
+                    use std::io::BufRead;
+                    for line in std::io::BufReader::new(stream).split(b'\n').map_while(Result::ok) {
+                        let line = String::from_utf8_lossy(&line);
+                        if live {
+                            tracker.lock().unwrap().line(&line, t0.elapsed().as_secs_f32());
+                        }
+                        if !progress_only(&line) {
+                            let mut l = logs.lock().unwrap();
+                            l.push_str(&line);
+                            l.push('\n');
+                        }
+                    }
+                });
+            }
+            let mut shown = -1.0f32;
+            let status = loop {
+                match child.try_wait() {
+                    Ok(Some(s)) => break Ok(s),
+                    Ok(None) => {}
+                    Err(e) => break Err(e),
+                }
+                let (pct, stage) = {
+                    let mut t = tracker.lock().unwrap();
+                    (job_percent(t.at(t0.elapsed().as_secs_f32())), t.stage_name())
+                };
+                if pct - shown >= 0.5 {
+                    shown = pct;
+                    report(Progress {
+                        id: job_id.clone(),
+                        phase: "slicing".into(),
+                        elapsed_s: t0.elapsed().as_secs_f32(),
+                        stage: Some(stage.into()),
+                        percent: Some(pct),
+                        ..Default::default()
+                    });
+                }
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            };
+            stop.store(true, std::sync::atomic::Ordering::Relaxed);
+            status
+        });
+        let status = match status {
+            Ok(s) => s,
+            Err(e) => return fail(crate::util::ui_err(e)),
+        };
+        let cancelled = jobs().lock().unwrap().remove(&job_id).is_none();
+        if cancelled {
+            return cancelled_now();
+        }
+
+        let logs = logs.into_inner().unwrap();
+        if !status.success() {
             let mut msg = engine_error(&logs);
             if msg == crate::t!("err.engine_silent") {
-                if let Some(code) = output.status.code() {
+                if let Some(code) = status.code() {
                     msg = format!("{msg} (code {code})");
                 } else {
                     msg = crate::t!("err.engine_killed");
@@ -783,20 +978,30 @@ pub fn run_job(
         let produced = std::fs::read_dir(&out)
             .ok()
             .map(|rd| {
-                rd.flatten()
-                    .map(|e| e.path())
-                    .filter(|p| p.extension().and_then(|x| x.to_str()) == Some("gcode"))
-                    .collect::<Vec<_>>()
+                rd.flatten().map(|e| e.path()).filter(|p| p.extension().and_then(|x| x.to_str()) == Some("gcode")).collect::<Vec<_>>()
             })
             .unwrap_or_default();
         let Some(first) = produced.first() else {
             return fail(engine_error(&logs));
         };
 
+        // The engine is done: the G-code's images and summary remain.
+        report(Progress {
+            id: job_id.clone(),
+            phase: "slicing".into(),
+            elapsed_s: el(&t0),
+            stage: Some("finishing".into()),
+            percent: Some(job_percent(1.0).max(99.0)),
+            ..Default::default()
+        });
+
         // The printer's screen shows the print from images in the G-code,
         // which the engine's command line does not write (`gcode_thumbs`).
         // Never a reason to fail the slice.
-        if let Some(mesh) = plate_mesh(&input, &head_colors(&req.colors, &prep.filaments)) {
+        // A virtual head shows its mix, after the physical heads.
+        let mut colors = head_colors(&req.colors, &prep.filaments);
+        colors.extend(req.virtual_heads.iter().map(|v| v.color.as_deref().and_then(crate::plate::hex_rgb)));
+        if let Some(mesh) = plate_mesh(&input, &colors) {
             for g in &produced {
                 if let Err(e) = crate::gcode_thumbs::embed(g, &mesh) {
                     eprintln!("[slice] G-code images: {e}");
@@ -806,17 +1011,24 @@ pub fn run_job(
 
         // The G-code stays in the working folder: it is a preview, which the user
         // will save, send to the printer or discard.
-        let stats = std::fs::File::open(first)
-            .ok()
-            .and_then(|f| crate::gcode::parse(f).ok())
-            .map(|d| crate::gcode::stats(&d));
-        previews().lock().unwrap().insert(
+        let stats = std::fs::File::open(first).ok().and_then(|f| crate::gcode::parse(f).ok()).map(|d| crate::gcode::stats(&d));
+        report(Progress {
+            id: job_id.clone(),
+            phase: "slicing".into(),
+            elapsed_s: el(&t0),
+            stage: Some("finishing".into()),
+            percent: Some(100.0),
+            ..Default::default()
+        });
+        remember_preview(
             job_id.clone(),
             Preview {
                 work: work.clone(),
                 gcode: first.clone(),
                 source: source.to_path_buf(),
                 out_dir: req.out_dir.as_ref().map(PathBuf::from),
+                seq: next_seq(),
+                saved: None,
             },
         );
 
@@ -826,6 +1038,7 @@ pub fn run_job(
             elapsed_s: el(&t0),
             gcode: Some(first.to_string_lossy().to_string()),
             stats,
+            warnings: support_warnings(&logs),
             ..Default::default()
         });
     }
@@ -838,6 +1051,9 @@ pub fn preview_gcode(id: &str) -> Option<PathBuf> {
 
 /// Saves the preview under a meaningful name, next to the model by default.
 /// The preview stays available (for sending to the printer, for instance).
+/// A file already there under that name is kept: the new one is numbered,
+/// as a download is — unless it is this preview's own earlier save, which
+/// is the same G-code, written again.
 pub fn save(id: &str, dir: Option<&str>) -> Result<PathBuf> {
     // Paths taken under the lock, copy done outside it.
     let (gcode, dest) = {
@@ -848,9 +1064,16 @@ pub fn save(id: &str, dir: Option<&str>) -> Result<PathBuf> {
             .or_else(|| p.out_dir.clone())
             .or_else(|| p.source.parent().map(|d| d.to_path_buf()))
             .unwrap_or_else(std::env::temp_dir);
-        (p.gcode.clone(), dest_dir.join(output_name(&p.source, &p.gcode)))
+        let dest = match &p.saved {
+            Some(s) if s.parent() == Some(dest_dir.as_path()) => s.clone(),
+            _ => crate::library::unique_path(&dest_dir, &output_name(&p.source, &p.gcode)),
+        };
+        (p.gcode.clone(), dest)
     };
     std::fs::copy(&gcode, &dest).map_err(|e| anyhow!(crate::t!("err.gcode_copy", err = e)))?;
+    if let Some(p) = previews().lock().unwrap().get_mut(id) {
+        p.saved = Some(dest.clone());
+    }
     Ok(dest)
 }
 
@@ -884,12 +1107,7 @@ pub fn cleanup_stale() {
         if !e.file_name().to_string_lossy().starts_with(WORK_PREFIX) {
             continue;
         }
-        let old = e
-            .metadata()
-            .and_then(|m| m.modified())
-            .ok()
-            .and_then(|t| t.elapsed().ok())
-            .is_some_and(|age| age > day);
+        let old = e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age > day);
         if old {
             let _ = std::fs::remove_dir_all(e.path());
         }
@@ -917,11 +1135,7 @@ fn progress_pipe(_work: &Path) -> Option<PathBuf> {
 #[cfg(unix)]
 fn open_pipe(pipe: &Path) -> Option<std::fs::File> {
     use std::os::unix::fs::OpenOptionsExt;
-    std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NONBLOCK)
-        .open(pipe)
-        .ok()
+    std::fs::OpenOptions::new().read(true).custom_flags(libc::O_NONBLOCK).open(pipe).ok()
 }
 
 #[cfg(not(unix))]
@@ -929,9 +1143,10 @@ fn open_pipe(_pipe: &Path) -> Option<std::fs::File> {
     None
 }
 
-/// Reads the engine's `{"total_percent": …, "message": …}` JSON lines until
-/// `stop` turns true.
-fn progress_loop(mut f: std::fs::File, stop: &std::sync::atomic::AtomicBool, on: impl Fn(f32, Option<String>)) {
+/// Reads the engine's progress JSON lines (`--pipe`) until `stop` turns
+/// true. Only Linux builds of the engine write them; on macOS and Windows
+/// the pipe stays silent and the log's stages tell the progress (`Tracker`).
+fn progress_loop(mut f: std::fs::File, stop: &std::sync::atomic::AtomicBool, on: impl Fn(PipeProgress)) {
     use std::io::Read;
     let mut buf: Vec<u8> = Vec::new();
     let mut chunk = [0u8; 4096];
@@ -943,8 +1158,8 @@ fn progress_loop(mut f: std::fs::File, stop: &std::sync::atomic::AtomicBool, on:
                 buf.extend_from_slice(&chunk[..n]);
                 while let Some(i) = buf.iter().position(|b| *b == b'\n') {
                     let line: Vec<u8> = buf.drain(..=i).collect();
-                    if let Some((pct, msg)) = parse_progress(&String::from_utf8_lossy(&line)) {
-                        on(pct, msg);
+                    if let Some(p) = parse_progress(&String::from_utf8_lossy(&line)) {
+                        on(p);
                     }
                 }
             }
@@ -955,24 +1170,162 @@ fn progress_loop(mut f: std::fs::File, stop: &std::sync::atomic::AtomicBool, on:
     }
 }
 
-/// A line from the engine: overall progress and optional message.
-fn parse_progress(line: &str) -> Option<(f32, Option<String>)> {
-    let v: Value = serde_json::from_str(line.trim_matches(|c: char| c == '\0' || c.is_whitespace())).ok()?;
-    let pct = v.get("total_percent").and_then(|x| x.as_f64())? as f32;
-    let msg = v
-        .get("message")
-        .or_else(|| v.get("warning"))
-        .and_then(|x| x.as_str())
-        .filter(|m| !m.is_empty())
-        .map(String::from);
-    Some((pct.clamp(0.0, 100.0), msg))
+/// A line from the engine's pipe: `{"plate_index", "plate_count",
+/// "plate_percent", "total_percent", "message"}`.
+#[derive(Debug, Clone, PartialEq)]
+struct PipeProgress {
+    /// Overall progress, 0–1: the larger of the engine's total and what its
+    /// plate index and plate percentage give.
+    overall: f32,
+    message: Option<String>,
 }
 
+fn parse_progress(line: &str) -> Option<PipeProgress> {
+    let v: Value = serde_json::from_str(line.trim_matches(|c: char| c == '\0' || c.is_whitespace())).ok()?;
+    let num = |k: &str| v.get(k).and_then(|x| x.as_f64()).map(|x| x as f32);
+    let total = num("total_percent").map(|t| t.clamp(0.0, 100.0) / 100.0);
+    // Plates count from 1; a plate's percentage within its share.
+    let by_plate = match (num("plate_index"), num("plate_count"), num("plate_percent")) {
+        (Some(i), Some(n), Some(pp)) if n >= 1.0 && i >= 1.0 => Some(((i - 1.0).min(n - 1.0) + pp.clamp(0.0, 100.0) / 100.0) / n),
+        _ => None,
+    };
+    let overall = match (total, by_plate) {
+        (None, None) => return None,
+        (a, b) => a.unwrap_or(0.0).max(b.unwrap_or(0.0)),
+    };
+    let message = v.get("message").or_else(|| v.get("warning")).and_then(|x| x.as_str()).filter(|m| !m.is_empty()).map(String::from);
+    Some(PipeProgress { overall, message })
+}
+
+/// The engine's stages as its log (`--debug 3`) announces them, in order:
+/// the line's start, the stage's name (`slice.stage.*`), and where in a
+/// plate's work it starts (0–1, from timings of real slices: the walls and
+/// the overhangs take most of it, the G-code export a fifth).
+const STAGES: &[(&str, &str, f32)] = &[
+    ("Starting the slicing process", "slicing", 0.00),
+    ("Slicing volumes...", "slicing", 0.02),
+    ("Make overhang printable...", "overhangs", 0.06),
+    ("Generating walls...", "walls", 0.28),
+    ("Detecting solid surfaces...", "surfaces", 0.40),
+    ("Preparing fill surfaces...", "surfaces", 0.43),
+    ("Discovering vertical shells...", "surfaces", 0.44),
+    ("Processing external surfaces...", "surfaces", 0.50),
+    ("Bridge over infill - Start", "infill", 0.52),
+    ("Slicing process finished", "gcode", 0.76),
+    ("Exporting G-code...", "gcode", 0.78),
+    ("Exporting G-code finished", "gcode", 0.98),
+];
+
+/// The engine's load (reading the model and the presets) before the first
+/// plate: this share of the whole.
+const LOAD_SHARE: f32 = 0.06;
+
+/// The engine's progress from its log, 0–1, never going back: each stage's
+/// line moves it to that stage's start; meanwhile it creeps towards the next
+/// stage without reaching it, so the bar keeps moving where the engine
+/// says nothing (infill, supports). Several plates share the whole equally.
+#[derive(Debug, Clone)]
+struct Tracker {
+    plates: u32,
+    /// Current plate, from 0; None while loading.
+    plate: Option<u32>,
+    /// Current stage (index in STAGES), and when it started (s).
+    stage: Option<usize>,
+    since: f32,
+    /// A floor from the pipe (Linux engines), and the last value given.
+    floor: f32,
+    last: f32,
+}
+
+impl Tracker {
+    fn new() -> Self {
+        Tracker { plates: 1, plate: None, stage: None, since: 0.0, floor: 0.0, last: 0.0 }
+    }
+
+    /// A line of the engine's log at time `t` (s).
+    fn line(&mut self, line: &str, t: f32) {
+        // "[date] [thread] [info]    Message": the message after the tags.
+        let msg = line.rsplit("]   ").next().unwrap_or(line).trim_start();
+        if let Some(n) = after(msg, "total plate count ").and_then(|r| r.split_whitespace().next()).and_then(|n| n.parse::<u32>().ok()) {
+            self.plates = n.max(1);
+        } else if let Some(k) = after(msg, "start Print::process for partplate ").and_then(|r| r.trim().parse::<u32>().ok()) {
+            self.plate = Some(k.saturating_sub(1).min(self.plates - 1));
+            self.stage = None;
+            self.since = t;
+        } else if let Some(i) = STAGES.iter().position(|(start, _, _)| msg.starts_with(start)) {
+            // A plate's work without its announcement (one plate): the first.
+            if self.plate.is_none() {
+                self.plate = Some(0);
+            }
+            if self.stage.map_or(true, |s| i >= s) {
+                self.stage = Some(i);
+                self.since = t;
+            }
+        }
+    }
+
+    /// A floor from the pipe (0–1).
+    fn pipe(&mut self, overall: f32) {
+        self.floor = self.floor.max(overall.clamp(0.0, 1.0));
+    }
+
+    /// The stage under way (`slice.stage.*`).
+    fn stage_name(&self) -> &'static str {
+        match (self.plate, self.stage) {
+            (None, _) => "loading",
+            (Some(_), None) => "slicing",
+            (Some(_), Some(i)) => STAGES[i].1,
+        }
+    }
+
+    /// The progress at time `t` (s), 0–1.
+    fn at(&mut self, t: f32) -> f32 {
+        let span = (1.0 - LOAD_SHARE) / self.plates as f32;
+        let est = match self.plate {
+            // Loading: towards the load's share, slowly.
+            None => LOAD_SHARE * creep(t - self.since, 4.0),
+            Some(k) => {
+                let (from, to) = match self.stage {
+                    None => (0.0, STAGES[0].2.max(0.02)),
+                    Some(i) => (STAGES[i].2, STAGES.get(i + 1).map_or(1.0, |s| s.2)),
+                };
+                let within = from + (to - from) * creep(t - self.since, 3.0);
+                LOAD_SHARE + span * (k as f32 + within)
+            }
+        };
+        self.last = self.last.max(est).max(self.floor).min(1.0);
+        self.last
+    }
+}
+
+fn after<'a>(s: &'a str, key: &str) -> Option<&'a str> {
+    s.find(key).map(|i| &s[i + key.len()..])
+}
+
+/// How far into a stage of unknown length after `dt` seconds (0 to 0.9):
+/// quick at first, slower and slower, never at the end.
+fn creep(dt: f32, tau: f32) -> f32 {
+    0.9 * (1.0 - (-dt.max(0.0) / tau).exp())
+}
+
+/// The engine's log lines that tell the progress only: kept out of the
+/// output read for an error (`engine_error`), as before `--debug 3`.
+fn progress_only(line: &str) -> bool {
+    line.contains("] [info]") || line.contains("] [debug]")
+}
+
+/// The job's percentage (0–100) for the engine's progress (0–1): the
+/// preparation before it, the G-code's images and summary after it.
+fn job_percent(engine: f32) -> f32 {
+    3.0 + 94.0 * engine.clamp(0.0, 1.0)
+}
 
 #[cfg(unix)]
 fn terminate(pid: u32) {
+    // A pid that does not fit would wrap negative: a whole process group.
+    let Ok(pid) = libc::pid_t::try_from(pid) else { return };
     // SAFETY: plain signal sent to a process we started.
-    unsafe { libc::kill(pid as i32, libc::SIGTERM) };
+    unsafe { libc::kill(pid, libc::SIGTERM) };
 }
 
 #[cfg(windows)]
@@ -982,16 +1335,19 @@ fn terminate(pid: u32) {
     let _ = cmd.args(["/PID", &pid.to_string(), "/T", "/F"]).status();
 }
 
-/// Interrupts a running slice.
+/// Interrupts a slice, preparing or running. False: no such job (done, or
+/// already cancelled).
 pub fn cancel(id: &str) -> bool {
-    let pid = jobs().lock().unwrap().remove(id);
-    match pid {
-        Some(pid) => {
-            // The engine has nothing to save, the working folder is cleaned up by
-            // the thread waiting for it.
+    let job = jobs().lock().unwrap().remove(id);
+    match job {
+        // The engine has nothing to save, the working folder is cleaned up by
+        // the thread waiting for it.
+        Some(Job { pid: Some(pid) }) => {
             terminate(pid);
             true
         }
+        // Still preparing: the thread sees the job gone at its next step.
+        Some(Job { pid: None }) => true,
         None => false,
     }
 }
@@ -1011,13 +1367,7 @@ mod tests {
     #[test]
     fn lists_are_filtered() {
         let Ok(l) = lists(None) else { return };
-        println!(
-            "{} machines, {} processes, {} filaments, {} heads",
-            l.machines.len(),
-            l.processes.len(),
-            l.filaments.len(),
-            l.extruders
-        );
+        println!("{} machines, {} processes, {} filaments, {} heads", l.machines.len(), l.processes.len(), l.filaments.len(), l.extruders);
         assert!(!l.machines.is_empty());
         assert!(!l.processes.is_empty(), "processes compatible with the chosen machine");
     }
@@ -1030,19 +1380,9 @@ mod tests {
         };
         let idx = index_for(&app).unwrap();
         let l = lists(None).unwrap();
-        let machine = l
-            .selected
-            .get("machine")
-            .cloned()
-            .unwrap_or_else(|| l.machines[0].name.clone());
+        let machine = l.selected.get("machine").cloned().unwrap_or_else(|| l.machines[0].name.clone());
         let process = l.processes[0].name.clone();
-        let filament = l
-            .filaments
-            .iter()
-            .find(|f| f.name.contains("PLA"))
-            .unwrap_or(&l.filaments[0])
-            .name
-            .clone();
+        let filament = l.filaments.iter().find(|f| f.name.contains("PLA")).unwrap_or(&l.filaments[0]).name.clone();
 
         let out_dir = std::env::temp_dir().join("snapstudio_job_out");
         let _ = std::fs::remove_dir_all(&out_dir);
@@ -1071,10 +1411,7 @@ mod tests {
         let phases: Vec<&str> = got.iter().map(|p| p.phase.as_str()).collect();
         println!("phases: {phases:?}");
         if let Some(last) = got.last() {
-            println!(
-                "last: {} in {:.1} s, message {:?}, file {:?}",
-                last.phase, last.elapsed_s, last.message, last.gcode
-            );
+            println!("last: {} in {:.1} s, message {:?}, file {:?}", last.phase, last.elapsed_s, last.message, last.gcode);
         }
         assert_eq!(phases.first(), Some(&"preparation"));
         assert!(phases.contains(&"slicing"));
@@ -1095,15 +1432,8 @@ mod tests {
     #[test]
     fn simple_reads_and_writes_preset_values() {
         let Ok(l) = lists(None) else { return };
-        let machine = l.selected.get("machine").cloned().unwrap_or_else(|| l.machines[0].name.clone());
-        let process = l
-            .processes
-            .iter()
-            .find(|p| p.name.contains("0.20"))
-            .unwrap_or(&l.processes[0])
-            .name
-            .clone();
-        let d = defaults(&machine, &process).unwrap();
+        let process = l.processes.iter().find(|p| p.name.contains("0.20")).unwrap_or(&l.processes[0]).name.clone();
+        let d = defaults(&process).unwrap();
         println!("“{process}” → {d:?}");
         assert!(d.layer_height.unwrap_or(0.0) > 0.0);
         assert!(d.infill.unwrap_or(-1.0) >= 0.0, "infill read");
@@ -1112,13 +1442,7 @@ mod tests {
         // Nothing touched, nothing rewritten.
         assert!(Simple::default().to_overrides().is_empty());
 
-        let s = Simple {
-            layer_height: Some(0.28),
-            infill: Some(25.0),
-            walls: Some(3),
-            supports: Some(true),
-            brim: Some(false),
-        };
+        let s = Simple { layer_height: Some(0.28), infill: Some(25.0), walls: Some(3), supports: Some(true), brim: Some(false) };
         let o = s.to_overrides();
         assert_eq!(o["layer_height"], "0.28");
         assert_eq!(o["sparse_infill_density"], "25%", "the engine expects a percentage");
@@ -1136,13 +1460,7 @@ mod tests {
         let l = lists(None).unwrap();
         let machine = l.selected.get("machine").cloned().unwrap_or_else(|| l.machines[0].name.clone());
         let process = l.processes[0].name.clone();
-        let filament = l
-            .filaments
-            .iter()
-            .find(|f| f.name.contains("PLA"))
-            .unwrap_or(&l.filaments[0])
-            .name
-            .clone();
+        let filament = l.filaments.iter().find(|f| f.name.contains("PLA")).unwrap_or(&l.filaments[0]).name.clone();
         let out_dir = std::env::temp_dir().join("snapstudio_job_ovr");
         let _ = std::fs::remove_dir_all(&out_dir);
         std::fs::create_dir_all(&out_dir).unwrap();
@@ -1170,12 +1488,7 @@ mod tests {
         assert_eq!(last.phase, "preview", "message : {:?}", last.message);
         let g = PathBuf::from(last.gcode.clone().unwrap());
         let d = crate::gcode::parse(std::fs::File::open(&g).unwrap()).unwrap();
-        println!(
-            "layer asked 0.30 mm → {:?} announced, {} layers, {:.1} s",
-            d.meta.layer_height,
-            d.layers + 1,
-            last.elapsed_s
-        );
+        println!("layer asked 0.30 mm → {:?} announced, {} layers, {:.1} s", d.meta.layer_height, d.layers + 1, last.elapsed_s);
         assert_eq!(d.meta.layer_height, Some(0.3), "the forced layer height is applied");
     }
 
@@ -1190,10 +1503,7 @@ mod tests {
         // The file must really be of the type that caused the problem.
         let z = crate::model3mf::open(Path::new(&model)).unwrap();
         let names = crate::model3mf::entry_names(&z);
-        assert!(
-            names.iter().any(|n| n.starts_with("3D/Objects/")),
-            "this test targets a 3MF with external geometry"
-        );
+        assert!(names.iter().any(|n| n.starts_with("3D/Objects/")), "this test targets a 3MF with external geometry");
         drop(z);
 
         let l = lists(None).unwrap();
@@ -1227,12 +1537,97 @@ mod tests {
 
     #[test]
     fn engine_progress_lines_are_read() {
-        let (pct, msg) = parse_progress(r#"{"plate_index":1,"plate_count":1,"plate_percent":40,"total_percent":37,"message":"Generating G-code"}"#).unwrap();
-        assert_eq!(pct, 37.0);
-        assert_eq!(msg.as_deref(), Some("Generating G-code"));
+        let p = parse_progress(r#"{"plate_index":1,"plate_count":1,"plate_percent":40,"total_percent":37,"message":"Generating G-code"}"#)
+            .unwrap();
+        assert!((p.overall - 0.40).abs() < 1e-6, "the plate's own 40 % beats a lower total");
+        assert_eq!(p.message.as_deref(), Some("Generating G-code"));
         assert!(parse_progress("bruit").is_none());
-        let (_, none) = parse_progress("{\"total_percent\":100,\"message\":\"\"}\0\0").unwrap();
-        assert!(none.is_none(), "empty message ignored, NUL bytes tolerated");
+        let p = parse_progress("{\"total_percent\":100,\"message\":\"\"}\0\0").unwrap();
+        assert!(p.message.is_none() && p.overall == 1.0, "empty message ignored, NUL bytes tolerated");
+        // Several plates: the second of three, half done, is half-way through
+        // the second third.
+        let p = parse_progress(r#"{"plate_index":2,"plate_count":3,"plate_percent":50,"total_percent":10}"#).unwrap();
+        assert!((p.overall - 0.5).abs() < 1e-6);
+        assert!(parse_progress(r#"{"message":"no number"}"#).is_none());
+    }
+
+    /// The engine's log, as a real slice wrote it on macOS (`--debug 3`,
+    /// Snapmaker Orca 2.4, a 12 s slice), moves the progress forward, stage
+    /// by stage, never back, to the end.
+    #[test]
+    fn progress_follows_the_engine_log() {
+        let log = [
+            (0.0, "[2026-10-24 16:44:55.073855] [0x1] [info]    Will use pipe /tmp/progress.pipe"),
+            (0.8, "[2026-10-24 16:44:55.893044] [0x1] [info]    Need to slice for plate 0, total plate count 1 partplates!"),
+            (0.9, "[2026-10-24 16:44:55.956181] [0x1] [info]    start Print::process for partplate 1"),
+            (0.9, "[2026-10-24 16:44:55.957023] [0x1] [info]    Starting the slicing process. Resident memory: 158MB"),
+            (0.9, "[2026-10-24 16:44:55.957128] [0x1] [info]    Slicing volumes... Resident memory: 158MB"),
+            (1.2, "[2026-10-24 16:44:56.254114] [0x1] [info]    Make overhang printable..."),
+            (4.8, "[2026-10-24 16:44:59.838819] [0x1] [info]    Generating walls... Resident memory: 408MB"),
+            (6.0, "[2026-10-24 16:45:01.026199] [0x1] [info]    Detecting solid surfaces... Resident memory: 409MB"),
+            (6.2, "[2026-10-24 16:45:01.272778] [0x1] [info]    Preparing fill surfaces... Resident memory: 414MB"),
+            (6.2, "[2026-10-24 16:45:01.272843] [0x1] [info]    Discovering vertical shells... Resident memory: 414MB"),
+            (6.9, "[2026-10-24 16:45:01.968405] [0x1] [info]    Processing external surfaces... Resident memory: 428MB"),
+            (7.0, "[2026-10-24 16:45:02.083037] [0x1] [info]    Bridge over infill - Start Resident memory: 428MB"),
+            (9.3, "[2026-10-24 16:45:04.386407] [0x1] [info]    Slicing process finished. Resident memory: 442MB"),
+            (9.3, "[2026-10-24 16:45:04.386857] [0x1] [info]    Exporting G-code... Resident memory: 442MB"),
+            (11.5, "[2026-10-24 16:45:06.604310] [0x1] [info]    Exporting G-code finished Resident memory: 731MB"),
+        ];
+        let mut t = Tracker::new();
+        assert_eq!(t.stage_name(), "loading");
+        let mut last = 0.0;
+        let mut seen = vec![];
+        for (at, line) in log {
+            // Ticks between lines: the bar creeps, never back.
+            for k in 0..5 {
+                let p = t.at(at - 0.5 + k as f32 * 0.1);
+                assert!(p >= last, "{p} after {last}");
+                last = p;
+            }
+            t.line(line, at);
+            let p = t.at(at);
+            assert!(p >= last);
+            last = p;
+            seen.push((t.stage_name(), p));
+        }
+        // Each stage starts where the table says, within the plate's share.
+        let at = |name: &str| seen.iter().find(|(s, _)| *s == name).unwrap().1;
+        assert!(at("walls") > 0.25 && at("walls") < 0.35, "{}", at("walls"));
+        assert!(at("gcode") > 0.7 && at("gcode") < 0.8, "{}", at("gcode"));
+        assert!(last > 0.9 && last < 1.0, "the export done, not yet the end: {last}");
+        // Within a long stage, it moves, but stops short of the next one.
+        let mut s = Tracker::new();
+        s.line("[x] [0x1] [info]    Make overhang printable...", 0.0);
+        let (a, b) = (s.at(1.0), s.at(30.0));
+        assert!(a > LOAD_SHARE + 0.06 * (1.0 - LOAD_SHARE) && b > a && b < LOAD_SHARE + 0.28 * (1.0 - LOAD_SHARE));
+        // A stage seen out of order does not move it back.
+        let before = s.at(30.0);
+        s.line("[x] [0x1] [info]    Slicing volumes...", 31.0);
+        assert!(s.at(31.0) >= before);
+    }
+
+    /// Several plates share the whole: the second of two starts half-way.
+    #[test]
+    fn progress_counts_the_plates() {
+        let mut t = Tracker::new();
+        t.line("[x] [0x1] [info]    Need to slice for plate 0, total plate count 2 partplates!", 0.0);
+        t.line("[x] [0x1] [info]    start Print::process for partplate 1", 0.1);
+        t.line("[x] [0x1] [info]    Exporting G-code finished Resident memory: 1MB", 5.0);
+        let first = t.at(5.0);
+        assert!(first < LOAD_SHARE + 0.5 * (1.0 - LOAD_SHARE), "{first}");
+        t.line("[x] [0x1] [info]    start Print::process for partplate 2", 5.1);
+        t.line("[x] [0x1] [info]    Starting the slicing process.", 5.1);
+        let second = t.at(5.1);
+        assert!(second >= LOAD_SHARE + 0.5 * (1.0 - LOAD_SHARE) - 1e-6 && second >= first, "{second}");
+        // The pipe, where it speaks, is a floor.
+        t.pipe(0.95);
+        assert!(t.at(5.2) >= 0.95);
+        // The job's scale: the preparation before, the images after.
+        assert_eq!(job_percent(0.0), 3.0);
+        assert_eq!(job_percent(1.0), 97.0);
+        // The log's info lines stay out of what an error is read from.
+        assert!(progress_only("[2026] [0x1] [info]    Generating walls..."));
+        assert!(!progress_only("[2026] [0x1] [error]   Nothing to be sliced"));
     }
 
     /// Extruders used: the parts', the object's for parts that declare none;
@@ -1244,14 +1639,17 @@ mod tests {
         let mut z = zip::ZipWriter::new(std::fs::File::create(&tmp).unwrap());
         let o = zip::write::SimpleFileOptions::default();
         z.start_file("Metadata/model_settings.config", o).unwrap();
-        z.write_all(br#"<config>
+        z.write_all(
+            br#"<config>
   <object id="7"><metadata key="extruder" value="1"/>
     <part id="1" subtype="normal_part"><metadata key="extruder" value="2"/></part>
     <part id="2" subtype="normal_part"><metadata key="extruder" value="3"/></part>
     <part id="3" subtype="normal_part"/>
   </object>
   <object id="9"><metadata key="extruder" value="4"/></object>
-</config>"#).unwrap();
+</config>"#,
+        )
+        .unwrap();
         z.start_file("Metadata/project_settings.config", o).unwrap();
         z.write_all(br##"{"filament_type":["PLA","PETG"],"filament_colour":["#FF0000FF","#00FF00"]}"##).unwrap();
         z.finish().unwrap();
@@ -1315,10 +1713,12 @@ mod tests {
         // Two stacked 10 mm cubes.
         let cube = |z0: f32| -> Vec<Tri> {
             let s = 10.0;
+            #[rustfmt::skip]
             let p = [
                 [0., 0., z0], [s, 0., z0], [s, s, z0], [0., s, z0],
                 [0., 0., z0 + s], [s, 0., z0 + s], [s, s, z0 + s], [0., s, z0 + s],
             ];
+            #[rustfmt::skip]
             let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
                      [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
             f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect()
@@ -1375,29 +1775,29 @@ mod tests {
         let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
         let l = lists(Some(&machine)).expect("profiles readable in the engine");
         assert!(l.machines.iter().any(|m| m.name == machine), "U1 0.4 machine profile");
-        let process = l
-            .processes
-            .iter()
-            .find(|p| p.name.starts_with("0.20mm Standard"))
-            .unwrap_or(&l.processes[0])
-            .name
-            .clone();
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.20mm Standard")).unwrap_or(&l.processes[0]).name.clone();
         let pla = l.filaments.iter().find(|f| f.name.contains("PLA")).expect("un filament PLA").name.clone();
         use crate::mesh::{Mat, Tri};
         let tmp = std::env::temp_dir().join("snapstudio-engine-smoke");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let cube = |s: f32| -> Vec<Tri> {
+            #[rustfmt::skip]
             let p = [[0., 0., 0.], [s, 0., 0.], [s, s, 0.], [0., s, 0.], [0., 0., s], [s, 0., s], [s, s, s], [0., s, s]];
+            #[rustfmt::skip]
             let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
                      [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
             f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect()
         };
         let src = tmp.join("cubes.3mf");
-        crate::write3mf::write_scene(&src, &[
-            crate::write3mf::SceneObject { name: "a".into(), tris: cube(12.0), transform: Mat::IDENTITY, extruder: None },
-            crate::write3mf::SceneObject { name: "b".into(), tris: cube(12.0), transform: Mat::IDENTITY, extruder: None },
-        ]).unwrap();
+        crate::write3mf::write_scene(
+            &src,
+            &[
+                crate::write3mf::SceneObject { name: "a".into(), tris: cube(12.0), transform: Mat::IDENTITY, extruder: None },
+                crate::write3mf::SceneObject { name: "b".into(), tris: cube(12.0), transform: Mat::IDENTITY, extruder: None },
+            ],
+        )
+        .unwrap();
         // One cube per head: T0 and T1.
         let item = |i: usize, x: f32, head: u8| crate::plate::SceneItem {
             path: src.to_string_lossy().to_string(),
@@ -1438,6 +1838,38 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
+    /// The progress a real slice reports, event by event, with its time:
+    /// to check it follows the engine's work.
+    /// `TRACE_3MF=model.3mf cargo test --lib engine_progress_trace -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn engine_progress_trace() {
+        let app = engine().expect("an engine (SNAPSTUDIO_ENGINE or the installed one)");
+        let src = std::env::var("TRACE_3MF").expect("TRACE_3MF: a model to slice");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).unwrap();
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.20mm Standard")).unwrap_or(&l.processes[0]).name.clone();
+        let pla = l.filaments.iter().find(|f| f.name.contains("PLA")).unwrap().name.clone();
+        let t0 = std::time::Instant::now();
+        run_job(
+            binary(&app).unwrap(),
+            index_for(&app).unwrap(),
+            Request { source: src, machine, process, filaments: vec![pla; 4], ..Default::default() },
+            "trace".into(),
+            &move |p| {
+                eprintln!(
+                    "{:6.2}s {} {:?} {:?} {:?}",
+                    t0.elapsed().as_secs_f32(),
+                    p.phase,
+                    p.stage,
+                    p.percent.map(|x| x.round()),
+                    p.message
+                )
+            },
+        );
+        discard("trace");
+    }
+
     /// The G-code's images color each part with its head's spool, painting
     /// included; a head without a known spool takes its profile's color.
     #[test]
@@ -1459,7 +1891,7 @@ mod tests {
             piece: None,
         }];
         let plate = dir.join("plate.3mf");
-        crate::plate::write_scene(&scene, (270.0, 270.0), &plate).unwrap();
+        crate::plate::write_scene(&scene, &[], (270.0, 270.0), &plate).unwrap();
         let profile = dir.join("filament_0.json");
         std::fs::write(&profile, r##"{"filament_colour":["#00FF00"]}"##).unwrap();
         let other = dir.join("filament_1.json");
@@ -1555,7 +1987,9 @@ mod tests {
         std::fs::create_dir_all(&tmp).unwrap();
         // An overhanging "T": supports have something to do.
         let bx = |x0: f32, y0: f32, z0: f32, x1: f32, y1: f32, z1: f32| -> Vec<Tri> {
+            #[rustfmt::skip]
             let p = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
+            #[rustfmt::skip]
             let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
                      [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
             f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect()
@@ -1563,17 +1997,51 @@ mod tests {
         let mut t = bx(8.0, 8.0, 0.0, 12.0, 12.0, 10.0);
         t.extend(bx(0.0, 0.0, 10.0, 20.0, 20.0, 13.0));
         let src = tmp.join("t.3mf");
-        crate::write3mf::write_scene(&src, &[
-            crate::write3mf::SceneObject { name: "t".into(), tris: t, transform: Mat::IDENTITY, extruder: None },
-        ]).unwrap();
+        crate::write3mf::write_scene(
+            &src,
+            &[crate::write3mf::SceneObject { name: "t".into(), tris: t, transform: Mat::IDENTITY, extruder: None }],
+        )
+        .unwrap();
         let mut overrides = Map::new();
         for (k, v) in [
-            ("seam_position", "back"), ("seam_gap", "12%"), ("staggered_inner_seams", "1"),
-            ("support_type", "tree(auto)"), ("support_style", "tree_slim"), ("support_interface_top_layers", "3"),
-            ("support_threshold_angle", "40"), ("tree_support_branch_angle", "35"),
-            ("brim_type", "brim_ears"), ("brim_width", "7"), ("brim_object_gap", "0.2"),
-            ("enable_prime_tower", "1"), ("prime_tower_width", "40"), ("flush_into_infill", "1"),
-            ("wall_filament", "2"), ("support_filament", "2"),
+            ("seam_position", "back"),
+            ("seam_gap", "12%"),
+            ("staggered_inner_seams", "1"),
+            ("support_type", "tree(auto)"),
+            ("support_style", "tree_slim"),
+            ("support_interface_top_layers", "3"),
+            ("support_threshold_angle", "40"),
+            ("tree_support_branch_angle", "35"),
+            // The lists chosen from pictures (#59).
+            ("support_base_pattern", "honeycomb"),
+            ("support_interface_pattern", "concentric"),
+            // One per panel of #60: Quality, Infill, Walls, Surfaces, Other.
+            ("initial_layer_print_height", "0.3"),
+            ("elefant_foot_compensation", "0.1"),
+            ("sparse_infill_pattern", "gyroid"),
+            ("infill_direction", "30"),
+            ("wall_generator", "arachne"),
+            ("wall_sequence", "outer wall/inner wall"),
+            ("top_shell_layers", "6"),
+            ("top_surface_pattern", "concentric"),
+            ("ironing_type", "top"),
+            ("skirt_loops", "2"),
+            ("fuzzy_skin", "external"),
+            ("brim_type", "brim_ears"),
+            ("brim_width", "7"),
+            ("brim_object_gap", "0.2"),
+            ("enable_prime_tower", "1"),
+            ("prime_tower_width", "40"),
+            ("flush_into_infill", "1"),
+            ("wall_filament", "2"),
+            ("support_filament", "2"),
+            // The prime tower's wall and ooze prevention (#35); the idle
+            // temperature goes to the filaments.
+            ("wipe_tower_filament", "1"),
+            ("ooze_prevention", "1"),
+            ("standby_temperature_delta", "-40"),
+            ("preheat_time", "45"),
+            ("idle_temperature", "150"),
         ] {
             overrides.insert(k.into(), Value::String(v.into()));
         }
@@ -1587,8 +2055,13 @@ mod tests {
                 process,
                 filaments: vec![pla.clone(), pla],
                 scene: vec![crate::plate::SceneItem {
-                    path: src.to_string_lossy().to_string(), item: 0, name: "t".into(),
-                    pos: [120.0, 120.0], rot: [0.0; 3], scale: [1.0; 3], extruder_map: vec![0],
+                    path: src.to_string_lossy().to_string(),
+                    item: 0,
+                    name: "t".into(),
+                    pos: [120.0, 120.0],
+                    rot: [0.0; 3],
+                    scale: [1.0; 3],
+                    extruder_map: vec![0],
                     piece: None,
                 }],
                 simple: Some(Simple { supports: Some(true), brim: Some(true), ..Default::default() }),
@@ -1604,10 +2077,36 @@ mod tests {
         assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
         let gcode = std::fs::read_to_string(last.gcode.clone().unwrap()).unwrap();
         for (k, v) in [
-            ("seam_position", "back"), ("seam_gap", "12%"), ("enable_support", "1"), ("support_type", "tree(auto)"),
-            ("support_style", "tree_slim"), ("support_interface_top_layers", "3"), ("brim_type", "brim_ears"),
-            ("brim_width", "7"), ("enable_prime_tower", "1"), ("prime_tower_width", "40"), ("wall_filament", "2"),
+            ("seam_position", "back"),
+            ("seam_gap", "12%"),
+            ("enable_support", "1"),
+            ("support_type", "tree(auto)"),
+            ("support_style", "tree_slim"),
+            ("support_interface_top_layers", "3"),
+            ("brim_type", "brim_ears"),
+            ("support_base_pattern", "honeycomb"),
+            ("support_interface_pattern", "concentric"),
+            ("initial_layer_print_height", "0.3"),
+            ("elefant_foot_compensation", "0.1"),
+            ("sparse_infill_pattern", "gyroid"),
+            ("infill_direction", "30"),
+            ("wall_generator", "arachne"),
+            ("wall_sequence", "outer wall/inner wall"),
+            ("top_shell_layers", "6"),
+            ("top_surface_pattern", "concentric"),
+            ("ironing_type", "top"),
+            ("skirt_loops", "2"),
+            ("fuzzy_skin", "external"),
+            ("brim_width", "7"),
+            ("enable_prime_tower", "1"),
+            ("prime_tower_width", "40"),
+            ("wall_filament", "2"),
             ("support_filament", "2"),
+            ("wipe_tower_filament", "1"),
+            ("ooze_prevention", "1"),
+            ("standby_temperature_delta", "-40"),
+            ("preheat_time", "45"),
+            ("idle_temperature", "150,150,150,150"),
         ] {
             let line = format!("; {k} = {v}");
             assert!(gcode.contains(&line), "missing in G-code: {line}");
@@ -1616,6 +2115,821 @@ mod tests {
         println!("heads used: {:?}", stats.tools);
         assert!(stats.tools.contains(&1), "wall/support filament 2 extrudes on T1");
         discard("adv");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// The engine's support check, supports off, on the plan's four models
+    /// (docs/plans/support-needed-hint.md): its warnings reach the preview,
+    /// and the mesh hint (`support_hint.rs`) agrees with it.
+    /// `SNAPSTUDIO_ENGINE=… cargo test --lib engine_support_warnings -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn engine_support_warnings() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles");
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.20mm Standard")).unwrap_or(&l.processes[0]).name.clone();
+        let pla = l.filaments.iter().find(|f| f.name.contains("PLA")).expect("PLA").name.clone();
+        use crate::mesh::Tri;
+        let tmp = std::env::temp_dir().join("snapstudio-engine-supports");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let bx = |x0: f32, y0: f32, z0: f32, x1: f32, y1: f32, z1: f32| -> Vec<Tri> {
+            #[rustfmt::skip]
+            let p = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
+            #[rustfmt::skip]
+            let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
+                     [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+            f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect()
+        };
+        let models: Vec<(&str, Vec<Tri>, Option<&str>)> = vec![
+            ("cube", bx(0.0, 0.0, 0.0, 20.0, 20.0, 20.0), None),
+            ("T", [bx(20.0, 0.0, 0.0, 30.0, 10.0, 12.0), bx(0.0, 0.0, 10.0, 50.0, 10.0, 15.0)].concat(), Some("cantilever")),
+            (
+                "pendant",
+                [bx(20.0, 0.0, 0.0, 30.0, 10.0, 20.0), bx(20.0, 0.0, 20.0, 50.0, 10.0, 25.0), bx(42.0, 0.0, 10.0, 50.0, 10.0, 21.0)]
+                    .concat(),
+                Some("floating"),
+            ),
+            (
+                "bridge",
+                [bx(0.0, 0.0, 0.0, 10.0, 10.0, 20.0), bx(40.0, 0.0, 0.0, 50.0, 10.0, 20.0), bx(0.0, 0.0, 20.0, 50.0, 10.0, 25.0)].concat(),
+                None,
+            ),
+        ];
+        let mut scene = Vec::new();
+        for (i, (name, tris, _)) in models.iter().enumerate() {
+            let src = tmp.join(format!("{name}.3mf"));
+            crate::write3mf::write_scene(
+                &src,
+                &[crate::write3mf::SceneObject {
+                    name: (*name).into(),
+                    tris: tris.clone(),
+                    transform: crate::mesh::Mat::IDENTITY,
+                    extruder: None,
+                }],
+            )
+            .unwrap();
+            scene.push(crate::plate::SceneItem {
+                path: src.to_string_lossy().to_string(),
+                item: 0,
+                name: (*name).into(),
+                pos: [50.0 + 60.0 * (i % 3) as f32, 60.0 + 80.0 * (i / 3) as f32],
+                rot: [0.0; 3],
+                scale: [1.0; 3],
+                extruder_map: vec![0],
+                piece: None,
+            });
+        }
+        let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+        let sink = seen.clone();
+        run_job(
+            binary(&app).unwrap(),
+            index_for(&app).unwrap(),
+            Request {
+                machine,
+                process,
+                filaments: vec![pla],
+                scene,
+                simple: Some(Simple { supports: Some(false), ..Default::default() }),
+                name: Some("supports".into()),
+                ..Default::default()
+            },
+            "supports".into(),
+            &move |p| sink.lock().unwrap().push(p),
+        );
+        let got = seen.lock().unwrap();
+        let last = got.last().unwrap();
+        assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
+        println!("engine: {:?}", last.warnings);
+        for (name, tris, want) in &models {
+            let said = last.warnings.iter().find(|w| w.object == *name).map(|w| w.reason.as_str());
+            let hint = crate::support_hint::analyse(tris, support_threshold(None));
+            println!("{name}: engine {said:?}, hint {:?} {:?}", hint.verdict, hint.reason);
+            assert_eq!(said, *want, "{name}: the engine");
+            assert_eq!(hint.reason, *want, "{name}: the hint");
+        }
+        discard("supports");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// The prime tower lands where Prepare put it: a two-head plate sliced
+    /// with `wipe_tower_x` / `wipe_tower_y` (front-left corner, one per
+    /// plate) and `wipe_tower_rotation_angle`, the tower read back from the
+    /// G-code's moves. Off, no tower is printed, whatever the profile says.
+    /// `SNAPSTUDIO_ENGINE=… cargo test --lib engine_prime_tower_position -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn engine_prime_tower_position() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles");
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.20mm Standard")).unwrap_or(&l.processes[0]).name.clone();
+        let pla = l.filaments.iter().find(|f| f.name.contains("PLA")).expect("PLA").name.clone();
+        use crate::mesh::{Mat, Tri};
+        let tmp = std::env::temp_dir().join("snapstudio-engine-tower");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        // Two 20 × 20 × 10 mm boxes, one per head.
+        let bx = |x0: f32, y0: f32, x1: f32, y1: f32| -> Vec<Tri> {
+            let (z0, z1) = (0.0, 10.0);
+            #[rustfmt::skip]
+            let p = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
+            #[rustfmt::skip]
+            let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
+                     [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+            f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect()
+        };
+        let src = tmp.join("two.3mf");
+        crate::write3mf::write_scene(
+            &src,
+            &[
+                crate::write3mf::SceneObject { name: "a".into(), tris: bx(0.0, 0.0, 20.0, 20.0), transform: Mat::IDENTITY, extruder: None },
+                crate::write3mf::SceneObject { name: "b".into(), tris: bx(0.0, 0.0, 20.0, 20.0), transform: Mat::IDENTITY, extruder: None },
+            ],
+        )
+        .unwrap();
+        let slice = |id: &str, tower: &[(&str, Value)]| {
+            let mut overrides = Map::new();
+            for (k, v) in tower {
+                overrides.insert((*k).into(), v.clone());
+            }
+            let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+            let sink = seen.clone();
+            let item = |i: usize, x: f32, head: u8| crate::plate::SceneItem {
+                path: src.to_string_lossy().to_string(),
+                item: i,
+                name: format!("o{i}"),
+                pos: [x, 135.0],
+                rot: [0.0; 3],
+                scale: [1.0; 3],
+                extruder_map: vec![head],
+                piece: None,
+            };
+            run_job(
+                binary(&app).unwrap(),
+                index_for(&app).unwrap(),
+                Request {
+                    machine: machine.clone(),
+                    process: process.clone(),
+                    filaments: vec![pla.clone(), pla.clone()],
+                    scene: vec![item(0, 120.0, 0), item(1, 150.0, 1)],
+                    overrides,
+                    name: Some(id.into()),
+                    ..Default::default()
+                },
+                id.into(),
+                &move |p| sink.lock().unwrap().push(p),
+            );
+            let last = seen.lock().unwrap().last().cloned().unwrap();
+            assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
+            let stats = last.stats.clone().unwrap();
+            assert!(stats.tools.contains(&0) && stats.tools.contains(&1), "both heads extrude");
+            discard(id);
+            stats.tower
+        };
+        let s = |v: &str| Value::String(v.into());
+        let list = |v: &str| Value::Array(vec![Value::String(v.into())]);
+        // A plain wall and no brim: the box is the tower itself.
+        let at = |x: &str, y: &str, a: &str| {
+            vec![
+                ("enable_prime_tower", s("1")),
+                ("prime_tower_width", s("40")),
+                ("wipe_tower_wall_type", s("rectangle")),
+                ("prime_tower_brim_width", s("0")),
+                ("wipe_tower_x", list(x)),
+                ("wipe_tower_y", list(y)),
+                ("wipe_tower_rotation_angle", s(a)),
+            ]
+        };
+        let near = |a: f32, b: f32| (a - b).abs() < 0.2;
+        let t = slice("tower-a", &at("200", "30", "0")).expect("a tower");
+        println!("at (200, 30), 0°: {t:?}");
+        assert!(near(t.x, 200.0) && near(t.y, 30.0), "placed at its front-left corner: {t:?}");
+        assert!(near(t.x0, 0.0) && near(t.y0, 0.0) && near(t.w, 40.0), "{t:?}");
+        let t = slice("tower-b", &at("60", "150", "90")).expect("a tower");
+        println!("at (60, 150), 90°: {t:?}");
+        assert!(near(t.x0, 0.0) && near(t.y0, 0.0) && near(t.w, 40.0), "turned around that corner: {t:?}");
+        // The U1's own tower (rib walls, 5 mm brim): a square around the
+        // corner, ribs and brim beyond it.
+        let t = slice("tower-rib", &[("enable_prime_tower", s("1")), ("wipe_tower_x", list("150")), ("wipe_tower_y", list("200"))])
+            .expect("a tower");
+        println!("U1 tower at (150, 200): {t:?}");
+        assert!(t.x0 < -5.0 && t.y0 < -5.0 && (t.w - t.d).abs() < 3.0, "{t:?}");
+        // Off: none, though the U1's profiles turn it on.
+        assert_eq!(slice("tower-off", &[("enable_prime_tower", s("0"))]), None);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Smooth mix: the three keys only with a virtual head and the switch
+    /// on; a value set by hand wins; the pillars' keys still apply.
+    #[test]
+    fn smooth_mix_overrides() {
+        let v = VirtualHead { a: 0, b: 2, pct: 50, color: None };
+        let smooth = |o: &Map<String, Value>| SMOOTH_MIX_OVERRIDES.map(|k| o.get(k).and_then(|x| x.as_str()).map(String::from));
+        let on = [Some("1".to_string()), Some("1".into()), Some("1".into())];
+        let req = |heads: Vec<VirtualHead>, smooth_mix: bool| Request { virtual_heads: heads, smooth_mix, ..Default::default() };
+        assert_eq!(smooth(&request_overrides(&req(vec![v.clone()], true))), on);
+        assert_eq!(smooth(&request_overrides(&req(vec![v.clone()], false))), [None, None, None], "off: nothing sent");
+        assert_eq!(smooth(&request_overrides(&req(vec![], true))), [None, None, None], "no virtual head: nothing sent");
+        let o = request_overrides(&req(vec![], false));
+        assert!(!o.contains_key("mixed_filament_definitions"));
+        assert!(!o.keys().any(|k| k.starts_with("dithering_") || k.starts_with("mixed_filament_height")), "{o:?}");
+        // A key set by hand in Advanced wins.
+        let mut r = req(vec![v.clone()], true);
+        r.overrides.insert("dithering_local_z_infill".into(), Value::String("0".into()));
+        assert_eq!(smooth(&request_overrides(&r)), [Some("1".into()), Some("1".into()), Some("0".into())]);
+        // With per-material pillars: both sets, the pillars' unchanged.
+        r.scene = vec![crate::plate::SceneItem {
+            path: String::new(),
+            item: 0,
+            name: String::new(),
+            pos: [0.0; 2],
+            rot: [0.0; 3],
+            scale: [1.0; 3],
+            extruder_map: vec![],
+            piece: None,
+        }];
+        r.pillars = vec![crate::plate::Pillar { name: "p".into(), x: 10.0, y: 10.0, rings: vec![], brim: 0.0 }];
+        r.overrides.insert("enable_prime_tower".into(), Value::String("1".into()));
+        let o = request_overrides(&r);
+        for (k, val) in PILLAR_OVERRIDES {
+            assert_eq!(o.get(k).and_then(|x| x.as_str()), Some(val), "{k}");
+        }
+        assert_eq!(o.get("dithering_local_z_mode").and_then(|x| x.as_str()), Some("1"));
+        assert!(o.get("mixed_filament_definitions").is_some());
+    }
+
+    /// The engine's mixed filaments, as Orca serializes them.
+    #[test]
+    fn mixed_definitions_rows() {
+        let v = |a, b, pct| VirtualHead { a, b, pct, color: None };
+        assert_eq!(mixed_definitions(&[]), "");
+        assert_eq!(mixed_definitions(&[v(0, 2, 33)]), "1,3,1,1,33,0,g,w,m2,z0,xa0,xb0,d0,o0,u1");
+        assert_eq!(
+            mixed_definitions(&[v(0, 2, 33), v(3, 1, 80)]),
+            "1,3,1,1,33,0,g,w,m2,z0,xa0,xb0,d0,o0,u1;4,2,1,1,80,0,g,w,m2,z0,xa0,xb0,d0,o0,u2"
+        );
+        let r: Request = serde_json::from_str(
+            r##"{"source":"","machine":"m","process":"p","filaments":[],"virtual_heads":[{"a":0,"b":2,"pct":33,"color":"#2f8d38"}]}"##,
+        )
+        .unwrap();
+        assert_eq!(r.virtual_heads, vec![VirtualHead { a: 0, b: 2, pct: 33, color: Some("#2f8d38".into()) }]);
+    }
+
+    /// A virtual head reaches the engine: a 10 mm cube on V1 (T0 + T2, 2:1)
+    /// at 0.1 mm, the mix in the process settings, prints T0, T0, T2 layer
+    /// after layer; the G-code has only physical tools.
+    /// `SNAPSTUDIO_ENGINE=… cargo test --lib engine_virtual_head_alternates -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn engine_virtual_head_alternates() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles");
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.10mm")).expect("a 0.10 mm profile").name.clone();
+        let pla = l.filaments.iter().find(|f| f.name.contains("PLA")).expect("PLA").name.clone();
+        use crate::mesh::{Mat, Tri};
+        let tmp = std::env::temp_dir().join("snapstudio-engine-mix");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        #[rustfmt::skip]
+        let p = [[0., 0., 0.], [10., 0., 0.], [10., 10., 0.], [0., 10., 0.], [0., 0., 10.], [10., 0., 10.], [10., 10., 10.], [0., 10., 10.]];
+        #[rustfmt::skip]
+        let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+        let tris: Vec<Tri> = f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect();
+        let src = tmp.join("cube.3mf");
+        crate::write3mf::write_scene(
+            &src,
+            &[crate::write3mf::SceneObject { name: "c".into(), tris, transform: Mat::IDENTITY, extruder: None }],
+        )
+        .unwrap();
+        let mut overrides = Map::new();
+        overrides.insert("enable_prime_tower".into(), Value::String("0".into()));
+        let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+        let sink = seen.clone();
+        run_job(
+            binary(&app).unwrap(),
+            index_for(&app).unwrap(),
+            Request {
+                machine,
+                process,
+                filaments: vec![pla; 4],
+                // Head 4: the first virtual head on a 4-head printer.
+                scene: vec![crate::plate::SceneItem {
+                    path: src.to_string_lossy().to_string(),
+                    item: 0,
+                    name: "c".into(),
+                    pos: [135.0, 135.0],
+                    rot: [0.0; 3],
+                    scale: [1.0; 3],
+                    extruder_map: vec![4],
+                    piece: None,
+                }],
+                virtual_heads: vec![VirtualHead { a: 0, b: 2, pct: 33, color: Some("#2f8d38".into()) }],
+                overrides,
+                name: Some("mix".into()),
+                ..Default::default()
+            },
+            "mix".into(),
+            &move |p| sink.lock().unwrap().push(p),
+        );
+        let last = seen.lock().unwrap().last().cloned().unwrap();
+        assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
+        let gcode = std::fs::read_to_string(last.gcode.clone().unwrap()).unwrap();
+        assert!(gcode.contains("; mixed_filament_definitions = 1,3,1,1,33,"), "the mix reached the engine");
+        // The tool printing each layer's features.
+        let (mut tool, mut layer, mut per_layer) =
+            (None::<u8>, -1i32, std::collections::BTreeMap::<i32, std::collections::BTreeSet<u8>>::new());
+        for l in gcode.lines() {
+            if l.starts_with(";LAYER_CHANGE") {
+                layer += 1;
+            } else if let Some(t) = l.strip_prefix('T').and_then(|t| t.trim().parse::<u8>().ok()) {
+                tool = Some(t);
+            } else if l.starts_with(";TYPE:") && layer >= 0 {
+                if let Some(t) = tool {
+                    per_layer.entry(layer).or_default().insert(t);
+                }
+            }
+        }
+        let seq: Vec<u8> = per_layer.values().map(|s| *s.iter().next().unwrap()).collect();
+        println!("tools by layer: {:?}", &seq[..seq.len().min(12)]);
+        assert!(per_layer.values().all(|s| s.len() == 1), "one head per layer");
+        assert!(seq.len() >= 90, "a 10 mm cube at 0.1 mm: {} layers", seq.len());
+        assert!(seq.chunks(3).take(seq.len() / 3).all(|c| c == [0, 0, 2]), "T0, T0, T2: {seq:?}");
+        assert_eq!(last.stats.unwrap().tools, vec![0, 2], "only physical tools");
+        discard("mix");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// One prime tower per material through the app's path: the
+    /// feasibility test's plate (a 30 mm PLA cube in two halves on T0 / T1,
+    /// a 20 mm PETG cube on T2) with the pillars the UI makes for it (a
+    /// two-ring PLA pillar, a PETG tube), sliced, its G-code read back:
+    /// 1. every extrusion on a ring is by that ring's head;
+    /// 2. on every layer, each head starts on its pillar;
+    /// 3. each ring stops at its head's last layer on the model (± 1);
+    /// 4. no engine tower, nothing extruded outside the objects;
+    /// 5. after each tool change, the head primes above its pillar.
+    /// The overrides are the engine's even when the request says otherwise.
+    /// `SNAPSTUDIO_ENGINE=… cargo test --lib engine_material_pillars -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn engine_material_pillars() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles");
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.20mm Standard")).unwrap_or(&l.processes[0]).name.clone();
+        let fil = |want: &str, fallback: &str| {
+            l.filaments
+                .iter()
+                .find(|f| f.name == want)
+                .or_else(|| l.filaments.iter().find(|f| f.name.contains(fallback) && !f.name.contains("Support")))
+                .expect(fallback)
+                .name
+                .clone()
+        };
+        let (pla, petg) = (fil("Snapmaker PLA Basic @U1", "PLA"), fil("Snapmaker PETG HF", "PETG"));
+        use crate::mesh::{Mat, Tri};
+        let tmp = std::env::temp_dir().join("snapstudio-engine-pillars");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let bx = |x0: f32, y0: f32, x1: f32, y1: f32, h: f32| -> Vec<Tri> {
+            #[rustfmt::skip]
+            let p = [[x0, y0, 0.], [x1, y0, 0.], [x1, y1, 0.], [x0, y1, 0.], [x0, y0, h], [x1, y0, h], [x1, y1, h], [x0, y1, h]];
+            #[rustfmt::skip]
+            let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+            f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect()
+        };
+        let part = |name: &str, tris: Vec<Tri>, extruder: u8| crate::write3mf::Part { name: name.into(), tris, extruder, paint: vec![] };
+        let pla_src = tmp.join("pla.3mf");
+        crate::write3mf::write_multipart(
+            &pla_src,
+            "pla",
+            &[part("a", bx(0., 0., 15., 30., 30.), 1), part("b", bx(15., 0., 30., 30., 30.), 2)],
+            &Mat::IDENTITY,
+        )
+        .unwrap();
+        let petg_src = tmp.join("petg.3mf");
+        crate::write3mf::write_multipart(&petg_src, "petg", &[part("c", bx(0., 0., 20., 20., 20.), 1)], &Mat::IDENTITY).unwrap();
+        let item = |src: &Path, name: &str, pos: [f32; 2], map: Vec<u8>| crate::plate::SceneItem {
+            path: src.to_string_lossy().to_string(),
+            item: 0,
+            name: name.into(),
+            pos,
+            rot: [0.0; 3],
+            scale: [1.0; 3],
+            extruder_map: map,
+            piece: None,
+        };
+        let scene = vec![item(&pla_src, "pla", [125.0, 135.0], vec![0, 1]), item(&petg_src, "petg", [170.0, 135.0], vec![2])];
+        // As pillar-logic.js makes them: the rings 16/12 and 12/8 mm, the tube
+        // 15/11 mm, on the layer grid (0.25 mm, then 0.2 mm), a 3 mm brim.
+        use crate::plate::{Pillar, Ring};
+        let pillars = vec![
+            Pillar {
+                name: "Prime tower · PLA".into(),
+                x: 60.0,
+                y: 135.0,
+                brim: 3.0,
+                rings: vec![Ring { head: 0, d_out: 16.0, d_in: 12.0, h: 30.05 }, Ring { head: 1, d_out: 12.0, d_in: 8.0, h: 30.05 }],
+            },
+            Pillar {
+                name: "Prime tower · PETG".into(),
+                x: 220.0,
+                y: 135.0,
+                brim: 3.0,
+                rings: vec![Ring { head: 2, d_out: 15.0, d_in: 11.0, h: 20.05 }],
+            },
+        ];
+        let mut overrides = Map::new();
+        // What a sheet might hold: the pillars' overrides win.
+        overrides.insert("print_order".into(), Value::String("default".into()));
+        overrides.insert("enable_prime_tower".into(), Value::String("1".into()));
+        let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+        let sink = seen.clone();
+        run_job(
+            binary(&app).unwrap(),
+            index_for(&app).unwrap(),
+            Request {
+                machine,
+                process,
+                filaments: vec![pla.clone(), pla.clone(), petg, pla],
+                scene,
+                pillars: pillars.clone(),
+                overrides,
+                name: Some("pillars".into()),
+                ..Default::default()
+            },
+            "pillars".into(),
+            &move |p| sink.lock().unwrap().push(p),
+        );
+        let last = seen.lock().unwrap().last().cloned().unwrap();
+        assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
+        let path = last.gcode.clone().unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        for (k, v) in PILLAR_OVERRIDES {
+            assert!(text.contains(&format!("; {k} = {v}\n")), "{k} = {v} reached the engine");
+        }
+        let g = crate::gcode::parse(std::fs::File::open(&path).unwrap()).unwrap();
+        // Which ring (pillar, head) a point is on, if any: within its annulus,
+        // half a line width of slack.
+        let on_ring = |x: f32, y: f32| -> Option<(usize, u8)> {
+            for (i, p) in pillars.iter().enumerate() {
+                let r = ((x - p.x).powi(2) + (y - p.y).powi(2)).sqrt();
+                for ring in &p.rings {
+                    if r >= ring.d_in / 2.0 - 0.25 && r <= ring.d_out / 2.0 + 0.25 {
+                        return Some((i, ring.head));
+                    }
+                }
+            }
+            None
+        };
+        let on_pillar = |x: f32, y: f32, slack: f32| {
+            pillars.iter().position(|p| ((x - p.x).powi(2) + (y - p.y).powi(2)).sqrt() <= p.rings[0].d_out / 2.0 + slack)
+        };
+        let ext: Vec<&crate::gcode::Seg> = g.segs.iter().filter(|s| !s.travel).collect();
+        // 1. Rings by their own head (the ring's own walls; the brim and the
+        // shared edge between two rings aside).
+        let mut wrong = 0;
+        let mut on_rings = 0;
+        for s in &ext {
+            if let (Some((pa, ha)), Some((pb, hb))) = (on_ring(s.a[0], s.a[1]), on_ring(s.b[0], s.b[1])) {
+                if pa == pb && ha == hb && s.layer > 0 {
+                    on_rings += 1;
+                    let shared = pillars[pa].rings.iter().any(|r| {
+                        r.head != ha && {
+                            let rr = ((s.a[0] - pillars[pa].x).powi(2) + (s.a[1] - pillars[pa].y).powi(2)).sqrt();
+                            (rr - r.d_out / 2.0).abs() < 0.3 || (rr - r.d_in / 2.0).abs() < 0.3
+                        }
+                    });
+                    if s.tool != ha && !shared {
+                        wrong += 1;
+                    }
+                }
+            }
+        }
+        println!("1. ring extrusions: {on_rings}, by another head: {wrong}");
+        assert!(on_rings > 1000, "the rings are printed");
+        assert_eq!(wrong, 0, "each ring by its own head");
+        // 2. Per layer and head, the first extrusion is on that head's pillar.
+        let mut first: std::collections::BTreeMap<(u16, u8), [f32; 3]> = Default::default();
+        for s in &ext {
+            first.entry((s.layer, s.tool)).or_insert(s.a);
+        }
+        let late: Vec<_> =
+            first.iter().filter(|((layer, _), a)| *layer > 0 && on_pillar(a[0], a[1], 4.0).is_none()).map(|(k, _)| *k).collect();
+        println!("2. layer × head starts: {}, not on a pillar: {}", first.len(), late.len());
+        assert!(late.is_empty(), "each head starts on its pillar: {:?}", &late[..late.len().min(8)]);
+        // 3. Each ring's last layer, against its head's last layer on the model.
+        let last_layer =
+            |pred: &dyn Fn(&crate::gcode::Seg) -> bool| ext.iter().filter(|s| pred(s)).map(|s| s.layer).max().unwrap_or(0) as i32;
+        for p in &pillars {
+            for r in &p.rings {
+                let ring = last_layer(&|s| s.tool == r.head && on_pillar(s.a[0], s.a[1], 4.0).is_some());
+                let model = last_layer(&|s| s.tool == r.head && on_pillar(s.a[0], s.a[1], 4.0).is_none());
+                println!("3. T{}: ring to layer {ring}, model to layer {model}", r.head);
+                assert!((ring - model).abs() <= 1, "T{} ring {ring} vs model {model}", r.head);
+            }
+        }
+        // 4. No engine tower, nothing outside the objects (pillars with their
+        // brims, the parts with a margin for theirs).
+        assert!(!text.contains(";TYPE:Prime tower"), "no engine tower");
+        assert!(last.stats.as_ref().unwrap().tower.is_none());
+        let parts = [(125.0f32 - 15.0, 135.0f32 - 15.0, 125.0f32 + 15.0, 135.0f32 + 15.0), (160.0, 125.0, 180.0, 145.0)];
+        let stray = ext
+            .iter()
+            .filter(|s| {
+                s.layer > 0
+                    && on_pillar(s.a[0], s.a[1], 4.5).is_none()
+                    && !parts.iter().any(|b| s.a[0] > b.0 - 8.0 && s.a[0] < b.2 + 8.0 && s.a[1] > b.1 - 8.0 && s.a[1] < b.3 + 8.0)
+            })
+            .count();
+        println!("4. extrusions outside the objects: {stray}");
+        assert_eq!(stray, 0);
+        // 5. After each tool change, the standstill prime is above a pillar.
+        let (mut x, mut y, mut layer, mut changed) = (0.0f32, 0.0f32, -1i32, false);
+        let (mut primes, mut off) = (0, Vec::new());
+        for line in text.lines() {
+            let l = line.split(';').next().unwrap_or("").trim();
+            if line.starts_with(";LAYER_CHANGE") {
+                layer += 1;
+            } else if layer >= 0 && l.len() >= 2 && l.starts_with('T') && l[1..].parse::<u8>().is_ok() {
+                changed = true;
+            } else if l.starts_with("G0 ") || l.starts_with("G1 ") {
+                let mut e = None;
+                let mut moved = false;
+                for w in l.split_whitespace().skip(1) {
+                    let (k, v) = w.split_at(1);
+                    match (k, v.parse::<f32>()) {
+                        ("X", Ok(v)) => {
+                            x = v;
+                            moved = true;
+                        }
+                        ("Y", Ok(v)) => {
+                            y = v;
+                            moved = true;
+                        }
+                        ("E", Ok(v)) => e = Some(v),
+                        _ => {}
+                    }
+                }
+                if changed && !moved && e.is_some_and(|e| e >= 3.0) {
+                    primes += 1;
+                    if on_pillar(x, y, 4.0).is_none() {
+                        off.push((layer, x, y));
+                    }
+                    changed = false;
+                }
+            }
+        }
+        println!("5. primes after a tool change: {primes}, off the pillars: {}", off.len());
+        assert!(primes > 100, "the U1 primes after its tool changes");
+        assert!(off.is_empty(), "{:?}", &off[..off.len().min(8)]);
+        let st = last.stats.unwrap();
+        println!("time {:?} s, filament {:?} g, tools {:?}", g.meta.print_time_s, g.meta.filament_g, st.tools);
+        discard("pillars");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Smooth mix reaches the engine: a 30 × 30 × 20 mm box on a 1:1 virtual
+    /// head (T0 + T2) at 0.20 mm. On, the three keys are in the G-code, every
+    /// layer is split into 0.10 mm sub-layers, one per head, walls and
+    /// infill alike, with about twice the tool changes; off, one head per
+    /// layer, as before.
+    /// `SNAPSTUDIO_ENGINE=… cargo test --lib engine_virtual_head_smooth_mix -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn engine_virtual_head_smooth_mix() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles");
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.20mm Standard")).expect("a 0.20 mm profile").name.clone();
+        let pla = l.filaments.iter().find(|f| f.name.contains("PLA") && !f.name.contains("Support")).expect("PLA").name.clone();
+        use crate::mesh::{Mat, Tri};
+        let tmp = std::env::temp_dir().join("snapstudio-engine-smooth");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        #[rustfmt::skip]
+        let p = [[0., 0., 0.], [30., 0., 0.], [30., 30., 0.], [0., 30., 0.], [0., 0., 20.], [30., 0., 20.], [30., 30., 20.], [0., 30., 20.]];
+        #[rustfmt::skip]
+        let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+        let tris: Vec<Tri> = f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect();
+        let src = tmp.join("box.3mf");
+        crate::write3mf::write_scene(
+            &src,
+            &[crate::write3mf::SceneObject { name: "box".into(), tris, transform: Mat::IDENTITY, extruder: None }],
+        )
+        .unwrap();
+        // One slice: its G-code.
+        let slice = |id: &str, smooth: bool| -> String {
+            let mut overrides = Map::new();
+            overrides.insert("enable_prime_tower".into(), Value::String("0".into()));
+            let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+            let sink = seen.clone();
+            run_job(
+                binary(&app).unwrap(),
+                index_for(&app).unwrap(),
+                Request {
+                    machine: machine.clone(),
+                    process: process.clone(),
+                    filaments: vec![pla.clone(); 4],
+                    scene: vec![crate::plate::SceneItem {
+                        path: src.to_string_lossy().to_string(),
+                        item: 0,
+                        name: "box".into(),
+                        pos: [135.0, 135.0],
+                        rot: [0.0; 3],
+                        scale: [1.0; 3],
+                        extruder_map: vec![4],
+                        piece: None,
+                    }],
+                    virtual_heads: vec![VirtualHead { a: 0, b: 2, pct: 50, color: None }],
+                    smooth_mix: smooth,
+                    overrides,
+                    name: Some(id.into()),
+                    ..Default::default()
+                },
+                id.into(),
+                &move |p| sink.lock().unwrap().push(p),
+            );
+            let last = seen.lock().unwrap().last().cloned().unwrap();
+            assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
+            let g = std::fs::read_to_string(last.gcode.clone().unwrap()).unwrap();
+            discard(id);
+            g
+        };
+        // Per layer: its top, its height, and the tools printing its walls
+        // and its infill. The tool-change block extrudes before the layer's
+        // first ;TYPE:, so the type starts empty at each layer.
+        struct Layer {
+            z: f32,
+            /// The thinnest ;HEIGHT: in it.
+            h: f32,
+            walls: std::collections::BTreeSet<u8>,
+            infill: std::collections::BTreeSet<u8>,
+        }
+        let read = |g: &str| -> (Vec<Layer>, usize) {
+            let (mut layers, mut tool, mut kind, mut changes) = (Vec::<Layer>::new(), None::<u8>, String::new(), 0usize);
+            for line in g.lines() {
+                if line.starts_with(";LAYER_CHANGE") {
+                    layers.push(Layer { z: 0.0, h: 0.0, walls: Default::default(), infill: Default::default() });
+                    kind.clear();
+                } else if let (Some(v), Some(l)) = (line.strip_prefix(";Z:"), layers.last_mut()) {
+                    l.z = v.trim().parse().unwrap_or(0.0);
+                } else if let (Some(v), Some(l)) = (line.strip_prefix(";HEIGHT:"), layers.last_mut()) {
+                    // A sub-layer's own height: the thinnest of the layer.
+                    let h: f32 = v.trim().parse().unwrap_or(0.0);
+                    l.h = if l.h > 0.0 { l.h.min(h) } else { h };
+                } else if let Some(t) = line.strip_prefix('T').and_then(|t| t.trim().parse::<u8>().ok()) {
+                    if !layers.is_empty() && tool.is_some_and(|x| x != t) {
+                        changes += 1;
+                    }
+                    tool = Some(t);
+                } else if let Some(k) = line.strip_prefix(";TYPE:") {
+                    kind = k.trim().to_string();
+                } else if line.starts_with("G1 ") && line.contains(" E") && line.contains('X') {
+                    if let (Some(l), Some(t)) = (layers.last_mut(), tool) {
+                        if kind.ends_with("wall") {
+                            l.walls.insert(t);
+                        } else if kind.contains("infill") {
+                            l.infill.insert(t);
+                        }
+                    }
+                }
+            }
+            (layers, changes)
+        };
+        let keys = |g: &str| SMOOTH_MIX_OVERRIDES.iter().map(|k| g.contains(&format!("; {k} = 1\n"))).collect::<Vec<_>>();
+
+        let off = slice("smooth-off", false);
+        let (layers_off, changes_off) = read(&off);
+        assert_eq!(keys(&off), [false; 3], "off: none of the keys");
+        assert!(layers_off.iter().all(|l| l.walls.len() <= 1 && l.infill.len() <= 1), "off: one head per layer");
+
+        let on = slice("smooth-on", true);
+        let (layers_on, changes_on) = read(&on);
+        assert_eq!(keys(&on), [true; 3], "on: the three keys reached the engine");
+        let heights: std::collections::BTreeSet<String> = layers_on.iter().skip(1).map(|l| format!("{:.2}", l.h)).collect();
+        println!(
+            "off: {} layers, {changes_off} tool changes; on: {} layers, {changes_on} tool changes, heights {heights:?}",
+            layers_off.len(),
+            layers_on.len()
+        );
+        // Sub-layers grouped by the 0.20 mm layer they make up (above the
+        // first): both heads print its walls and its infill.
+        let mut by_layer: std::collections::BTreeMap<i32, (std::collections::BTreeSet<u8>, std::collections::BTreeSet<u8>)> =
+            Default::default();
+        let first = layers_on.first().map(|l| l.z).unwrap_or(0.2);
+        for l in layers_on.iter().filter(|l| l.z > first + 0.01) {
+            let e = by_layer.entry(((l.z - first - 0.001) / 0.2).floor() as i32).or_default();
+            e.0.extend(&l.walls);
+            e.1.extend(&l.infill);
+        }
+        let full = by_layer.values().filter(|(w, i)| w.len() == 2 && i.len() == 2).count();
+        println!("on: {full} of {} layers with both heads on walls and infill", by_layer.len());
+        assert!(by_layer.len() > 80);
+        // The top shell may close on one head: the last layers aside.
+        assert!(by_layer.values().take(by_layer.len() - 5).all(|(w, _)| w == &[0u8, 2].into()), "walls by both heads on every layer");
+        assert!(full * 10 >= by_layer.len() * 8, "infill by both heads on most layers: {full} / {}", by_layer.len());
+        assert!(layers_on.iter().skip(1).all(|l| l.h >= 0.04 - 1e-3), "never below the 0.04 mm bound");
+        assert!(heights.contains("0.10"), "0.10 mm sub-layers: {heights:?}");
+        assert!(changes_on as f32 >= changes_off as f32 * 1.7, "about twice the tool changes: {changes_off} → {changes_on}");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// The Speed adjustment reaches the engine: the values the slice sheet
+    /// sends at 75 % (lists per nozzle flow type, as in the U1 profiles) are
+    /// in the G-code's config block and slow the print down; with no
+    /// override the config block is the profile's.
+    /// `SNAPSTUDIO_ENGINE=… cargo test --lib engine_speed_overrides -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn engine_speed_overrides() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles");
+        let process = "0.20mm Standard @Snapmaker U1 (0.4 nozzle)".to_string();
+        assert!(l.processes.iter().any(|p| p.name == process), "{process}");
+        let pla = l.filaments.iter().find(|f| f.name.contains("PLA")).expect("PLA").name.clone();
+        use crate::mesh::{Mat, Tri};
+        let tmp = std::env::temp_dir().join("snapstudio-engine-speed");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let s = 30.0f32;
+        #[rustfmt::skip]
+        let p = [[0., 0., 0.], [s, 0., 0.], [s, s, 0.], [0., s, 0.], [0., 0., s], [s, 0., s], [s, s, s], [0., s, s]];
+        #[rustfmt::skip]
+        let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
+                 [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+        let tris: Vec<Tri> = f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect();
+        let src = tmp.join("cube.3mf");
+        crate::write3mf::write_scene(
+            &src,
+            &[crate::write3mf::SceneObject { name: "cube".into(), tris, transform: Mat::IDENTITY, extruder: None }],
+        )
+        .unwrap();
+        let slice = |id: &str, overrides: Map<String, Value>| {
+            let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+            let sink = seen.clone();
+            run_job(
+                binary(&app).unwrap(),
+                index_for(&app).unwrap(),
+                Request {
+                    machine: machine.clone(),
+                    process: process.clone(),
+                    filaments: vec![pla.clone()],
+                    scene: vec![crate::plate::SceneItem {
+                        path: src.to_string_lossy().to_string(),
+                        item: 0,
+                        name: "cube".into(),
+                        pos: [135.0, 135.0],
+                        rot: [0.0; 3],
+                        scale: [1.0; 3],
+                        extruder_map: vec![0],
+                        piece: None,
+                    }],
+                    overrides,
+                    name: Some(id.into()),
+                    ..Default::default()
+                },
+                id.into(),
+                &move |p| sink.lock().unwrap().push(p),
+            );
+            let last = seen.lock().unwrap().last().cloned().unwrap();
+            assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
+            let gcode = std::fs::read_to_string(last.gcode.clone().unwrap()).unwrap();
+            discard(id);
+            (gcode, last.stats.unwrap())
+        };
+        let (base, base_stats) = slice("speed100", Map::new());
+        for line in
+            ["; outer_wall_speed = 200,500", "; sparse_infill_speed = 270,600", "; default_acceleration = 10000", "; travel_speed = 500"]
+        {
+            assert!(base.contains(line), "profile value missing: {line}");
+        }
+        // What the slice sheet computes at 75 % (scripts/test-speed.js).
+        let at75: Map<String, Value> = serde_json::from_str(r#"{"outer_wall_speed":["150","375"],"inner_wall_speed":["225","450"],"sparse_infill_speed":["202","450"],"internal_solid_infill_speed":["187","450"],"gap_infill_speed":"187","top_surface_speed":"150","support_speed":"112","support_interface_speed":"60","bridge_speed":"37","default_acceleration":"5620","outer_wall_acceleration":"2810","inner_wall_acceleration":"5620","top_surface_acceleration":"1120"}"#).unwrap();
+        let (slow, slow_stats) = slice("speed75", at75);
+        for line in [
+            "; outer_wall_speed = 150,375",
+            "; inner_wall_speed = 225,450",
+            "; sparse_infill_speed = 202,450",
+            "; gap_infill_speed = 187",
+            "; top_surface_speed = 150",
+            "; bridge_speed = 37",
+            "; default_acceleration = 5620",
+            "; outer_wall_acceleration = 2810",
+            "; inner_wall_acceleration = 5620",
+            "; top_surface_acceleration = 1120",
+            "; travel_speed = 500",
+            "; initial_layer_speed = 50",
+        ] {
+            assert!(slow.contains(line), "missing in G-code: {line}");
+        }
+        let (t0, t1) = (base_stats.print_time_s.unwrap(), slow_stats.print_time_s.unwrap());
+        println!("print time: 100 % {t0} s, 75 % {t1} s");
+        assert!(t1 > t0, "slower: {t0} s → {t1} s");
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
@@ -1628,16 +2942,22 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let cube = |s: f32| -> Vec<Tri> {
+            #[rustfmt::skip]
             let p = [[0., 0., 0.], [s, 0., 0.], [s, s, 0.], [0., s, 0.], [0., 0., s], [s, 0., s], [s, s, s], [0., s, s]];
+            #[rustfmt::skip]
             let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
                      [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
             f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect()
         };
         let src = tmp.join("cubes.3mf");
-        crate::write3mf::write_scene(&src, &[
-            crate::write3mf::SceneObject { name: "a".into(), tris: cube(15.0), transform: Mat::IDENTITY, extruder: None },
-            crate::write3mf::SceneObject { name: "b".into(), tris: cube(15.0), transform: Mat::IDENTITY, extruder: None },
-        ]).unwrap();
+        crate::write3mf::write_scene(
+            &src,
+            &[
+                crate::write3mf::SceneObject { name: "a".into(), tris: cube(15.0), transform: Mat::IDENTITY, extruder: None },
+                crate::write3mf::SceneObject { name: "b".into(), tris: cube(15.0), transform: Mat::IDENTITY, extruder: None },
+            ],
+        )
+        .unwrap();
         let item = |i: usize, x: f32, rz: f32| crate::plate::SceneItem {
             path: src.to_string_lossy().to_string(),
             item: i,
@@ -1682,6 +3002,31 @@ mod tests {
                    [2026-09-19 10:26:01.463331] [0x00000001f60b6180] [error]   run 2334: process not compatible with printer.\n\
                    run found error, exit";
         assert_eq!(engine_error(raw), "run 2334: process not compatible with printer.");
+        // A tower on a part: said in words, not "plate 1: found slicing result conflict!".
+        let raw = "[2026-10-25 20:51:02.1] [0x1] [error]   plate 1: found slicing result conflict!\nrun found error, exit";
+        assert_eq!(engine_error(raw), crate::t!("err.slice_conflict"));
+    }
+
+    /// The engine's lines, as its 2.4.0 build logs them with supports off.
+    #[test]
+    fn support_warnings_are_read_from_the_log() {
+        let logs = "[2026-11-04 10:00:00.1] [0x1] [warning] plate 1: found NON_CRITICAL slicing warnings: It seems object T.stl has floating cantilever. Please re-orient the object or enable support generation.\n\
+                    \n\
+                    [2026-11-04 10:00:00.2] [0x1] [warning] plate 1: found NON_CRITICAL slicing warnings: It seems object pendant.stl has floating regions. Please re-orient the object or enable support generation.\n\
+                    [2026-11-04 10:00:00.3] [0x1] [warning] plate 1: found NON_CRITICAL slicing warnings: It seems object T.stl has floating cantilever. Please re-orient the object or enable support generation.\n\
+                    [2026-11-04 10:00:00.4] [0x1] [warning] plate 1: found NON_CRITICAL slicing warnings: It seems object Cat has a tail has wobbly bits. Please re-orient the object or enable support generation.\n\
+                    [2026-11-04 10:00:00.5] [0x1] [warning] plate 1: found NON_CRITICAL slicing warnings: Detected print speed exceeds max speed.\n\
+                    [2026-11-04 10:00:00.6] [0x1] [warning] plate 1: found slicing warnings: It seems object X has floating regions., no_check=0";
+        let w = support_warnings(logs);
+        let got: Vec<(&str, &str)> = w.iter().map(|w| (w.object.as_str(), w.reason.as_str())).collect();
+        // Once per object and reason; an unknown reason kept with its text;
+        // other warnings ignored.
+        assert_eq!(got, vec![("T.stl", "cantilever"), ("pendant.stl", "floating"), ("Cat has a tail", "other")]);
+        assert!(w[2].text.starts_with("It seems object Cat has a tail has wobbly bits."));
+        // A name holding " has " keeps it.
+        let w = support_warnings("[x] [0x1] [warning] plate 1: found NON_CRITICAL slicing warnings: It seems object Bob has a hat has large overhangs. Please re-orient the object or enable support generation.");
+        assert_eq!((w[0].object.as_str(), w[0].reason.as_str()), ("Bob has a hat", "overhangs"));
+        assert!(support_warnings("").is_empty());
     }
 
     #[test]
@@ -1694,3 +3039,74 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod cancel_and_previews {
+    use super::*;
+
+    #[test]
+    fn a_preparing_job_can_be_cancelled() {
+        jobs().lock().unwrap().insert("lotc-prep".into(), Job { pid: None });
+        assert!(cancel("lotc-prep"), "known, still preparing: stopped at its next step");
+        assert!(!jobs().lock().unwrap().contains_key("lotc-prep"));
+        assert!(!cancel("lotc-prep"), "already gone");
+    }
+
+    fn fake_preview(base: &Path, i: usize) -> (PathBuf, Preview) {
+        let work = base.join(format!("w{i}"));
+        std::fs::create_dir_all(&work).unwrap();
+        let gcode = work.join("a.gcode");
+        std::fs::write(&gcode, "; test\nG1 X0\n").unwrap();
+        let p = Preview {
+            work: work.clone(),
+            gcode,
+            source: base.join("Piece.3mf"),
+            out_dir: Some(base.to_path_buf()),
+            seq: next_seq(),
+            saved: None,
+        };
+        (work, p)
+    }
+
+    #[test]
+    fn the_oldest_previews_go_past_the_cap() {
+        let base = std::env::temp_dir().join("snapstudio_lotc_cap");
+        let _ = std::fs::remove_dir_all(&base);
+        let mut list = std::collections::HashMap::new();
+        let works: Vec<PathBuf> = (0..5)
+            .map(|i| {
+                let (work, p) = fake_preview(&base, i);
+                remember_in(&mut list, format!("p{i}"), p, 3);
+                work
+            })
+            .collect();
+        assert_eq!(list.len(), 3);
+        assert!(!works[0].exists() && !works[1].exists(), "the two oldest folders are gone");
+        assert!(works[2].exists() && works[4].exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_save_never_overwrites_another_file() {
+        let base = std::env::temp_dir().join("snapstudio_lotc_save");
+        let _ = std::fs::remove_dir_all(&base);
+        let (_, p) = fake_preview(&base, 0);
+        let name = output_name(&p.source, &p.gcode);
+        // Someone else's G-code under the name the save would take.
+        std::fs::write(base.join(&name), "; theirs").unwrap();
+        previews().lock().unwrap().insert("lotc-save".into(), p);
+        let first = save("lotc-save", None).unwrap();
+        assert_ne!(first, base.join(&name), "numbered, not overwritten");
+        assert_eq!(std::fs::read_to_string(base.join(&name)).unwrap(), "; theirs");
+        // Saving the same preview again writes over its own copy only.
+        let again = save("lotc-save", None).unwrap();
+        assert_eq!(again, first);
+        // Another folder: a fresh name there, the first copy untouched.
+        let other = base.join("other");
+        std::fs::create_dir_all(&other).unwrap();
+        let elsewhere = save("lotc-save", Some(other.to_str().unwrap())).unwrap();
+        assert_eq!(elsewhere, other.join(&name));
+        assert!(first.is_file());
+        previews().lock().unwrap().remove("lotc-save");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+}

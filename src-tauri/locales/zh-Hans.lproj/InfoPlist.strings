@@ -1,0 +1,7 @@
+/* Simplified Chinese texts of the permission prompts (see Info.plist). */
+NSLocalNetworkUsageDescription = "Snap Studio 会在你的本地网络中查找 Snapmaker 打印机。";
+NSDownloadsFolderUsageDescription = "Snap Studio 会显示并准备此文件夹中的 3D 模型。";
+NSDocumentsFolderUsageDescription = "Snap Studio 会显示并准备此文件夹中的 3D 模型。";
+NSDesktopFolderUsageDescription = "Snap Studio 会显示并准备此文件夹中的 3D 模型。";
+NSRemovableVolumesUsageDescription = "Snap Studio 会显示并准备此磁盘上的 3D 模型。";
+NSNetworkVolumesUsageDescription = "Snap Studio 会显示并准备此网络卷上的 3D 模型。";

@@ -11,7 +11,20 @@
   <array>
     <string>en</string>
     <string>fr</string>
+    <string>de</string>
+    <string>es</string>
+    <string>pt-BR</string>
+    <string>it</string>
+    <string>ja</string>
+    <string>zh-Hans</string>
+    <string>ko</string>
   </array>
+  <!-- macOS 26 icon: Icon Composer source in icons/macos/AppIcon.icon,
+       compiled to icons/macos/Assets.car (scripts/build-icons.py). Older
+       systems use icon.icns, on Apple's grid so macOS 26 does not frame it
+       in a light tile either. -->
+  <key>CFBundleIconName</key>
+  <string>AppIcon</string>
   <!-- Printer discovery (mDNS): without these keys macOS silently blocks the
        search. Merged by Tauri into the bundle's Info.plist. -->
   <key>NSLocalNetworkUsageDescription</key>

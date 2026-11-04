@@ -18,15 +18,17 @@ use crate::pty::Tools;
 use anyhow::{anyhow, Result};
 use serde::Serialize;
 use serde_json::Value;
-use tauri::{AppHandle, Emitter};
 #[cfg(target_os = "macos")]
 use std::io::Write;
+use tauri::{AppHandle, Emitter};
 
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 /// Keychain item of the sandbox token: Snap Studio's, apart from Claude's.
+#[cfg(target_os = "macos")]
 const SERVICE: &str = "fr.carlini.snapstudio.claude-sandbox";
+#[cfg(target_os = "macos")]
 const ACCOUNT: &str = "sandbox";
 
 /// Width of the `setup-token` terminal: a token is about 110 characters.
@@ -39,30 +41,21 @@ pub const TERM_KEY: &str = "auth";
 
 /// A token as `claude setup-token` prints it.
 pub fn is_token(s: &str) -> bool {
-    s.starts_with("sk-ant-oat")
-        && s.len() > 40
-        && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    s.starts_with("sk-ant-oat") && s.len() > 40 && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 /// Outside macOS there is no `security`: a file only its owner can read.
 #[cfg(not(target_os = "macos"))]
 fn token_file() -> std::path::PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("fr.carlini.snapstudio")
-        .join("claude-sandbox-token")
+    dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio").join("claude-sandbox-token")
 }
 
 /// Runs `security` in interactive mode with `command` on its input: the
 /// secret never shows in the process list, unlike an argument.
 #[cfg(target_os = "macos")]
 fn security(command: &str) -> Result<()> {
-    let mut child = Command::new("/usr/bin/security")
-        .arg("-i")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()?;
+    let mut child =
+        Command::new("/usr/bin/security").arg("-i").stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn()?;
     child.stdin.take().ok_or_else(|| anyhow!("no stdin"))?.write_all(format!("{command}\n").as_bytes())?;
     let out = child.wait_with_output()?;
     let err = String::from_utf8_lossy(&out.stderr);
@@ -105,12 +98,19 @@ pub fn set_sandbox_token(token: &str) -> Result<()> {
         if let Some(d) = p.parent() {
             std::fs::create_dir_all(d)?;
         }
-        std::fs::write(&p, token)?;
+        // Created readable by its owner only, from the first byte: a file
+        // written then chmod'ed is readable by all in between.
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
+            use std::io::Write;
+            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+            let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&p)?;
+            f.write_all(token.as_bytes())?;
+            // An existing file keeps its old mode on open: set anyway.
             std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600))?;
         }
+        #[cfg(not(unix))]
+        std::fs::write(&p, token)?;
         Ok(())
     }
 }
@@ -135,9 +135,7 @@ pub fn sandbox_env(engine: &str) -> Vec<(String, String)> {
     if engine != "container" {
         return Vec::new();
     }
-    sandbox_token()
-        .map(|t| vec![("CLAUDE_CODE_OAUTH_TOKEN".to_string(), t)])
-        .unwrap_or_default()
+    sandbox_token().map(|t| vec![("CLAUDE_CODE_OAUTH_TOKEN".to_string(), t)]).unwrap_or_default()
 }
 
 // ------------------------------------------------------------ status, check
@@ -158,23 +156,13 @@ pub struct Status {
 
 /// The command for a side: Claude itself, or Claude through yolobox.
 fn argv(engine: &str, tools: &Tools, claude_args: &[&str]) -> Result<Vec<String>> {
-    let claude = tools
-        .claude
-        .as_ref()
-        .ok_or_else(|| anyhow!(crate::t!("err.no_claude")))?
-        .to_string_lossy()
-        .to_string();
+    let claude = tools.claude.as_ref().ok_or_else(|| anyhow!(crate::t!("err.no_claude")))?.to_string_lossy().to_string();
     if engine != "container" {
         let mut v = vec![claude];
         v.extend(claude_args.iter().map(|s| s.to_string()));
         return Ok(v);
     }
-    let yolobox = tools
-        .yolobox
-        .as_ref()
-        .ok_or_else(|| anyhow!(crate::t!("err.no_yolobox")))?
-        .to_string_lossy()
-        .to_string();
+    let yolobox = tools.yolobox.as_ref().ok_or_else(|| anyhow!(crate::t!("err.no_yolobox")))?.to_string_lossy().to_string();
     let mut v = vec![yolobox, "run".into(), "--claude-config".into()];
     v.extend(crate::setup::runtime_args());
     v.push("claude".into());
@@ -185,13 +173,13 @@ fn argv(engine: &str, tools: &Tools, claude_args: &[&str]) -> Result<Vec<String>
 /// Runs a command with a deadline; returns its standard output, up to the
 /// line for which `enough` says so (the command is then stopped).
 fn run(argv: &[String], envs: &[(String, String)], deadline: Duration, enough: impl Fn(&str) -> bool) -> Result<String> {
-    let cwd = dirs::home_dir().unwrap_or_else(std::env::temp_dir);
+    // An empty folder of our own, not the home: in container mode yolobox
+    // mounts the working directory into the sandbox, and a sign-in check
+    // has no business seeing the user's files (nor a stray CLAUDE.md).
+    let cwd = crate::ia::root().join(".auth-check");
+    std::fs::create_dir_all(&cwd)?;
     let mut cmd = Command::new(&argv[0]);
-    cmd.args(&argv[1..])
-        .current_dir(cwd)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+    cmd.args(&argv[1..]).current_dir(cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
     if let Some(p) = crate::pty::child_path() {
         cmd.env("PATH", p);
     }
@@ -245,8 +233,9 @@ fn run(argv: &[String], envs: &[(String, String)], deadline: Duration, enough: i
 /// to the container), forced after a moment.
 fn stop(child: &mut std::process::Child) {
     #[cfg(unix)]
-    unsafe {
-        libc::killpg(child.id() as i32, libc::SIGTERM);
+    if let Ok(pgid) = libc::pid_t::try_from(child.id()) {
+        // SAFETY: plain signal to the process group we created.
+        unsafe { libc::killpg(pgid, libc::SIGTERM) };
     }
     let end = Instant::now() + Duration::from_secs(3);
     while Instant::now() < end {
@@ -269,10 +258,7 @@ fn first_json(out: &str) -> Option<Value> {
 pub fn status(engine: &str) -> Status {
     let tools = Tools::detect();
     let envs = sandbox_env(engine);
-    let mut s = Status {
-        sandbox_token: engine == "container" && !envs.is_empty(),
-        ..Default::default()
-    };
+    let mut s = Status { sandbox_token: engine == "container" && !envs.is_empty(), ..Default::default() };
     let deadline = Duration::from_secs(if engine == "container" { 180 } else { 20 });
     match argv(engine, &tools, &["auth", "status", "--json"]).and_then(|a| run(&a, &envs, deadline, |_| false)) {
         Ok(out) => match first_json(&out) {
@@ -284,7 +270,7 @@ pub fn status(engine: &str) -> Status {
             }
             None => s.error = Some(crate::t!("err.auth_unreadable")),
         },
-        Err(e) => s.error = Some(e.to_string()),
+        Err(e) => s.error = Some(crate::util::ui_err(e)),
     }
     s
 }
@@ -301,22 +287,12 @@ pub struct Check {
 pub fn verify(engine: &str) -> Check {
     let tools = Tools::detect();
     let envs = sandbox_env(engine);
-    let args = [
-        "-p",
-        "Reply with the single word OK.",
-        "--model",
-        "haiku",
-        "--output-format",
-        "stream-json",
-        "--verbose",
-    ];
+    let args = ["-p", "Reply with the single word OK.", "--model", "haiku", "--output-format", "stream-json", "--verbose"];
     let deadline = Duration::from_secs(if engine == "container" { 240 } else { 90 });
-    let decisive = |line: &str| {
-        serde_json::from_str::<Value>(line).is_ok_and(|v| v["type"] == "result" || crate::chat::auth_failed(&v))
-    };
+    let decisive = |line: &str| serde_json::from_str::<Value>(line).is_ok_and(|v| v["type"] == "result" || crate::chat::auth_failed(&v));
     let out = match argv(engine, &tools, &args).and_then(|a| run(&a, &envs, deadline, decisive)) {
         Ok(out) => out,
-        Err(e) => return Check { ok: false, message: e.to_string() },
+        Err(e) => return Check { ok: false, message: crate::util::ui_err(e) },
     };
     check_of(&out)
 }
@@ -328,23 +304,17 @@ fn check_of(out: &str) -> Check {
     match last {
         Some(v) if v["type"] == "result" && v["is_error"] == false => Check { ok: true, message: crate::t!("auth.check_ok") },
         Some(v) if v["type"] == "result" => Check { ok: false, message: v["result"].as_str().unwrap_or("?").to_string() },
-        Some(v) if crate::chat::auth_failed(&v) => Check {
-            ok: false,
-            message: format!("API Error: {} {}", v["error_status"], v["error"].as_str().unwrap_or_default()),
-        },
+        Some(v) if crate::chat::auth_failed(&v) => {
+            Check { ok: false, message: format!("API Error: {} {}", v["error_status"], v["error"].as_str().unwrap_or_default()) }
+        }
         _ => Check { ok: false, message: crate::t!("err.auth_unreadable") },
     }
 }
 
 /// Whether a message from Claude says it could not sign in.
 pub fn is_auth_failure(text: &str) -> bool {
-    const SIGNS: [&str; 5] = [
-        "Failed to authenticate",
-        "Invalid API key",
-        "OAuth token has expired",
-        "Please run /login",
-        "OAuth access token is invalid",
-    ];
+    const SIGNS: [&str; 5] =
+        ["Failed to authenticate", "Invalid API key", "OAuth token has expired", "Please run /login", "OAuth access token is invalid"];
     SIGNS.iter().any(|s| text.contains(s))
 }
 
@@ -425,11 +395,7 @@ fn strip_ansi(s: &str) -> String {
 /// Mac, or a token for the sandbox.
 pub fn term_argv(kind: &str) -> Result<Vec<String>> {
     let tools = Tools::detect();
-    let claude = tools
-        .claude
-        .ok_or_else(|| anyhow!(crate::t!("err.no_claude")))?
-        .to_string_lossy()
-        .to_string();
+    let claude = tools.claude.ok_or_else(|| anyhow!(crate::t!("err.no_claude")))?.to_string_lossy().to_string();
     match kind {
         "login" => Ok(vec![claude, "auth".into(), "login".into()]),
         "setup" => Ok(vec![claude, "setup-token".into()]),
@@ -448,7 +414,7 @@ pub fn term_open(app: &AppHandle, kind: &str, cols: u16, rows: u16) -> Result<()
         let mut catcher = TokenCatcher::default();
         Box::new(move |bytes: &[u8]| {
             if let Some(token) = catcher.feed(bytes) {
-                let error = set_sandbox_token(&token).err().map(|e| e.to_string());
+                let error = set_sandbox_token(&token).err().map(crate::util::ui_err);
                 let _ = app.emit("auth-token", serde_json::json!({ "ok": error.is_none(), "error": error }));
             }
         }) as crate::pty::Tap
@@ -517,6 +483,16 @@ mod tests {
 
     /// Against the real Claude: `AUTH_REAL=1 cargo test --lib real_sign_in -- --ignored --nocapture`.
     /// Prints no secret, only what the window would show.
+    /// The built-in sandbox signs in as this computer: Claude itself, no
+    /// token of its own.
+    #[test]
+    fn the_builtin_sandbox_uses_this_computers_sign_in() {
+        assert!(sandbox_env("sandbox").is_empty());
+        let tools = Tools { claude: Some("/usr/local/bin/claude".into()), yolobox: Some("/usr/local/bin/yolobox".into()) };
+        let a = argv("sandbox", &tools, &["auth", "status"]).unwrap();
+        assert_eq!(a, ["/usr/local/bin/claude", "auth", "status"]);
+    }
+
     #[test]
     #[ignore]
     fn real_sign_in() {
@@ -525,7 +501,10 @@ mod tests {
         }
         for engine in ["local", "container"] {
             let s = status(engine);
-            println!("{engine}: logged_in={} method={:?} plan={:?} own_token={} error={:?}", s.logged_in, s.method, s.plan, s.sandbox_token, s.error);
+            println!(
+                "{engine}: logged_in={} method={:?} plan={:?} own_token={} error={:?}",
+                s.logged_in, s.method, s.plan, s.sandbox_token, s.error
+            );
             let c = verify(engine);
             println!("{engine}: check ok={} {}", c.ok, c.message);
         }

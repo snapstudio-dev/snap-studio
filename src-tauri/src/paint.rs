@@ -127,9 +127,7 @@ pub fn dominant(s: &str) -> Option<u8> {
             None => acc.push((state, w)),
         }
     }
-    acc.into_iter()
-        .max_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0)))
-        .map(|(s, _)| s)
+    acc.into_iter().max_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0))).map(|(s, _)| s)
 }
 
 /// True when the triangle is split into differently painted pieces.

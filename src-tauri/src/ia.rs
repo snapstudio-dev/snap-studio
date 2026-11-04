@@ -21,8 +21,10 @@
 //! A conversation may also start from nothing, to design an object: then there
 //! is no `source.3mf`, and `out/current.3mf` only exists after the first export.
 //!
-//! The working folder belongs to Claude; the app only writes there at creation,
-//! then just watches what comes out.
+//! The working folder belongs to Claude. The app writes what Claude needs
+//! (`CLAUDE.md`, the tools and skills, the previews) at creation and again
+//! at each opening (`refresh_workspace`), keeps the chat log and the
+//! attachments, and watches what comes out.
 
 use crate::mesh::{Mat, MeshData};
 use crate::write3mf::Part;
@@ -46,7 +48,8 @@ pub struct Conversation {
     /// Initial request, sent on the first pass in the terminal.
     #[serde(default)]
     pub prompt: String,
-    /// "container" or "local".
+    /// "sandbox" (Claude Code's built-in sandbox), "container" (yolobox) or
+    /// "local".
     pub engine: String,
     pub created_at: u64,
     pub updated_at: u64,
@@ -56,6 +59,10 @@ pub struct Conversation {
     /// Path of the 3MF exported into your files, once the work is done.
     #[serde(default)]
     pub saved: Option<String>,
+    /// Files written by Save, per version: number → path. The same version
+    /// is not written twice while its file is still there.
+    #[serde(default)]
+    pub saved_versions: std::collections::BTreeMap<u32, String>,
     /// True as soon as the Claude session was created: it is resumed afterwards.
     #[serde(default)]
     pub started: bool,
@@ -86,10 +93,7 @@ fn one() -> u32 {
 }
 
 fn now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 // ------------------------------------------------------------ locations
@@ -108,8 +112,15 @@ pub fn root() -> PathBuf {
     d
 }
 
+/// A conversation's folder. An id that is not a uuid (only a tampered
+/// call sends one) maps to a folder that never exists, so every command
+/// built on this path fails to find anything rather than reach elsewhere.
 pub fn dir(id: &str) -> PathBuf {
-    root().join(id)
+    if valid_id(id) {
+        root().join(id)
+    } else {
+        root().join("_invalid")
+    }
 }
 
 pub fn workspace(id: &str) -> PathBuf {
@@ -171,7 +182,12 @@ pub fn list() -> Vec<Conversation> {
 /// is the kernel that resolves it afterwards — a deletion would then reach
 /// much further than intended.
 fn valid_id(id: &str) -> bool {
-    id.len() == 36 && id.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-')
+    // 8-4-4-4-12 hexadecimal digits, as uuid writes them.
+    id.len() == 36
+        && id.bytes().enumerate().all(|(i, b)| match i {
+            8 | 13 | 18 | 23 => b == b'-',
+            _ => b.is_ascii_hexdigit(),
+        })
 }
 
 pub fn remove(id: &str) -> Result<()> {
@@ -191,24 +207,246 @@ pub fn mark_started(id: &str) {
     }
 }
 
-
-/// Where Claude Code stores the session of a working folder.
+/// Claude Code's configuration folders, most specific first.
 ///
-/// It names the folder after the path, each character that is neither a letter
-/// nor a digit becoming a dash: `/Users/me/.config/snap-studio/ia/<id>/workspace`
-/// gives `-Users-me--config-snap-studio-ia-<id>-workspace`.
+/// `CLAUDE_CONFIG_DIR`, when set, replaces `~/.claude` for a local Claude.
+/// The sandbox shares the host's `~/.claude/projects` (yolobox
+/// `--claude-config`), so `~/.claude` stays a candidate even then.
+pub fn claude_roots() -> Vec<PathBuf> {
+    claude_roots_from(std::env::var_os("CLAUDE_CONFIG_DIR"), dirs::home_dir())
+}
+
+fn claude_roots_from(env: Option<std::ffi::OsString>, home: Option<PathBuf>) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Some(dir) = env.filter(|v| !v.is_empty()).map(PathBuf::from) {
+        // A relative value would depend on the app's current folder: ignored.
+        if dir.is_absolute() {
+            out.push(dir);
+        }
+    }
+    let home = home.unwrap_or_else(std::env::temp_dir).join(".claude");
+    if !out.contains(&home) {
+        out.push(home);
+    }
+    out
+}
+
+/// Name of Claude's project folder for a working folder: each character that
+/// is neither a letter nor a digit becomes a dash, so
+/// `/Users/me/.config/snap-studio/ia/<id>/workspace` gives
+/// `-Users-me--config-snap-studio-ia-<id>-workspace`.
+fn project_slug(ws: &Path) -> String {
+    ws.to_string_lossy().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect()
+}
+
+/// Where Claude Code stores the session of a working folder: in the first
+/// configuration folder that has it, otherwise where a new one would go.
 pub fn session_file(id: &str) -> PathBuf {
-    let slug: String = workspace(id)
-        .to_string_lossy()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect();
-    dirs::home_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join(".claude")
-        .join("projects")
-        .join(slug)
-        .join(format!("{id}.jsonl"))
+    let rel = Path::new("projects").join(project_slug(&workspace(id))).join(format!("{id}.jsonl"));
+    let roots = claude_roots();
+    roots.iter().map(|r| r.join(&rel)).find(|p| p.is_file()).unwrap_or_else(|| roots[0].join(&rel))
+}
+
+/// What Claude Code keeps of one session, outside the conversation folder.
+#[derive(Debug, Default, Serialize)]
+pub struct Artifacts {
+    /// Files and folders that belong to the session only.
+    pub paths: Vec<PathBuf>,
+    /// Matching names left alone: symbolic links, or out of the folder.
+    pub skipped: Vec<PathBuf>,
+}
+
+/// Folders of a configuration root where Claude Code files things per
+/// session, named after the session id.
+const SESSION_DIRS: &[&str] = &["file-history", "session-env", "debug", "todos", "image-cache"];
+
+/// Where a name was found, for the rules that only apply there.
+#[derive(Clone, Copy, PartialEq)]
+enum Place {
+    /// Inside a `projects/<slug>/` folder.
+    Project,
+    Todos,
+    Other,
+}
+
+/// True for a name that belongs to session `id` and to no other: the id
+/// itself, or the id followed by a dot (`<id>.jsonl`, `<id>.txt`,
+/// `<id>.jsonl.superseded-…`); in `todos`, `<id>-agent-…`; in a project,
+/// `….orphaned-<id>-…`. A bare prefix never matches: `<id>0.jsonl` is
+/// someone else's.
+fn names_session(name: &str, id: &str, place: Place) -> bool {
+    match name.strip_prefix(id) {
+        Some("") => return true,
+        Some(rest) if rest.starts_with('.') => return true,
+        Some(rest) if place == Place::Todos && rest.starts_with("-agent-") => return true,
+        _ => {}
+    }
+    place == Place::Project && name.contains(&format!(".orphaned-{id}-"))
+}
+
+/// The session's files under the configuration roots, after every check.
+pub fn session_artifacts(id: &str) -> Result<Artifacts> {
+    let mut out = Artifacts::default();
+    for root in claude_roots() {
+        let a = artifacts_in(&root, id)?;
+        out.paths.extend(a.paths);
+        out.skipped.extend(a.skipped);
+    }
+    Ok(out)
+}
+
+/// One root's share. Only reads.
+///
+/// - the id is ours (a UUID), so no `/`, `..` or wildcard can ride in it;
+/// - only names that are exactly the session's are listed (`names_session`);
+/// - nothing is followed: a symbolic link — the candidate or a folder on the
+///   way — is skipped, never listed;
+/// - each candidate must resolve inside the root, directly in the folder it
+///   was found in;
+/// - a project folder (`projects/<slug>`) is never a candidate, only what is
+///   inside it; `history.jsonl` and the other shared files at the root are
+///   never looked at.
+fn artifacts_in(root: &Path, id: &str) -> Result<Artifacts> {
+    if !valid_id(id) {
+        return Err(anyhow!("unknown conversation"));
+    }
+    let mut out = Artifacts::default();
+    let Ok(base) = root.canonicalize() else {
+        return Ok(out); // no configuration here
+    };
+    let real_dir = |d: &Path| -> Option<PathBuf> {
+        let m = std::fs::symlink_metadata(d).ok()?;
+        if !m.is_dir() || m.file_type().is_symlink() {
+            return None;
+        }
+        d.canonicalize().ok().filter(|c| c.starts_with(&base))
+    };
+    let mut dirs: Vec<(PathBuf, Place)> = Vec::new();
+    let projects = base.join("projects");
+    if real_dir(&projects).is_some() {
+        if let Ok(entries) = std::fs::read_dir(&projects) {
+            for e in entries.flatten() {
+                let p = e.path();
+                if real_dir(&p).is_some() {
+                    dirs.push((p, Place::Project));
+                } else if names_session(&e.file_name().to_string_lossy(), id, Place::Other)
+                    && std::fs::symlink_metadata(&p).is_ok_and(|m| m.file_type().is_symlink())
+                {
+                    out.skipped.push(p);
+                }
+            }
+        }
+    }
+    for d in SESSION_DIRS {
+        dirs.push((base.join(d), if *d == "todos" { Place::Todos } else { Place::Other }));
+    }
+    for (d, place) in dirs {
+        let Some(real) = real_dir(&d) else { continue };
+        let Ok(entries) = std::fs::read_dir(&d) else { continue };
+        for e in entries.flatten() {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if !names_session(&name, id, place) {
+                continue;
+            }
+            let p = e.path();
+            let Ok(m) = std::fs::symlink_metadata(&p) else { continue };
+            let inside = p.canonicalize().ok().and_then(|c| c.parent().map(Path::to_path_buf)) == Some(real.clone());
+            if m.file_type().is_symlink() || !inside {
+                out.skipped.push(p);
+            } else {
+                out.paths.push(p);
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Deletes what `session_artifacts` listed, checking each path again right
+/// before: it must still not be a link. Returns how many went, and the
+/// paths that could not be removed.
+pub fn remove_artifacts(a: &Artifacts) -> (usize, Vec<PathBuf>) {
+    let (mut n, mut failed) = (0, Vec::new());
+    for p in &a.paths {
+        let ok = match std::fs::symlink_metadata(p) {
+            Ok(m) if m.file_type().is_symlink() => false,
+            // `remove_dir_all` does not follow the links it meets inside.
+            Ok(m) if m.is_dir() => std::fs::remove_dir_all(p).is_ok(),
+            Ok(_) => std::fs::remove_file(p).is_ok(),
+            Err(_) => true, // already gone
+        };
+        if ok {
+            n += 1;
+        } else {
+            failed.push(p.clone());
+        }
+    }
+    (n, failed)
+}
+
+/// Gives a conversation a new title, as typed by the user.
+pub fn rename(id: &str, title: &str) -> Result<Conversation> {
+    if !valid_id(id) {
+        return Err(anyhow!("unknown conversation"));
+    }
+    let title: String = title.split_whitespace().collect::<Vec<_>>().join(" ");
+    if title.is_empty() {
+        return Err(anyhow!(crate::t!("err.title_empty")));
+    }
+    let mut c = get(id)?;
+    // The activity date stays: renaming is not working on the object.
+    c.title = title.chars().take(120).collect();
+    save(&c)?;
+    Ok(c)
+}
+
+/// A copy of a conversation: same object, versions and instructions, but a
+/// fresh Claude session — its chat log, attachments and initial request stay
+/// with the original, so the copy starts a new exchange on the same files.
+/// Links in the folder are not copied.
+pub fn duplicate(id: &str) -> Result<Conversation> {
+    if !valid_id(id) {
+        return Err(anyhow!("unknown conversation"));
+    }
+    let c = get(id)?;
+    let new_id = uuid::Uuid::new_v4().to_string();
+    let (from, to) = (workspace(id), workspace(&new_id));
+    let skip = [crate::chat::log_path(&from), crate::chat::attachments_dir(&from)];
+    if let Err(e) = copy_plain(&from, &to, &skip) {
+        let _ = std::fs::remove_dir_all(dir(&new_id));
+        return Err(e.into());
+    }
+    let copy = Conversation {
+        id: new_id,
+        title: crate::t!("ia.copy_of", title = c.title.clone()).chars().take(120).collect(),
+        prompt: String::new(),
+        created_at: now(),
+        updated_at: now(),
+        saved: None,
+        saved_versions: Default::default(),
+        started: false,
+        ..c
+    };
+    save(&copy)?;
+    Ok(copy)
+}
+
+/// Copies a folder, skipping links and the paths in `skip`.
+fn copy_plain(from: &Path, to: &Path, skip: &[PathBuf]) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for e in std::fs::read_dir(from)? {
+        let e = e?;
+        let p = e.path();
+        if skip.contains(&p) {
+            continue;
+        }
+        let t = e.file_type()?;
+        if t.is_dir() {
+            copy_plain(&p, &to.join(e.file_name()), skip)?;
+        } else if t.is_file() {
+            std::fs::copy(&p, to.join(e.file_name()))?;
+        }
+    }
+    Ok(())
 }
 
 /// True if Claude really has a session to resume.
@@ -272,34 +510,21 @@ fn split_by_head(m: MeshData) -> Vec<Part> {
     for (t, head) in m.tris.into_iter().zip(heads) {
         groups.entry(head.clamp(1, 16)).or_default().push(t);
     }
-    groups
-        .into_iter()
-        .map(|(head, tris)| Part {
-            name: format!("part-{head}"),
-            tris,
-            extruder: head,
-            paint: Vec::new(),
-        })
-        .collect()
+    groups.into_iter().map(|(head, tris)| Part { name: format!("part-{head}"), tris, extruder: head, paint: Vec::new() }).collect()
 }
 
 /// An STL as a one-part 3MF, for conversations from before 3MF.
 pub fn stl_to_3mf(src: &Path, dst: &Path, name: &str) -> Result<usize> {
     let m = crate::stl::read(src)?;
     let n = m.tris.len();
-    let part = Part {
-        name: "part-1".into(),
-        tris: m.tris,
-        extruder: 1,
-        paint: Vec::new(),
-    };
+    let part = Part { name: "part-1".into(), tris: m.tris, extruder: 1, paint: Vec::new() };
     write_3mf(dst, name, &[part])?;
     Ok(n)
 }
 
 /// Writes parts as one object, the way Claude's tools do, replacing `dst`
 /// at once: the watch must never read a half-written file.
-fn write_3mf(dst: &Path, name: &str, parts: &[Part]) -> Result<()> {
+pub(crate) fn write_3mf(dst: &Path, name: &str, parts: &[Part]) -> Result<()> {
     let tmp = dst.with_file_name(format!(".writing-{}", dst.file_name().unwrap_or_default().to_string_lossy()));
     crate::write3mf::write_multipart(&tmp, name, parts, &on_plate(parts))?;
     std::fs::rename(&tmp, dst)?;
@@ -345,14 +570,25 @@ fn title_for(prompt: &str, source: &Path) -> String {
         }
         return t;
     }
-    source
-        .file_stem()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| crate::t!("ia.untitled"))
+    source.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| crate::t!("ia.untitled"))
 }
 
 /// Prepares a conversation: folder, instructions, tools, converted object.
+/// The ways a conversation runs: Claude Code's own sandbox, a container
+/// (yolobox), this computer. Anything else is refused: it would run as
+/// "this computer" without saying so.
+pub const ENGINES: [&str; 3] = ["sandbox", "container", "local"];
+
+fn check_engine(engine: &str) -> Result<()> {
+    if ENGINES.contains(&engine) {
+        Ok(())
+    } else {
+        Err(anyhow!("unknown engine: {engine}"))
+    }
+}
+
 pub fn create(source: &Path, prompt: &str, engine: &str) -> Result<Conversation> {
+    check_engine(engine)?;
     if !source.is_file() {
         return Err(anyhow!(crate::t!("err.file_not_found")));
     }
@@ -364,7 +600,8 @@ pub fn create(source: &Path, prompt: &str, engine: &str) -> Result<Conversation>
     // Conversion first: if the object is unreadable, nothing must remain.
     let stem = source.file_stem().unwrap_or_default().to_string_lossy().to_string();
     let src_3mf = ws.join(SOURCE);
-    let parts = match parts_of_3mf(source).and_then(|p| write_3mf(&src_3mf, &stem, &p).map(|_| p)) {
+    // A 3MF or an STL (ia_attach.rs: the same checks as an attached model).
+    let parts = match crate::ia_attach::model_parts(source).and_then(|p| write_3mf(&src_3mf, &stem, &p).map(|_| p)) {
         Ok(p) => p,
         Err(e) => {
             let _ = std::fs::remove_dir_all(dir(&id));
@@ -391,6 +628,7 @@ pub fn create(source: &Path, prompt: &str, engine: &str) -> Result<Conversation>
         updated_at: now(),
         version: 1,
         saved: None,
+        saved_versions: Default::default(),
         started: false,
         kind: String::new(),
         dest_dir: None,
@@ -405,12 +643,8 @@ pub fn create(source: &Path, prompt: &str, engine: &str) -> Result<Conversation>
 ///
 /// The output folder exists from the start — the watch hooks onto it — but
 /// stays empty: the first exported mesh becomes v1.
-pub fn create_blank(
-    prompt: &str,
-    engine: &str,
-    dest_dir: &Path,
-    bounds: Option<[f32; 3]>,
-) -> Result<Conversation> {
+pub fn create_blank(prompt: &str, engine: &str, dest_dir: &Path, bounds: Option<[f32; 3]>) -> Result<Conversation> {
+    check_engine(engine)?;
     let prompt = prompt.trim();
     if prompt.is_empty() {
         return Err(anyhow!(crate::t!("ia.new.need_prompt")));
@@ -436,6 +670,7 @@ pub fn create_blank(
         updated_at: now(),
         version: 0,
         saved: None,
+        saved_versions: Default::default(),
         started: false,
         kind: "create".into(),
         dest_dir: Some(dest_dir.to_string_lossy().to_string()),
@@ -471,14 +706,6 @@ fn write_tools(ws: &Path) -> Result<()> {
     std::fs::create_dir_all(ws.join(SKILL_DIR))?;
     std::fs::write(ws.join(SKILL_DIR).join("SKILL.md"), SKILL)?;
     Ok(())
-}
-
-/// The language Claude must answer in: the app's, named in English.
-fn reply_language() -> &'static str {
-    match crate::i18n::lang().as_str() {
-        "fr" => "French",
-        _ => "English",
-    }
 }
 
 /// What the original holds, for the instructions.
@@ -542,9 +769,21 @@ Snapmaker U1) that prints it. That is how a multicolor model stays one.
 - `tools/measure.py` — dimensions, volume, watertightness, part by part.
 - `trimesh`, `manifold3d` (booleans), `numpy`.";
 
+/// The models the user attaches (ia_attach.rs), in both kinds of
+/// conversation.
+const SOURCES_DOC: &str = "- `sources/` — 3D models the user attached (STL and 3MF files, each
+  converted to a 3MF of this workspace's layout: one object, one part per
+  head). Read them with `mf.read(\"sources/…\")`; **never modify them**. To
+  build on one, read its parts, change or combine them, and install the
+  result with `tools/export.py`, as usual. Each is centered on the plate:
+  the positions of the original file are not kept. STL has no unit:
+  millimeters are assumed; if a size looks wrong (under 1 mm or over 1 m),
+  ask.";
+
 /// The instructions left to Claude in the working folder.
 fn instructions(source_name: &str, source: &Summary) -> String {
-    let lang = reply_language();
+    // The language Claude must answer in: the app's, named in English.
+    let lang = crate::i18n::english_name();
     let parts = source.describe();
     format!(
         "# Modifying a part to print
@@ -573,6 +812,7 @@ before changing, and look again afterwards.
 - `chat.jsonl`, `attachments/` — this conversation as the app shows it, and
   the images the user attached. Read attachments when asked; never modify
   either.
+{SOURCES_DOC}
 
 {parts}
 {COMMON}
@@ -604,7 +844,8 @@ No Blender.
 
 /// The instructions of a conversation that starts from nothing.
 fn instructions_creation(bounds: Option<[f32; 3]>) -> String {
-    let lang = reply_language();
+    // The language Claude must answer in: the app's, named in English.
+    let lang = crate::i18n::english_name();
     let fmt = |v: f32| format!("{v:.0}");
     let envelope = match bounds {
         Some([x, y, z]) => format!(
@@ -644,6 +885,7 @@ shapes, main dimensions, colors, print orientation.
 - `chat.jsonl`, `attachments/` — this conversation as the app shows it, and
   the images the user attached (sketches, photos: look at them). Never modify
   either.
+{SOURCES_DOC}
 
 {COMMON}
 
@@ -691,6 +933,7 @@ pub fn tests_conversation() -> Conversation {
         updated_at: 0,
         version: 1,
         saved: None,
+        saved_versions: Default::default(),
         started: false,
         kind: String::new(),
         dest_dir: None,
@@ -703,18 +946,246 @@ pub fn tests_conversation() -> Conversation {
 mod tests {
     use super::*;
 
+    // ---------------------------------------------- Claude session files
+
+    const ID: &str = "0b7c3a52-9d1e-4f4a-8a51-3f0e2b6c9d10";
+
+    /// A fresh fake configuration root, with what Claude Code leaves for
+    /// session `ID`, for a neighbour whose id starts with it, and the shared
+    /// files that must never go.
+    fn fake_root(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("snapstudio-artifacts-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let proj = root.join("projects").join("-Users-me-ia-x-workspace");
+        let other = root.join("projects").join("-Users-me-elsewhere");
+        for d in [&proj, &other, &root.join("file-history").join(ID), &root.join("todos"), &root.join("debug")] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        let w = |p: PathBuf| std::fs::write(p, "x").unwrap();
+        w(proj.join(format!("{ID}.jsonl")));
+        w(proj.join(format!("old.orphaned-{ID}-9.jsonl")));
+        std::fs::create_dir_all(root.join("image-cache").join(ID)).unwrap();
+        std::fs::create_dir_all(proj.join(ID).join("subagents")).unwrap();
+        w(proj.join(ID).join("subagents").join("agent-1.jsonl"));
+        w(other.join(format!("{ID}.jsonl.superseded-1")));
+        w(root.join("file-history").join(ID).join("a.txt"));
+        w(root.join("todos").join(format!("{ID}-agent-{ID}.json")));
+        w(root.join("debug").join(format!("{ID}.txt")));
+        // Neighbours: a longer id, and shared files.
+        w(proj.join(format!("{ID}0.jsonl")));
+        w(proj.join(format!("x{ID}.jsonl")));
+        w(root.join("todos").join(format!("{ID}0-agent-1.json")));
+        w(root.join("history.jsonl"));
+        w(proj.join("memory.md"));
+        root
+    }
+
+    fn names(a: &Artifacts, root: &Path) -> Vec<String> {
+        let base = root.canonicalize().unwrap();
+        let mut v: Vec<String> = a.paths.iter().map(|p| p.strip_prefix(&base).unwrap().to_string_lossy().into_owned()).collect();
+        v.sort();
+        v
+    }
+
+    #[test]
+    fn session_artifacts_match_the_exact_id_only() {
+        let root = fake_root("exact");
+        let a = artifacts_in(&root, ID).unwrap();
+        let mut want = vec![
+            format!("debug/{ID}.txt"),
+            format!("file-history/{ID}"),
+            format!("image-cache/{ID}"),
+            format!("projects/-Users-me-elsewhere/{ID}.jsonl.superseded-1"),
+            format!("projects/-Users-me-ia-x-workspace/old.orphaned-{ID}-9.jsonl"),
+            format!("projects/-Users-me-ia-x-workspace/{ID}"),
+            format!("projects/-Users-me-ia-x-workspace/{ID}.jsonl"),
+            format!("todos/{ID}-agent-{ID}.json"),
+        ];
+        want.sort();
+        assert_eq!(names(&a, &root), want);
+        assert!(a.skipped.is_empty());
+
+        let (n, failed) = remove_artifacts(&a);
+        assert_eq!((n, failed.len()), (8, 0));
+        // Neighbours, shared files and project folders are all still there.
+        let proj = root.join("projects").join("-Users-me-ia-x-workspace");
+        for p in [
+            proj.join(format!("{ID}0.jsonl")),
+            proj.join(format!("x{ID}.jsonl")),
+            proj.join("memory.md"),
+            root.join("todos").join(format!("{ID}0-agent-1.json")),
+            root.join("history.jsonl"),
+        ] {
+            assert!(p.is_file(), "{} must stay", p.display());
+        }
+        assert!(root.join("projects").join("-Users-me-elsewhere").is_dir());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn session_artifacts_refuse_bad_ids() {
+        let root = fake_root("ids");
+        let dashes = "-".repeat(36);
+        for bad in [
+            "",
+            "..",
+            "*",
+            &ID[..35],
+            "../../../../../../etc/passwdxxxxxxxxx",
+            "0b7c3a52-9d1e-4f4a-8a51-3f0e2b6c9d1/",
+            &dashes,
+            "0b7c3a529d1e-4f4a-8a51-3f0e2b6c9d10-",
+            "0b7c3a52-9d1e-4f4a-8a51-3f0e2b6c9d1.",
+        ] {
+            assert!(artifacts_in(&root, bad).is_err(), "{bad:?} must be refused");
+        }
+        // A missing root is simply empty.
+        let none = artifacts_in(&root.join("absent"), ID).unwrap();
+        assert!(none.paths.is_empty() && none.skipped.is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_project_folder_named_like_the_id_is_never_listed() {
+        let root = fake_root("projdir");
+        // projects/<id>/ is a project folder: only what is inside may go.
+        let p = root.join("projects").join(ID);
+        std::fs::create_dir_all(&p).unwrap();
+        std::fs::write(p.join("keep.jsonl"), "x").unwrap();
+        let a = artifacts_in(&root, ID).unwrap();
+        let base = root.canonicalize().unwrap();
+        assert!(!a.paths.contains(&base.join("projects").join(ID)));
+        remove_artifacts(&a);
+        assert!(p.join("keep.jsonl").is_file());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn session_artifacts_never_follow_links() {
+        use std::os::unix::fs::symlink;
+        let root = fake_root("links");
+        let outside = std::env::temp_dir().join(format!("snapstudio-artifacts-outside-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&outside);
+        std::fs::create_dir_all(outside.join("proj")).unwrap();
+        std::fs::write(outside.join("victim.txt"), "keep").unwrap();
+        std::fs::write(outside.join("proj").join(format!("{ID}.jsonl")), "keep").unwrap();
+        let proj = root.join("projects").join("-Users-me-ia-x-workspace");
+        // A link named like the session, pointing out of the root.
+        symlink(outside.join("victim.txt"), root.join("debug").join(format!("{ID}.log"))).unwrap();
+        // A whole project folder that is a link out of the root.
+        symlink(outside.join("proj"), root.join("projects").join("-linked")).unwrap();
+        // A session folder replaced by a link.
+        std::fs::remove_dir_all(root.join("file-history").join(ID)).unwrap();
+        symlink(&outside, root.join("file-history").join(ID)).unwrap();
+        // A link inside a folder that will be deleted: removed, not followed.
+        symlink(outside.join("victim.txt"), proj.join(ID).join("link")).unwrap();
+
+        let a = artifacts_in(&root, ID).unwrap();
+        let listed = names(&a, &root);
+        assert!(!listed.iter().any(|n| n.contains("-linked") || n.ends_with(".log") || n.starts_with("file-history")), "{listed:?}");
+        assert_eq!(a.skipped.len(), 2, "{:?}", a.skipped);
+        remove_artifacts(&a);
+        assert_eq!(std::fs::read_to_string(outside.join("victim.txt")).unwrap(), "keep");
+        assert!(outside.join("proj").join(format!("{ID}.jsonl")).is_file());
+        assert!(!proj.join(ID).exists());
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&outside);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_projects_folder_is_skipped() {
+        use std::os::unix::fs::symlink;
+        let root = fake_root("projlink");
+        let outside = std::env::temp_dir().join(format!("snapstudio-artifacts-pl-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&outside);
+        std::fs::create_dir_all(outside.join("p")).unwrap();
+        std::fs::write(outside.join("p").join(format!("{ID}.jsonl")), "keep").unwrap();
+        std::fs::rename(root.join("projects"), root.join("projects.real")).unwrap();
+        symlink(&outside, root.join("projects")).unwrap();
+        let a = artifacts_in(&root, ID).unwrap();
+        assert!(!names(&a, &root).iter().any(|n| n.starts_with("projects")));
+        remove_artifacts(&a);
+        assert!(outside.join("p").join(format!("{ID}.jsonl")).is_file());
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&outside);
+    }
+
+    #[test]
+    fn claude_config_dir_comes_first() {
+        let home = PathBuf::from("/Users/me");
+        assert_eq!(claude_roots_from(None, Some(home.clone())), vec![home.join(".claude")]);
+        assert_eq!(claude_roots_from(Some("".into()), Some(home.clone())), vec![home.join(".claude")]);
+        assert_eq!(
+            claude_roots_from(Some("/conf/claude".into()), Some(home.clone())),
+            vec![PathBuf::from("/conf/claude"), home.join(".claude")]
+        );
+        // Relative: ignored. Same as the default: not twice.
+        assert_eq!(claude_roots_from(Some("rel".into()), Some(home.clone())), vec![home.join(".claude")]);
+        assert_eq!(claude_roots_from(Some("/Users/me/.claude".into()), Some(home.clone())), vec![home.join(".claude")]);
+    }
+
+    #[test]
+    fn session_file_slug() {
+        assert_eq!(project_slug(Path::new("/Users/me/.config/snap-studio/ia/x/workspace")), "-Users-me--config-snap-studio-ia-x-workspace");
+        assert!(session_file(ID).ends_with(format!("{ID}.jsonl")));
+    }
+
+    #[test]
+    fn a_duplicate_has_the_files_but_a_fresh_session() {
+        let tmp = std::env::temp_dir().join("snapstudio-ia-dup-test");
+        std::fs::create_dir_all(&tmp).unwrap();
+        let src = tmp.join("cube.3mf");
+        cube_3mf(&src);
+        let mut c = create(&src, "make it taller", "local").unwrap();
+        c.started = true;
+        c.saved = Some("/x/y.3mf".into());
+        save(&c).unwrap();
+        let ws = workspace(&c.id);
+        std::fs::write(crate::chat::log_path(&ws), "{}\n").unwrap();
+        std::fs::create_dir_all(crate::chat::attachments_dir(&ws)).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("/etc/hosts", ws.join("link")).unwrap();
+
+        let d = duplicate(&c.id).unwrap();
+        let dws = workspace(&d.id);
+        assert_ne!(d.id, c.id);
+        assert!(!d.started && d.saved.is_none() && d.prompt.is_empty());
+        assert_eq!(d.source, c.source);
+        assert!(dws.join("CLAUDE.md").is_file() && dws.join("out").join(CURRENT).is_file());
+        assert!(!crate::chat::log_path(&dws).exists());
+        assert!(!crate::chat::attachments_dir(&dws).exists());
+        assert!(std::fs::symlink_metadata(dws.join("link")).is_err());
+        assert_eq!(get(&d.id).unwrap().title, d.title);
+
+        let r = rename(&d.id, "  New   name ").unwrap();
+        assert_eq!(r.title, "New name");
+        assert_eq!(r.updated_at, d.updated_at, "renaming is not activity");
+        assert!(rename(&d.id, "   ").is_err());
+        assert!(duplicate("../x").is_err());
+        remove(&c.id).unwrap();
+        remove(&d.id).unwrap();
+    }
+
+    #[test]
+    fn names_session_rules() {
+        use Place::*;
+        assert!(names_session(ID, ID, Other));
+        assert!(names_session(&format!("{ID}.jsonl"), ID, Project));
+        assert!(!names_session(&format!("{ID}0.jsonl"), ID, Project));
+        assert!(!names_session(&format!("{ID}-agent-x.json"), ID, Other));
+        assert!(names_session(&format!("{ID}-agent-x.json"), ID, Todos));
+        assert!(names_session(&format!("x.orphaned-{ID}-1.jsonl"), ID, Project));
+        assert!(!names_session(&format!("x.orphaned-{ID}-1.jsonl"), ID, Other));
+        assert!(!names_session(&format!("x.orphaned-{ID}0-1.jsonl"), ID, Project));
+        assert!(!names_session(&format!("x.orphaned-a{ID}-1.jsonl"), ID, Project));
+        assert!(!names_session("history.jsonl", ID, Other));
+    }
+
     fn cube_3mf(dst: &Path) {
         let tris = crate::stl::tests_cube();
-        crate::write3mf::write_scene(
-            dst,
-            &[SceneObject {
-                name: "cube".into(),
-                tris,
-                transform: Mat::IDENTITY,
-                extruder: None,
-            }],
-        )
-        .unwrap();
+        crate::write3mf::write_scene(dst, &[SceneObject { name: "cube".into(), tris, transform: Mat::IDENTITY, extruder: None }]).unwrap();
     }
 
     /// Claude installs an object: what `tools/export.py` does.
@@ -754,6 +1225,29 @@ mod tests {
         let _ = std::fs::remove_file(&src);
     }
 
+    /// An STL dropped in the creation sheet with "Start from this model"
+    /// becomes the conversation's original, as a one-part 3MF.
+    #[test]
+    fn a_conversation_starts_from_an_stl() {
+        let tmp = std::env::temp_dir().join("snapstudio-ia-test");
+        std::fs::create_dir_all(&tmp).unwrap();
+        let src = tmp.join("bracket.stl");
+        crate::stl::write(&src, &crate::stl::tests_cube()).unwrap();
+        let c = create(&src, "", "local").unwrap();
+        let ws = workspace(&c.id);
+        for f in ["source.3mf", "out/current.3mf", "versions/v1.3mf"] {
+            assert!(ws.join(f).is_file(), "{f} should exist");
+        }
+        let parts = parts_of_3mf(&ws.join("source.3mf")).unwrap();
+        assert_eq!((parts.len(), parts[0].tris.len(), parts[0].extruder), (1, 12, 1));
+        assert_eq!(c.title, "bracket");
+        assert_eq!(c.source_name, "bracket.stl");
+        let md = std::fs::read_to_string(ws.join("CLAUDE.md")).unwrap();
+        assert!(md.contains("`sources/`"), "the instructions tell about attached models");
+        remove(&c.id).unwrap();
+        let _ = std::fs::remove_file(&src);
+    }
+
     /// A two-color original keeps its parts, colors and heads all the way.
     #[test]
     fn a_multicolor_original_keeps_its_parts() {
@@ -761,7 +1255,13 @@ mod tests {
         std::fs::create_dir_all(&tmp).unwrap();
         let src = tmp.join("deux-couleurs.3mf");
         let paint = |c: [u8; 3]| -> Vec<crate::mesh::Tri> {
-            crate::stl::tests_cube().into_iter().map(|mut t| { t.c = c; t }).collect()
+            crate::stl::tests_cube()
+                .into_iter()
+                .map(|mut t| {
+                    t.c = c;
+                    t
+                })
+                .collect()
         };
         let parts = [
             Part { name: "body".into(), tris: paint([240, 240, 240]), extruder: 1, paint: Vec::new() },
@@ -1019,8 +1519,7 @@ body.export("body.stl"); eye.export("eye.stl")
         std::fs::create_dir_all(&dest).unwrap();
         assert!(create_blank("  ", "local", &dest, None).is_err(), "description required");
 
-        let c = create_blank("Wall hook for headphones", "local", &dest, Some([270.0, 270.0, 270.0]))
-            .unwrap();
+        let c = create_blank("Wall hook for headphones", "local", &dest, Some([270.0, 270.0, 270.0])).unwrap();
         let ws = workspace(&c.id);
         assert!(c.is_creation());
         assert_eq!(c.version, 0);
@@ -1141,13 +1640,7 @@ mod essai_reel {
         let got = read_mesh(&ws.join(SOURCE)).unwrap();
         let orig = mesh_of_3mf(&src).unwrap();
         let parts = parts_of_3mf(&ws.join(SOURCE)).unwrap();
-        println!(
-            "{} : {} triangles in {} part(s), encombrement {:?} mm",
-            c.source_name,
-            got.tris.len(),
-            parts.len(),
-            got.size()
-        );
+        println!("{} : {} triangles in {} part(s), encombrement {:?} mm", c.source_name, got.tris.len(), parts.len(), got.size());
         assert_eq!(got.tris.len(), orig.tris.len(), "no triangle lost");
         for k in 0..3 {
             assert!((got.min[k] - orig.min[k]).abs() < 1e-3);
@@ -1163,8 +1656,7 @@ mod essai_reel {
                 let from = previews_dir(&c.id).join(format!("{name}.png"));
                 let bytes = std::fs::metadata(&from).unwrap().len();
                 assert!(bytes > 2000, "{name}.png is {bytes} bytes");
-                std::fs::copy(&from, std::path::Path::new(&dest).join(format!("{name}.png")))
-                    .unwrap();
+                std::fs::copy(&from, std::path::Path::new(&dest).join(format!("{name}.png"))).unwrap();
                 println!("preview {name}: {bytes} bytes");
             }
         }
@@ -1181,7 +1673,6 @@ mod essai_reel {
         remove(&c.id).unwrap();
     }
 }
-
 
 // ------------------------------------------------------------ sandbox
 
@@ -1226,11 +1717,7 @@ pub fn dockerfile() -> PathBuf {
 /// deliberately tilted by about twenty degrees: straight from above, all top
 /// faces look the same and relief vanishes — a 0.5 mm engraving rendered a
 /// uniform disc.
-const VIEWS: [(&str, [f32; 3]); 3] = [
-    ("front", [0.0, -1.0, 0.12]),
-    (THREE_QUARTER, [0.62, -1.0, 0.68]),
-    ("top", [0.0, -0.36, 1.0]),
-];
+const VIEWS: [(&str, [f32; 3]); 3] = [("front", [0.0, -1.0, 0.12]), (THREE_QUARTER, [0.62, -1.0, 0.68]), ("top", [0.0, -0.36, 1.0])];
 /// The view that also serves as the thumbnail of a created object.
 const THREE_QUARTER: &str = "three-quarter";
 
@@ -1280,8 +1767,7 @@ pub fn write_previews(id: &str) -> Result<()> {
     for (name, eye) in VIEWS {
         let img = flatten(crate::render::render_from(&mesh, 720, eye));
         let mut png = Vec::new();
-        image::DynamicImage::ImageRgba8(img)
-            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)?;
+        image::DynamicImage::ImageRgba8(img).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)?;
         std::fs::write(dir.join(format!("{name}.png")), png)?;
     }
     Ok(())
@@ -1302,9 +1788,7 @@ pub fn preview_png(id: &str) -> Result<Vec<u8>> {
 /// An image the user attached to the conversation, with its MIME type. Only a
 /// plain file name of `attachments/` is accepted: no path, no way out.
 pub fn attachment(id: &str, name: &str) -> Result<(Vec<u8>, &'static str)> {
-    let plain = !name.is_empty()
-        && !name.starts_with('.')
-        && name.chars().all(|c| c.is_alphanumeric() || matches!(c, '.' | '-' | '_'));
+    let plain = !name.is_empty() && !name.starts_with('.') && name.chars().all(|c| c.is_alphanumeric() || matches!(c, '.' | '-' | '_'));
     if !valid_id(id) || !plain {
         return Err(anyhow!("unknown attachment"));
     }
@@ -1402,25 +1886,26 @@ pub fn save_to_files(id: &str) -> Result<String> {
     if !current(id).is_file() {
         return Err(anyhow!(crate::t!("err.nothing_to_save")));
     }
+    // This version is already in your files: no second copy of it.
+    if let Some(p) = c.saved_versions.get(&c.version) {
+        if Path::new(p).is_file() {
+            return Ok(p.clone());
+        }
+    }
     let (home, stem) = if c.is_creation() {
         (c.dest_dir.clone().map(PathBuf::from), slug(&c.title))
     } else {
         let src = PathBuf::from(&c.source);
-        let stem = src
-            .file_stem()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_else(|| "object".into());
+        let stem = src.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "object".into());
         (src.parent().map(PathBuf::from), stem)
     };
-    let dir = home
-        .filter(|d| d.is_dir())
-        .or_else(dirs::download_dir)
-        .ok_or_else(|| anyhow!(crate::t!("err.nowhere_to_write")))?;
+    let dir = home.filter(|d| d.is_dir()).or_else(dirs::download_dir).ok_or_else(|| anyhow!(crate::t!("err.nowhere_to_write")))?;
     let dst = free_name(&dir, &stem);
     std::fs::copy(current(id), &dst)?;
 
     let mut c = c;
     c.saved = Some(dst.to_string_lossy().to_string());
+    c.saved_versions.insert(c.version, dst.to_string_lossy().to_string());
     c.updated_at = now();
     save(&c)?;
     Ok(dst.to_string_lossy().to_string())
@@ -1537,7 +2022,6 @@ fn next_token() -> u64 {
     N.fetch_add(1, Ordering::Relaxed)
 }
 
-
 fn watchers() -> &'static Mutex<HashMap<String, Watcher>> {
     static W: OnceLock<Mutex<HashMap<String, Watcher>>> = OnceLock::new();
     W.get_or_init(|| Mutex::new(HashMap::new()))
@@ -1565,16 +2049,8 @@ pub struct CurrentDto {
 pub fn current_dto(id: &str) -> Result<CurrentDto> {
     let p = current(id);
     let m = std::fs::metadata(&p)?;
-    let secs = m
-        .modified()
-        .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    Ok(CurrentDto {
-        path: p.to_string_lossy().to_string(),
-        stamp: format!("{secs}-{}", m.len()),
-    })
+    let secs = m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis()).unwrap_or(0);
+    Ok(CurrentDto { path: p.to_string_lossy().to_string(), stamp: format!("{secs}-{}", m.len()) })
 }
 
 /// Reads the current state and takes its measurements.
@@ -1597,14 +2073,7 @@ pub fn watch_start(app: tauri::AppHandle, id: &str) -> Result<()> {
     let stop = Arc::new(AtomicBool::new(false));
     let last = Arc::new(Mutex::new(hash_file(&current(id)).unwrap_or(0)));
     let token = next_token();
-    watchers().lock().unwrap().insert(
-        id.to_string(),
-        Watcher {
-            stop: stop.clone(),
-            last: last.clone(),
-            token,
-        },
-    );
+    watchers().lock().unwrap().insert(id.to_string(), Watcher { stop: stop.clone(), last: last.clone(), token });
 
     let id = id.to_string();
     std::thread::spawn(move || {
@@ -1651,13 +2120,7 @@ fn consider(id: &str, last: &Mutex<u64>) -> Change {
     }
 }
 
-fn watch_loop(
-    app: &tauri::AppHandle,
-    id: &str,
-    out: &Path,
-    stop: &AtomicBool,
-    last: &Mutex<u64>,
-) {
+fn watch_loop(app: &tauri::AppHandle, id: &str, out: &Path, stop: &AtomicBool, last: &Mutex<u64>) {
     {
         use notify::{RecursiveMode, Watcher as _};
         let (tx, rx) = std::sync::mpsc::channel();
@@ -1700,14 +2163,7 @@ fn watch_loop(
                     continue;
                 }
             };
-            let _ = app.emit(
-                "ia-mesh",
-                MeshEvent {
-                    id: id.to_string(),
-                    version,
-                    stats,
-                },
-            );
+            let _ = app.emit("ia-mesh", MeshEvent { id: id.to_string(), version, stats });
         }
     }
 }
@@ -1748,11 +2204,7 @@ mod watch_tests {
         let delay = t0.elapsed();
         assert!(got.is_ok(), "no event received within 5 s");
         println!("event received in {} ms", delay.as_millis());
-        assert!(
-            delay < Duration::from_secs(2),
-            "trop lent : {} ms",
-            delay.as_millis()
-        );
+        assert!(delay < Duration::from_secs(2), "trop lent : {} ms", delay.as_millis());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
@@ -1788,12 +2240,7 @@ mod sortie_tests {
     fn cube_3mf(dst: &Path) {
         crate::write3mf::write_scene(
             dst,
-            &[SceneObject {
-                name: "cube".into(),
-                tris: crate::stl::tests_cube(),
-                transform: Mat::IDENTITY,
-                extruder: None,
-            }],
+            &[SceneObject { name: "cube".into(), tris: crate::stl::tests_cube(), transform: Mat::IDENTITY, extruder: None }],
         )
         .unwrap();
     }
@@ -1808,18 +2255,29 @@ mod sortie_tests {
         let c = create(&src, "", "local").unwrap();
 
         let first = save_to_files(&c.id).unwrap();
-        assert_eq!(
-            Path::new(&first).file_name().unwrap(),
-            "support-ai.3mf",
-            "the object goes back next to its own"
-        );
+        assert_eq!(Path::new(&first).file_name().unwrap(), "support-ai.3mf", "the object goes back next to its own");
         assert_eq!(get(&c.id).unwrap().saved.as_deref(), Some(first.as_str()));
         assert_eq!(mesh_of_3mf(Path::new(&first)).unwrap().tris.len(), 12);
 
-        // A second save must not overwrite the first.
+        // The same version again: the file already written, no copy.
+        assert_eq!(save_to_files(&c.id).unwrap(), first);
+        assert_eq!(std::fs::read_dir(&tmp).unwrap().count(), 2, "source and one copy");
+
+        // Another version must not overwrite the first.
+        let mut c2 = get(&c.id).unwrap();
+        c2.version = 2;
+        save(&c2).unwrap();
         let second = save_to_files(&c.id).unwrap();
         assert_eq!(Path::new(&second).file_name().unwrap(), "support-ai-2.3mf");
         assert!(Path::new(&first).is_file(), "the first is still there");
+        let saved = get(&c.id).unwrap().saved_versions;
+        assert_eq!(saved.get(&1), Some(&first));
+        assert_eq!(saved.get(&2), Some(&second));
+
+        // The file of a version removed from the Finder: written again.
+        std::fs::remove_file(&second).unwrap();
+        let again = save_to_files(&c.id).unwrap();
+        assert!(Path::new(&again).is_file());
 
         remove(&c.id).unwrap();
         let _ = std::fs::remove_dir_all(&tmp);

@@ -106,16 +106,12 @@ pub fn convex_hull(p: &[V3]) -> Result<Hull> {
         b = (0..p.len()).max_by(|&i, &j| norm(sub(p[i], p[a])).total_cmp(&norm(sub(p[j], p[a])))).unwrap();
     }
     let ab = sub(p[b], p[a]);
-    let c = (0..p.len())
-        .max_by(|&i, &j| norm(cross(ab, sub(p[i], p[a]))).total_cmp(&norm(cross(ab, sub(p[j], p[a])))))
-        .unwrap();
+    let c = (0..p.len()).max_by(|&i, &j| norm(cross(ab, sub(p[i], p[a]))).total_cmp(&norm(cross(ab, sub(p[j], p[a]))))).unwrap();
     let nrm = unit(cross(ab, sub(p[c], p[a])));
     if norm(cross(ab, sub(p[c], p[a]))) < eps * scale {
         return Err(anyhow!("collinear points"));
     }
-    let d = (0..p.len())
-        .max_by(|&i, &j| dot(nrm, sub(p[i], p[a])).abs().total_cmp(&dot(nrm, sub(p[j], p[a])).abs()))
-        .unwrap();
+    let d = (0..p.len()).max_by(|&i, &j| dot(nrm, sub(p[i], p[a])).abs().total_cmp(&dot(nrm, sub(p[j], p[a])).abs())).unwrap();
     if dot(nrm, sub(p[d], p[a])).abs() < eps {
         return Err(anyhow!("flat object"));
     }
@@ -154,11 +150,7 @@ pub fn convex_hull(p: &[V3]) -> Result<Hull> {
             continue;
         }
         // Farthest point from the face.
-        let far = *faces[fi]
-            .outside
-            .iter()
-            .max_by(|&&i, &&j| faces[fi].dist(p[i]).total_cmp(&faces[fi].dist(p[j])))
-            .unwrap();
+        let far = *faces[fi].outside.iter().max_by(|&&i, &&j| faces[fi].dist(p[i]).total_cmp(&faces[fi].dist(p[j]))).unwrap();
         let q = p[far];
         // Faces visible from this point, by adjacency.
         let mut visible = vec![fi];
@@ -356,10 +348,7 @@ fn cost(mesh: &Facets, hull: &Facets, up: V3, ascent: f64) -> f64 {
 ///
 /// `threshold_deg`: the profile's overhang angle (`support_threshold_angle`).
 pub fn best_up(tris: &[Tri], threshold_deg: f64) -> Result<V3> {
-    let mesh_tris: Vec<[V3; 3]> = tris
-        .iter()
-        .map(|t| t.v.map(|v| [v[0] as f64, v[1] as f64, v[2] as f64]))
-        .collect();
+    let mesh_tris: Vec<[V3; 3]> = tris.iter().map(|t| t.v.map(|v| [v[0] as f64, v[1] as f64, v[2] as f64])).collect();
     let mesh = Facets::from_tris(&mesh_tris);
     let hull = convex_hull(&unique_points(tris))?;
     let hp: Vec<V3> = hull.points.iter().map(|v| [v[0] as f64, v[1] as f64, v[2] as f64]).collect();
@@ -371,12 +360,14 @@ pub fn best_up(tris: &[Tri], threshold_deg: f64) -> Result<V3> {
     downs.extend(top_directions(&mesh, 10));
     downs.extend(top_directions(&hull_f, 14));
     let s = std::f64::consts::FRAC_1_SQRT_2;
-    downs.extend([
+    #[rustfmt::skip]
+    let fixed: [V3; 18] = [
         [0.0, 0.0, -1.0], [s, 0.0, -s], [0.0, s, -s], [-s, 0.0, -s], [0.0, -s, -s],
         [1.0, 0.0, 0.0], [s, s, 0.0], [0.0, 1.0, 0.0], [-s, s, 0.0],
         [-1.0, 0.0, 0.0], [-s, -s, 0.0], [0.0, -1.0, 0.0], [s, -s, 0.0],
         [s, 0.0, s], [0.0, s, s], [-s, 0.0, s], [0.0, -s, s], [0.0, 0.0, 1.0],
-    ]);
+    ];
+    downs.extend(fixed);
     let mut uniq: Vec<V3> = Vec::new();
     for d in downs {
         if norm(d) < 1e-9 || uniq.iter().any(|u| norm(sub(*u, d)) < 1e-7) {

@@ -47,6 +47,21 @@ pub struct Seg {
     pub travel: bool,
     /// Extrusion width in hundredths of a mm (`;WIDTH:`), 0 if unknown.
     pub width: u8,
+    /// Extrusion height (layer or sub-layer) in steps of 0.005 mm
+    /// (`;HEIGHT:`, else the Z step), 0 if unknown.
+    pub height: u8,
+}
+
+/// The step of `Seg::height`, mm: fine enough for 0.04 mm sub-layers.
+pub const HEIGHT_STEP: f32 = 0.005;
+
+/// A height in mm as `Seg::height` keeps it.
+fn height_steps(h: f32) -> u8 {
+    if h > 0.0 {
+        (h / HEIGHT_STEP).round().clamp(1.0, 255.0) as u8
+    } else {
+        0
+    }
 }
 
 #[derive(Default, Clone, serde::Serialize)]
@@ -63,6 +78,10 @@ pub struct GMeta {
     pub per_tool_g: Vec<f32>,
     pub cost: Option<f32>,
     pub layer_height: Option<f32>,
+    /// The prime tower's front-left corner (`wipe_tower_x` / `wipe_tower_y`,
+    /// the first plate's) and its turn in degrees (`wipe_tower_rotation_angle`).
+    pub tower_at: [Option<f32>; 2],
+    pub tower_angle: Option<f32>,
     pub total_layers: Option<u32>,
     pub generator: Option<String>,
     /// Color of each filament (`#rrggbb`), empty if the slicer does not write it.
@@ -108,9 +127,7 @@ fn num_after(line: &str, key: u8) -> Option<f32> {
         }
         if c == key && (i == 0 || bytes[i - 1] == b' ') {
             let rest = &line[i + 1..];
-            let end = rest
-                .find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-' || c == '+' || c == 'e'))
-                .unwrap_or(rest.len());
+            let end = rest.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-' || c == '+' || c == 'e')).unwrap_or(rest.len());
             return rest[..end].parse().ok();
         }
         i += 1;
@@ -129,10 +146,11 @@ fn hex_list(v: &str) -> Vec<String> {
         .map(|s| {
             let s = s.trim().trim_matches('"');
             let hex = s.strip_prefix('#').unwrap_or("");
-            if hex.len() >= 6 && hex[..6].chars().all(|c| c.is_ascii_hexdigit()) {
-                format!("#{}", hex[..6].to_ascii_lowercase())
-            } else {
-                String::new()
+            // `get`, not a byte slice: a non-ASCII character at the cut
+            // (a comment of the slicer's) must not end the parse.
+            match hex.get(..6) {
+                Some(h) if h.chars().all(|c| c.is_ascii_hexdigit()) => format!("#{}", h.to_ascii_lowercase()),
+                _ => String::new(),
             }
         })
         .collect()
@@ -179,7 +197,8 @@ fn parse_duration(s: &str) -> Option<u32> {
                 _ => 0,
             };
             if mult > 0 {
-                total += v * mult;
+                // Saturating: a nonsense "99999999d" must not overflow.
+                total = total.saturating_add(v.saturating_mul(mult));
                 any = true;
             }
             num.clear();
@@ -202,6 +221,10 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
     let mut feature: u8 = 0;
     let mut tool: u8 = 0;
     let mut width: u8 = 0;
+    // `;HEIGHT:` as written, and the step between the `;Z:` of two layers
+    // when the slicer does not write it.
+    let mut height: u8 = 0;
+    let (mut z_step, mut layer_z) = (0u8, None::<f32>);
     let mut seen_layer_marker = false;
     let mut last_z = f32::MIN;
     let mut truncated = false;
@@ -211,11 +234,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
     let mut times = RawTimes::default();
     let mut clock = 0f32;
     let mut tools_used = [false; 16];
-    let list = |v: &str| -> Vec<f32> {
-        v.split(|c| c == ',' || c == ';')
-            .filter_map(|x| x.trim().parse::<f32>().ok())
-            .collect()
-    };
+    let list = |v: &str| -> Vec<f32> { v.split(|c| c == ',' || c == ';').filter_map(|x| x.trim().parse::<f32>().ok()).collect() };
 
     loop {
         line.clear();
@@ -238,6 +257,18 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
             } else if rl.starts_with("width:") {
                 // Orca, PrusaSlicer: `;WIDTH:0.42`, width of the extrusions that follow.
                 width = r[6..].trim().parse::<f32>().map(|w| (w * 100.0).round().clamp(0.0, 255.0) as u8).unwrap_or(0);
+            } else if rl.starts_with("height:") {
+                // Orca, PrusaSlicer: `;HEIGHT:0.08`, height of the extrusions
+                // that follow (a sub-layer's own, with subdivided mixing).
+                height = r[7..].trim().parse::<f32>().map(height_steps).unwrap_or(0);
+            } else if rl.starts_with("z:") {
+                // `;Z:3.40` at each layer: the step from the previous one.
+                if let Ok(v) = r[2..].trim().parse::<f32>() {
+                    if let Some(prev) = layer_z.filter(|p| v > *p) {
+                        z_step = height_steps(v - prev);
+                    }
+                    layer_z = Some(v);
+                }
             } else if rl == "layer_change" {
                 layer = layer.saturating_add(1);
                 seen_layer_marker = true;
@@ -247,36 +278,32 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
                     layer = n.max(0) as u16;
                     seen_layer_marker = true;
                 }
-            } else if let Some(v) = comment_value(l, "printer_model")
-                .or_else(|| comment_value(l, "Printer"))
-            {
+            } else if let Some(v) = comment_value(l, "printer_model").or_else(|| comment_value(l, "Printer")) {
                 meta.printer.get_or_insert_with(|| v.to_string());
             } else if let Some(v) = comment_value(l, "Profile").or_else(|| comment_value(l, "print_settings_id")) {
                 meta.profile.get_or_insert_with(|| v.to_string());
             } else if let Some(v) = comment_value(l, "filament_type") {
                 if meta.filaments.is_empty() {
-                    meta.filaments = v
-                        .split(|c| c == ';' || c == ',')
-                        .map(|s| s.trim().to_string())
-                        .filter(|s| !s.is_empty())
-                        .collect();
+                    meta.filaments = v.split(|c| c == ';' || c == ',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                 }
-            } else if let Some(v) = comment_value(l, "total layer number")
-                .or_else(|| comment_value(l, "LAYER_COUNT"))
-            {
+            } else if let Some(v) = comment_value(l, "total layer number").or_else(|| comment_value(l, "LAYER_COUNT")) {
                 meta.total_layers = v.parse().ok();
             } else if let Some(v) = comment_value(l, "layer_height") {
                 meta.layer_height = v.parse().ok();
+            } else if let Some(v) = comment_value(l, "wipe_tower_rotation_angle") {
+                meta.tower_angle = v.parse().ok();
+            } else if let Some(v) = comment_value(l, "wipe_tower_x") {
+                meta.tower_at[0] = v.split(',').next().and_then(|x| x.trim().parse().ok());
+            } else if let Some(v) = comment_value(l, "wipe_tower_y") {
+                meta.tower_at[1] = v.split(',').next().and_then(|y| y.trim().parse().ok());
             } else if let Some(v) = comment_value(l, "estimated first layer printing time (normal mode)") {
                 meta.first_layer_s = meta.first_layer_s.or_else(|| parse_duration(v));
             } else if let Some(v) = comment_value(l, "model printing time") {
                 // Orca: `; model printing time: 1h 2m; total estimated time: 1h 10m`.
                 // The total (preheat included) is the useful value; never add up the two
                 // durations of the line.
-                let total = v
-                    .split(';')
-                    .find_map(|part| comment_value(part, "total estimated time"))
-                    .unwrap_or(v.split(';').next().unwrap_or(v));
+                let total =
+                    v.split(';').find_map(|part| comment_value(part, "total estimated time")).unwrap_or(v.split(';').next().unwrap_or(v));
                 if let Some(t) = parse_duration(total) {
                     meta.print_time_s = Some(t);
                 }
@@ -302,9 +329,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
                     let sum: f32 = list(v).iter().sum();
                     meta.cost = (sum > 0.0).then_some(sum);
                 }
-            } else if let Some(v) = comment_value(l, "total filament weight [g]")
-                .or_else(|| comment_value(l, "total filament used [g]"))
-            {
+            } else if let Some(v) = comment_value(l, "total filament weight [g]").or_else(|| comment_value(l, "total filament used [g]")) {
                 meta.filament_g = v.split(',').next().and_then(|s| s.trim().parse().ok()).or(meta.filament_g);
             } else if let Some(v) = comment_value(l, "filament_colour") {
                 meta.colors = hex_list(v);
@@ -333,12 +358,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
         if up != b'G' && up != b'M' {
             continue;
         }
-        let code: u32 = match l[1..]
-            .split(|c: char| !c.is_ascii_digit())
-            .next()
-            .unwrap_or("")
-            .parse()
-        {
+        let code: u32 = match l[1..].split(|c: char| !c.is_ascii_digit()).next().unwrap_or("").parse() {
             Ok(c) => c,
             Err(_) => continue,
         };
@@ -435,6 +455,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
                     tool,
                     travel: de <= 0.0,
                     width,
+                    height: if height > 0 { height } else { z_step },
                 });
             }
             _ => {}
@@ -478,15 +499,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
     }
 
     times.tools = (0..16u8).filter(|t| tools_used[*t as usize]).collect();
-    Ok(GcodeData {
-        segs,
-        layers,
-        min,
-        max,
-        meta,
-        truncated,
-        times,
-    })
+    Ok(GcodeData { segs, layers, min, max, meta, truncated, times })
 }
 
 /// Time of a path feature in the preview.
@@ -518,6 +531,13 @@ pub struct SliceStats {
     pub tools: Vec<u8>,
     /// True when no total time was found: everything is computed.
     pub estimated_only: bool,
+    /// Material of each G-code tool (`filament_type`), as sliced.
+    pub filament_types: Vec<String>,
+    /// Color of each G-code tool (`#rrggbb`, empty if unknown), as sliced.
+    pub filament_colors: Vec<String>,
+    /// The prime tower as printed, if there is one: Prepare shows its real
+    /// size once sliced.
+    pub tower: Option<TowerBox>,
 }
 
 pub fn stats(d: &GcodeData) -> SliceStats {
@@ -529,13 +549,8 @@ pub fn stats(d: &GcodeData) -> SliceStats {
         Some(total) if raw_total > 0.0 => total as f32 / raw_total,
         _ => 1.0,
     };
-    let mut features: Vec<FeatureTime> = t
-        .feature
-        .iter()
-        .enumerate()
-        .filter(|(_, s)| **s > 0.0)
-        .map(|(i, s)| FeatureTime { feature: i as u8, seconds: s * k })
-        .collect();
+    let mut features: Vec<FeatureTime> =
+        t.feature.iter().enumerate().filter(|(_, s)| **s > 0.0).map(|(i, s)| FeatureTime { feature: i as u8, seconds: s * k }).collect();
     features.sort_by(|a, b| b.seconds.total_cmp(&a.seconds));
     SliceStats {
         print_time_s: d.meta.print_time_s.or_else(|| (raw_total > 0.0).then_some(raw_total as u32)),
@@ -551,7 +566,47 @@ pub fn stats(d: &GcodeData) -> SliceStats {
         layer_end_s: t.layer_end.iter().map(|s| s * k).collect(),
         tools: t.tools.clone(),
         estimated_only: d.meta.print_time_s.is_none(),
+        filament_types: d.meta.filaments.clone(),
+        filament_colors: d.meta.colors.clone(),
+        tower: tower_box(d, d.meta.tower_at.map(|v| v.unwrap_or(0.0)), d.meta.tower_angle.unwrap_or(0.0)),
     }
+}
+
+/// The prime tower as printed, in its own frame (turned with it): the
+/// corner it was placed at (`x`, `y`, the engine's `wipe_tower_x` /
+/// `wipe_tower_y`), then the box its extrusions fill — brim and ribs
+/// included — from (`x0`, `y0`) relative to that corner, `w` × `d`, and its
+/// height `h`, in mm.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+pub struct TowerBox {
+    pub x: f32,
+    pub y: f32,
+    pub x0: f32,
+    pub y0: f32,
+    pub w: f32,
+    pub d: f32,
+    pub h: f32,
+}
+
+/// The prime tower's extrusions (`;TYPE:Prime tower`), seen in the tower's
+/// own frame: the engine turns the tower by `angle` degrees around its
+/// front-left corner `at`, so the moves are turned back around it before
+/// taking their extent. None without a tower.
+pub fn tower_box(d: &GcodeData, at: [f32; 2], angle: f32) -> Option<TowerBox> {
+    let (s, c) = (-angle.to_radians()).sin_cos();
+    let (mut x0, mut y0, mut x1, mut y1, mut h) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN, 0f32);
+    for seg in d.segs.iter().filter(|s| s.feature == 10 && !s.travel) {
+        for p in [&seg.a, &seg.b] {
+            let (dx, dy) = (p[0] - at[0], p[1] - at[1]);
+            let (x, y) = (dx * c - dy * s, dx * s + dy * c);
+            x0 = x0.min(x);
+            y0 = y0.min(y);
+            x1 = x1.max(x);
+            y1 = y1.max(y);
+            h = h.max(p[2]);
+        }
+    }
+    (x0 <= x1).then(|| TowerBox { x: at[0], y: at[1], x0, y0, w: x1 - x0, d: y1 - y0, h })
 }
 
 /// Serialization for the viewer.
@@ -560,7 +615,8 @@ pub fn stats(d: &GcodeData) -> SliceStats {
 /// `"3MFG"` | version u8 | flags u8 (bit 0: truncated) | reserved u8×2 |
 /// segment count u32 | layer count u32 | min f32×3 | max f32×3 |
 /// positions (6 f32 per segment) | attributes (layer u16, feature u8,
-/// tool on the 4 high bits + travel on bit 0).
+/// tool on the 4 high bits + travel on bit 0) | widths (u8, 0.01 mm, 0
+/// unknown) | heights (u8, `HEIGHT_STEP`, 0 unknown; version 3) | colors.
 ///
 /// Segments are sorted by layer: the viewer shows layers up to a given rank
 /// with a single draw call.
@@ -569,10 +625,11 @@ pub fn encode(data: &GcodeData) -> Vec<u8> {
     order.sort_by_key(|s| (s.layer, s.travel));
     let n = order.len();
 
-    let mut out = Vec::with_capacity(40 + n * 28);
+    let mut out = Vec::with_capacity(40 + n * 30 + 65);
     out.extend_from_slice(b"3MFG");
-    // Version 2: width per segment and filament colors after it.
-    out.push(2);
+    // Version 2: width per segment and filament colors after it; version 3:
+    // the height per segment between them.
+    out.push(3);
     out.push(if data.truncated { 1 } else { 0 });
     out.extend_from_slice(&[0, 0]);
     out.extend_from_slice(&(n as u32).to_le_bytes());
@@ -592,6 +649,11 @@ pub fn encode(data: &GcodeData) -> Vec<u8> {
     }
     for s in &order {
         out.push(s.width);
+    }
+    // A height not written nor stepped: the profile's layer height.
+    let fallback = data.meta.layer_height.map(height_steps).unwrap_or(0);
+    for s in &order {
+        out.push(if s.height > 0 { s.height } else { fallback });
     }
     // Colors: their count, then per head a flag (1 known, 0 unknown) and the
     // three RGB components.
@@ -748,10 +810,11 @@ G1 X30 Y30 F9000
         let n = u32::from_le_bytes(b[8..12].try_into().unwrap()) as usize;
         assert_eq!(n, d.segs.len());
         assert_eq!(u32::from_le_bytes(b[12..16].try_into().unwrap()), 3, "layers 0 to 2");
-        // 40-byte header, positions, attributes, widths, then the colors (their
-        // count, 4 bytes each).
+        // 40-byte header, positions, attributes, widths, heights, then the
+        // colors (their count, 4 bytes each).
         let colors = d.meta.colors.len();
-        assert_eq!(b.len(), 40 + n * 24 + n * 4 + n + 1 + colors * 4);
+        assert_eq!(b[4], 3, "version 3");
+        assert_eq!(b.len(), 40 + n * 24 + n * 4 + n + n + 1 + colors * 4);
         // Layers are increasing in the attribute buffer.
         let base = 40 + n * 24;
         let mut prev = 0u16;
@@ -785,9 +848,7 @@ G1 X30 Y30 F9000
         println!("breakdown by feature: {hist:?}");
         std::fs::write(format!("{out}.bin"), encode(&d)).unwrap();
         let img = crate::render::render_paths(&d.segs, d.min, d.max, 512);
-        image::DynamicImage::ImageRgba8(img)
-            .save(format!("{out}.png"))
-            .unwrap();
+        image::DynamicImage::ImageRgba8(img).save(format!("{out}.png")).unwrap();
     }
 
     #[test]
@@ -799,7 +860,7 @@ G1 X30 Y30 F9000
         let w: Vec<u8> = d.segs.iter().filter(|s| !s.travel).map(|s| s.width).collect();
         assert_eq!(w, vec![45, 62]);
         let bin = encode(&d);
-        assert_eq!(bin[4], 2, "version 2");
+        assert_eq!(bin[4], 3, "version 3");
         // End of the buffer: 3 colors × 4 bytes, preceded by their count.
         let tail = &bin[bin.len() - 13..];
         assert_eq!(tail[0], 3);
@@ -807,9 +868,80 @@ G1 X30 Y30 F9000
         assert_eq!(&tail[9..13], &[0, 0, 0, 0], "unknown color");
     }
 
+    /// Heights: `;HEIGHT:` per extrusion (sub-layers of 0.04 mm kept
+    /// apart from 0.08 mm layers), else the `;Z:` step, else the profile's
+    /// layer height; encoded after the widths, in 0.005 mm steps.
+    #[test]
+    fn reads_and_encodes_heights() {
+        let g = ";LAYER_CHANGE\n;Z:0.2\n;HEIGHT:0.2\nG1 Z0.2\nG1 X10 Y0 E1\n\
+;LAYER_CHANGE\n;Z:0.28\n;HEIGHT:0.08\nG1 Z0.28\nG1 X10 Y10 E2\n\
+;HEIGHT:0.04\nG1 X0 Y10 E3\n";
+        let d = parse(g.as_bytes()).unwrap();
+        let h: Vec<u8> = d.segs.iter().filter(|s| !s.travel).map(|s| s.height).collect();
+        assert_eq!(h, vec![40, 16, 8], "0.2, 0.08 and 0.04 mm");
+        // No ;HEIGHT: — the Z step between layers.
+        let g = ";LAYER_CHANGE\n;Z:0.2\nG1 Z0.2\nG1 X10 Y0 E1\n;LAYER_CHANGE\n;Z:0.32\nG1 Z0.32\nG1 X10 Y10 E2\n";
+        let d = parse(g.as_bytes()).unwrap();
+        let h: Vec<u8> = d.segs.iter().filter(|s| !s.travel).map(|s| s.height).collect();
+        assert_eq!(h, vec![0, 24], "the first layer unknown, then 0.12 mm");
+        // Neither: the profile's layer height, at encoding.
+        let d = parse("G1 X10 Y0 E1\n; layer_height = 0.16\n".as_bytes()).unwrap();
+        assert_eq!(d.segs[0].height, 0);
+        let b = encode(&d);
+        let n = d.segs.len();
+        let heights = &b[40 + n * 29..40 + n * 30];
+        assert!(heights.iter().all(|&x| x == 32), "{heights:?}");
+        assert_eq!(height_steps(0.0), 0);
+        assert_eq!(height_steps(2.0), 255, "clamped");
+    }
+
+    #[test]
+    fn stats_carry_sliced_materials_and_colors() {
+        let g = "G1 X1 E1\n; filament_type = PLA;PETG\n; filament_colour = #FF0000;#000000\n";
+        let st = stats(&parse(g.as_bytes()).unwrap());
+        assert_eq!(st.filament_types, vec!["PLA", "PETG"]);
+        assert_eq!(st.filament_colors, vec!["#ff0000", "#000000"]);
+        // Older records (no such fields) still read.
+        let old: SliceStats = serde_json::from_str(r#"{"layers":3,"tools":[0]}"#).unwrap();
+        assert!(old.filament_types.is_empty() && old.filament_colors.is_empty());
+    }
+
+    /// The tower's box, in its own frame: from the corner it was placed at,
+    /// read from the config block; turned 90°, its width runs along Y.
+    #[test]
+    fn tower_box_in_the_tower_frame() {
+        let g = "; wipe_tower_x = 100,15\n; wipe_tower_y = 50,220\n; wipe_tower_rotation_angle = 90\n\
+                 G1 X0 Y0 Z0.2\n;TYPE:Outer wall\nG1 X10 Y0 E1\n\
+                 ;TYPE:Prime tower\nG1 X102 Y48 F600\nG1 X102 Y88 E2\nG1 X76 Y88 E3\nG1 Z5\nG1 X76 Y48 E4\n";
+        let d = parse(g.as_bytes()).unwrap();
+        assert_eq!(d.meta.tower_at, [Some(100.0), Some(50.0)], "the first plate's");
+        let t = stats(&d).tower.unwrap();
+        let near = |a: f32, b: f32| (a - b).abs() < 1e-3;
+        assert!(near(t.x, 100.0) && near(t.y, 50.0), "{t:?}");
+        // 40 mm along Y is the width, 26 mm along −X the depth; the box
+        // starts 2 mm before the corner on both sides (a brim).
+        assert!(near(t.w, 40.0) && near(t.d, 26.0) && near(t.x0, -2.0) && near(t.y0, -2.0), "{t:?}");
+        assert!(near(t.h, 5.0), "{t:?}");
+        assert_eq!(stats(&parse("G1 X1 E1\n".as_bytes()).unwrap()).tower, None, "no tower");
+    }
+
     #[test]
     fn prusa_extruder_colour_is_a_fallback() {
         let d = parse("; extruder_colour = \"#112233\"\nG1 X1 E1\n".as_bytes()).unwrap();
         assert_eq!(d.meta.colors, vec!["#112233"]);
+    }
+}
+
+#[cfg(test)]
+mod hex_tests {
+    use super::hex_list;
+
+    #[test]
+    fn colours_cut_safely() {
+        assert_eq!(hex_list("#AABBCC;#112233"), vec!["#aabbcc", "#112233"]);
+        // Six bytes that are not six characters: skipped, never a panic.
+        assert_eq!(hex_list("#aaaaaé"), vec![""]);
+        assert_eq!(hex_list("#é"), vec![""]);
+        assert_eq!(hex_list("#aabbccé"), vec!["#aabbcc"]);
     }
 }

@@ -1,0 +1,36 @@
+{
+  "name": "trouble",
+  "description": "Three U1 in trouble: one drops its connection every few minutes, one whose uploads fail halfway, one with Klipper in shutdown.",
+  "speed": 1,
+  "printers": [
+    {
+      "id": "sim-echo",
+      "name": "Sim U1 Echo",
+      "hostname": "sim-echo",
+      "serial": "SIM-0000-0005",
+      "files": [{ "name": "Calibration_Cube.gcode", "tools": [0], "minutes": 24, "layers": 100 }],
+      "mesh_seed": 5,
+      "faults": [{ "fault": "disconnect", "secs": 20, "after": 90, "every": 240 }]
+    },
+    {
+      "id": "sim-foxtrot",
+      "name": "Sim U1 Foxtrot",
+      "hostname": "sim-foxtrot",
+      "serial": "SIM-0000-0006",
+      "files": [{ "name": "Cable_Clip.gcode", "tools": [1], "minutes": 8, "layers": 30 }],
+      "mesh_seed": 6,
+      "faults": [{ "fault": "upload_fail", "at": 50, "after": 0 }]
+    },
+    {
+      "id": "sim-golf",
+      "name": "Sim U1 Golf",
+      "hostname": "sim-golf",
+      "serial": "SIM-0000-0007",
+      "start": "klippy_shutdown",
+      "mesh_seed": 7,
+      "history": [
+        { "file": "Vase.gcode", "status": "klippy_shutdown", "days_ago": 0.1, "minutes": 40, "filament_m": 3.2 }
+      ]
+    }
+  ]
+}

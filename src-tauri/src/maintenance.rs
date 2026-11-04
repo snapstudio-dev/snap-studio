@@ -83,14 +83,10 @@ pub fn parse(status: &Value, totals: &Value) -> Usage {
 /// Reads the counters and the history totals of a printer.
 pub async fn usage(host: &str, port: u16) -> Result<Usage> {
     let base = crate::printers::base(host, port);
-    let objects = crate::printers::get_json(&format!(
-        "{base}/printer/objects/query?extruder&extruder1&extruder2&extruder3&purifier"
-    ))
-    .await?;
+    let objects =
+        crate::printers::get_json(&format!("{base}/printer/objects/query?extruder&extruder1&extruder2&extruder3&purifier")).await?;
     // A printer without the history component still has its counters.
-    let totals = crate::printers::get_json(&format!("{base}/server/history/totals"))
-        .await
-        .unwrap_or(Value::Null);
+    let totals = crate::printers::get_json(&format!("{base}/server/history/totals")).await.unwrap_or(Value::Null);
     Ok(parse(&objects["result"]["status"], &totals["result"]))
 }
 
@@ -111,25 +107,15 @@ pub struct Entry {
 type Log = HashMap<String, Vec<Entry>>;
 
 fn log_path() -> PathBuf {
-    let dir = dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("fr.carlini.snapstudio");
-    let _ = std::fs::create_dir_all(&dir);
-    dir.join("maintenance.json")
+    crate::util::app_dir().join("maintenance.json")
 }
 
 fn read_log(path: &std::path::Path) -> Log {
-    std::fs::read(path)
-        .ok()
-        .and_then(|d| serde_json::from_slice(&d).ok())
-        .unwrap_or_default()
+    std::fs::read(path).ok().and_then(|d| serde_json::from_slice(&d).ok()).unwrap_or_default()
 }
 
 fn write_log(path: &std::path::Path, log: &Log) -> Result<()> {
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, serde_json::to_vec_pretty(log)?)?;
-    std::fs::rename(&tmp, path)?;
-    Ok(())
+    crate::util::write_atomic(path, &serde_json::to_vec_pretty(log)?)
 }
 
 /// A printer's log, oldest first.
@@ -157,10 +143,7 @@ fn remove_in(path: &std::path::Path, printer: &str, task: &str, at: u64) -> Resu
 
 /// Logs a task done now.
 pub fn done(printer: &str, task: &str, print_hours: f64, swaps: Vec<u64>) -> Result<Vec<Entry>> {
-    let at = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+    let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     add_in(&log_path(), printer, Entry { task: task.to_string(), at, print_hours, swaps })
 }
 

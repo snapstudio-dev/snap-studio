@@ -18,6 +18,7 @@ const V = {
   drag: null,
   path: null,
   showPlate: true,
+  frameWithBed: false, // framing includes the bed when shown (AI preview)
   raf: 0,
   /* Slice preview in progress: summary, head colors, actions. */
   preview: null,
@@ -136,17 +137,23 @@ out vec4 frag;
 void main() { frag = vec4(vCol, uAlpha); }`;
 
 /* Extrusions as ribbons: each segment (one instance) becomes a quad facing
-   the screen, at the real extrusion width, shaded like a cylinder — light in
-   the middle, dark at the edges. The lines' position and color buffers are
-   used as is (no copy). */
+   the camera, shaded like a cylinder — light in the middle, dark at the
+   edges. Its size is the extrusion's cross-section, as Snapmaker Orca draws
+   it: an ellipse `w` wide and `h` high (the layer's or sub-layer's height),
+   its top at the segment's Z. The quad spans that ellipse's outline as seen
+   from the eye, so a line seen from the side is as tall as its layer, never
+   as tall as it is wide: the alternating layers of a virtual head show as
+   thin bands, not overlapping strips. One pixel wide at least. The lines'
+   position and color buffers are used as is (no copy). */
 const RIB_VS = `#version 300 es
 in vec3 aA;
 in vec3 aB;
 in vec3 aCol;
 in float aW;
+in float aH;
 uniform mat4 uMVP;
 uniform vec2 uViewport;
-uniform float uPxPerMm;
+uniform vec3 uEye;
 out vec3 vCol;
 out float vSide;
 void main() {
@@ -154,18 +161,36 @@ void main() {
   int id = gl_VertexID;
   float t = (id == 1 || id == 2 || id == 4) ? 1.0 : 0.0;
   float s = (id == 2 || id == 4 || id == 5) ? 1.0 : -1.0;
-  vec4 pa = uMVP * vec4(aA, 1.0);
-  vec4 pb = uMVP * vec4(aB, 1.0);
-  vec2 sa = pa.xy / pa.w * uViewport, sb = pb.xy / pb.w * uViewport;
-  vec2 dir = sb - sa;
-  dir = length(dir) > 1e-4 ? normalize(dir) : vec2(1.0, 0.0);
-  vec2 nrm = vec2(-dir.y, dir.x);
-  vec4 p = mix(pa, pb, t);
-  // Half-width in pixels at this depth; one pixel at least.
-  float hw = max(0.5, 0.5 * aW * uPxPerMm / p.w);
-  // Ends stick out by a half-width: joints overlap.
-  vec2 off = nrm * s * hw + dir * (t * 2.0 - 1.0) * hw;
-  p.xy += off / uViewport * p.w;
+  vec3 seg = aB - aA;
+  float len = length(seg);
+  vec3 d = len > 1e-6 ? seg / len : vec3(1.0, 0.0, 0.0);
+  // The cross-section's axes: n across (horizontal), u up.
+  vec3 n = cross(d, vec3(0.0, 0.0, 1.0));
+  n = length(n) > 1e-4 ? normalize(n) : vec3(1.0, 0.0, 0.0);
+  vec3 u = cross(n, d);
+  float hw = 0.5 * aW;
+  // A height not known: as tall as wide (the round line of before).
+  float hh = 0.5 * (aH > 0.0 ? aH : aW);
+  // Its top at the segment's Z, its ends past the segment by a half-width
+  // along it (joints overlap).
+  vec3 c = mix(aA, aB, t) - u * hh + d * (t * 2.0 - 1.0) * hw;
+  // The ellipse's outline seen from the eye: the point of the ellipse
+  // furthest along e, across the line and the view.
+  vec3 e = cross(d, uEye - c);
+  e = length(e) > 1e-6 ? normalize(e) : n;
+  float en = dot(e, n), eu = dot(e, u);
+  vec3 off = (hw * hw * en * n + hh * hh * eu * u) / max(1e-6, sqrt(hw * hw * en * en + hh * hh * eu * eu));
+  vec4 pc = uMVP * vec4(c, 1.0);
+  vec4 p = uMVP * vec4(c + off * s, 1.0);
+  // One pixel wide at least: a line far away does not vanish.
+  vec2 px = (p.xy / p.w - pc.xy / pc.w) * uViewport;
+  if (length(px) < 0.5) {
+    vec4 pa = uMVP * vec4(aA, 1.0), pb = uMVP * vec4(aB, 1.0);
+    vec2 dir = pb.xy / pb.w - pa.xy / pa.w;
+    dir = length(dir) > 1e-6 ? normalize(dir * uViewport) : vec2(1.0, 0.0);
+    vec2 side = length(px) > 1e-4 ? normalize(px) : vec2(-dir.y, dir.x) * s;
+    p = vec4((pc.xy / pc.w + side * 0.5 / uViewport) * p.w, p.z, p.w);
+  }
   gl_Position = p;
   vCol = aCol;
   vSide = s;
@@ -186,6 +211,8 @@ void main() {
 const RIBBON_MAX = 2_500_000;
 /* Width assumed when the G-code does not say (mm). */
 const DEFAULT_WIDTH = 0.42;
+/* The encoded heights' step (mm, gcode.rs HEIGHT_STEP). */
+const HEIGHT_STEP = 0.005;
 
 /* Feature keys and colors, the same as the thumbnails computed in Rust. */
 const FEATURES = [
@@ -288,12 +315,14 @@ function decodeGcode(buf) {
   const max = [dv.getFloat32(28, true), dv.getFloat32(32, true), dv.getFloat32(36, true)];
   const pos = new Float32Array(buf, 40, n * 6);
   const attrs = new Uint8Array(buf, 40 + n * 24, n * 4);
-  // Version 2: width per segment, then filament colors.
+  // Version 2: width per segment, then filament colors; version 3: the
+  // height per segment between them (steps of 0.005 mm, gcode.rs).
   const version = dv.getUint8(4);
   const widths = version >= 2 ? new Uint8Array(buf, 40 + n * 28, n) : null;
+  const heights = version >= 3 ? new Uint8Array(buf, 40 + n * 29, n) : null;
   const fileColors = [];
   if (version >= 2) {
-    let o = 40 + n * 29;
+    let o = 40 + n * (heights ? 30 : 29);
     const k = dv.getUint8(o++);
     for (let i = 0; i < k; i++, o += 4) {
       fileColors.push(dv.getUint8(o) ? [dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3)] : null);
@@ -310,6 +339,8 @@ function decodeGcode(buf) {
       feat: new Uint8Array(count.e),
       tool: new Uint8Array(count.e),
       width: new Float32Array(count.e),
+      // 0: not known (the shader draws the line round).
+      height: new Float32Array(count.e),
       ends: new Int32Array(layers + 1),
     },
     t: { pos: new Float32Array(count.t * 6), col: new Float32Array(count.t * 6), ends: new Int32Array(layers + 1) },
@@ -329,6 +360,7 @@ function decodeGcode(buf) {
       out.e.feat[k] = Math.min(feat, FEATURES.length - 1);
       out.e.tool[k] = attrs[i * 4 + 3] >> 4;
       out.e.width[k] = widths && widths[i] ? widths[i] / 100 : DEFAULT_WIDTH;
+      out.e.height[k] = heights ? heights[i] * HEIGHT_STEP : 0;
     }
     const c = travel ? [96, 104, 126] : FEATURES[Math.min(feat, FEATURES.length - 1)][1];
     for (let v = 0; v < 2; v++) {
@@ -443,7 +475,7 @@ function buildPathBuffers(gl, prog, part) {
 }
 
 /* Ribbons: one instance per segment, read from the line buffers (positions
-   a then b, color of the first vertex), plus the width. */
+   a then b, color of the first vertex), plus the width and the height. */
 function buildRibbons(gl, prog, part, lines) {
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
@@ -467,8 +499,15 @@ function buildRibbons(gl, prog, part, lines) {
   gl.enableVertexAttribArray(aW);
   gl.vertexAttribPointer(aW, 1, gl.FLOAT, false, 0, 0);
   gl.vertexAttribDivisor(aW, 1);
+  const hb = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, hb);
+  gl.bufferData(gl.ARRAY_BUFFER, part.height, gl.STATIC_DRAW);
+  const aH = gl.getAttribLocation(prog, "aH");
+  gl.enableVertexAttribArray(aH);
+  gl.vertexAttribPointer(aH, 1, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribDivisor(aH, 1);
   gl.bindVertexArray(null);
-  return { vao, widthBuf: wb };
+  return { vao, widthBuf: wb, heightBuf: hb };
 }
 
 function buildPaths(gl, data) {
@@ -516,7 +555,8 @@ function buildMesh(gl, data) {
   gl.vertexAttribPointer(aCol, 3, gl.UNSIGNED_BYTE, true, 0, 0);
 
   gl.bindVertexArray(null);
-  return { prog, vao, count: data.n * 3, min: data.min, max: data.max, truncated: data.truncated };
+  // The buffers are kept to be freed: deleting a VAO does not free them.
+  return { prog, vao, bufs: [pb, cb], count: data.n * 3, min: data.min, max: data.max, truncated: data.truncated };
 }
 
 /* Bed grid: lines every 10 mm, emphasized border. */
@@ -554,7 +594,16 @@ function buildGrid(gl, w = PLATE.w, d = PLATE.d) {
   gl.enableVertexAttribArray(aMain);
   gl.vertexAttribPointer(aMain, 1, gl.FLOAT, false, 0, 0);
   gl.bindVertexArray(null);
-  return { prog, vao, count: pos.length / 3 };
+  return { prog, vao, bufs: [pb, mb], count: pos.length / 3 };
+}
+
+/* Frees a drawable (VAO, its buffers, its program): a VAO deleted alone
+   leaves its buffers on the GPU. */
+function disposeDrawable(gl, d) {
+  if (!d) return;
+  gl.deleteVertexArray(d.vao);
+  for (const b of d.bufs || []) gl.deleteBuffer(b);
+  gl.deleteProgram(d.prog);
 }
 
 /* ---------------------------------------------------------------- physical bed */
@@ -645,6 +694,7 @@ function buildBed(gl, w, d, model, onReady) {
   gl.enableVertexAttribArray(aUV);
   gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, 20, 12);
   gl.bindVertexArray(null);
+  bed.quadBuf = qb;
 
   // Plate: the manufacturer's mesh, centered on the printable area.
   bedFile(a.model, loadStl)
@@ -665,7 +715,13 @@ function buildBed(gl, w, d, model, onReady) {
       gl.enableVertexAttribArray(p);
       gl.vertexAttribPointer(p, 3, gl.FLOAT, false, 0, 0);
       gl.bindVertexArray(null);
-      bed.plate = { prog, vao, count: pos.length / 3, aCol: gl.getAttribLocation(prog, "aCol") };
+      const plate = { prog, vao, bufs: [pb], count: pos.length / 3, aCol: gl.getAttribLocation(prog, "aCol") };
+      // The bed was replaced while its model loaded: nothing to keep.
+      if (bed.disposed) {
+        disposeDrawable(gl, plate);
+        return;
+      }
+      bed.plate = plate;
       onReady?.();
     })
     .catch((e) => console.warn("plaque :", e.message));
@@ -691,6 +747,10 @@ function buildBed(gl, w, d, model, onReady) {
       const aniso = gl.getExtension("EXT_texture_filter_anisotropic");
       if (aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, 8);
       gl.bindTexture(gl.TEXTURE_2D, null);
+      if (bed.disposed) {
+        gl.deleteTexture(tex);
+        return;
+      }
       bed.texture = tex;
       onReady?.();
     })
@@ -700,12 +760,11 @@ function buildBed(gl, w, d, model, onReady) {
 
 function disposeBed(gl, bed) {
   if (!bed) return;
+  bed.disposed = true;
   gl.deleteVertexArray(bed.quad);
+  if (bed.quadBuf) gl.deleteBuffer(bed.quadBuf);
   gl.deleteProgram(bed.tex);
-  if (bed.plate) {
-    gl.deleteVertexArray(bed.plate.vao);
-    gl.deleteProgram(bed.plate.prog);
-  }
+  disposeDrawable(gl, bed.plate);
   if (bed.texture) gl.deleteTexture(bed.texture);
 }
 
@@ -763,18 +822,50 @@ function drawBed(gl, bed, grid, vp, view, light) {
 
 /* ---------------------------------------------------------------- render */
 
+/* The picture is cleared with the viewer's own CSS background
+   (var(--content-bg)), so it melts into the screen around it, in light and
+   dark alike. Read once, again after a theme change. */
+let V_CLEAR = null;
+function viewerClear() {
+  if (!V_CLEAR) {
+    const m = getComputedStyle($("viewer")).backgroundColor.match(/[\d.]+/g) || [];
+    V_CLEAR = m.length >= 3 ? m.slice(0, 3).map((x) => +x / 255) : [0.953, 0.953, 0.961];
+  }
+  return V_CLEAR;
+}
+
+/* Pixels kept clear at the top of the picture: docked in the AI preview,
+   the floating controls (ia.js sets V.insetTop). Full screen, none. */
+function viewInsetTop() {
+  return $("viewer").classList.contains("docked") ? V.insetTop || 0 : 0;
+}
+
 function frameCamera() {
   const m = V.paths || V.mesh;
   if (!m) return;
-  V.cam.target = [
-    (m.min[0] + m.max[0]) / 2,
-    (m.min[1] + m.max[1]) / 2,
-    (m.min[2] + m.max[2]) / 2,
-  ];
-  const size = Math.max(m.max[0] - m.min[0], m.max[1] - m.min[1], m.max[2] - m.min[2], 1);
-  V.cam.dist = size * 2.1;
+  let lo = m.min;
+  let hi = m.max;
+  // Asked by the AI preview: with the bed shown, the frame takes it in too;
+  // bed hidden, the object alone, closer.
+  if (V.frameWithBed && V.showPlate && !V.paths) {
+    lo = [Math.min(lo[0], 0), Math.min(lo[1], 0), Math.min(lo[2], 0)];
+    hi = [Math.max(hi[0], PLATE.w), Math.max(hi[1], PLATE.d), hi[2]];
+  }
+  V.cam.target = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
+  const size = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], 1);
+  // The field of view is vertical: a pane taller than wide would cut the
+  // sides, so step back in proportion.
+  // Under a band kept clear at the top, the object fits in what is left.
+  const c = V.gl?.canvas;
+  const ch = c?.clientHeight || 0;
+  const free = Math.max(ch - viewInsetTop(), 1);
+  const aspect = ch ? c.clientWidth / free : 1;
+  V.cam.dist = size * 2.1 * (aspect < 1 ? 1 / aspect : 1) * (ch ? ch / free : 1);
   V.cam.yaw = -0.62;
   V.cam.pitch = 0.46;
+  // Framed by the app: a resize may frame again (ia.js), until the user
+  // turns, pans or zooms.
+  V.framed = true;
   draw();
 }
 
@@ -791,8 +882,7 @@ function draw() {
   }
   gl.viewport(0, 0, w, h);
   const light = !isDark();
-  // --content-bg: #f3f3f5 in light mode, #1e1e20 in dark mode.
-  gl.clearColor(...(light ? [0.953, 0.953, 0.961, 1] : [0.118, 0.118, 0.125, 1]));
+  gl.clearColor(...viewerClear(), 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
 
@@ -805,6 +895,10 @@ function draw() {
   ]);
   const view = m4.lookAt(eye, c.target, [0, 0, 1]);
   const proj = m4.perspective(0.72, Math.max(w / Math.max(h, 1), 0.01), Math.max(c.dist / 100, 0.5), c.dist * 12 + 2000);
+  // A band kept clear at the top: the picture's centre moves to the middle
+  // of what is left below it.
+  const top = viewInsetTop();
+  if (top && canvas.clientHeight) proj[9] += top / canvas.clientHeight;
   const mvp = m4.mul(proj, view);
 
   if (V.showPlate && V.grid) drawBed(gl, V.bed, V.grid, mvp, view, light);
@@ -827,9 +921,9 @@ function draw() {
       const r = p.ribbons;
       gl.useProgram(r.prog);
       gl.uniformMatrix4fv(gl.getUniformLocation(r.prog, "uMVP"), false, mvp);
-      // Pixels per normalized screen unit, and per millimeter at distance 1.
+      // Pixels per normalized screen unit, and the eye: the lines' outline.
       gl.uniform2f(gl.getUniformLocation(r.prog, "uViewport"), w / 2, h / 2);
-      gl.uniform1f(gl.getUniformLocation(r.prog, "uPxPerMm"), proj[5] * h / 2);
+      gl.uniform3fv(gl.getUniformLocation(r.prog, "uEye"), eye);
       gl.bindVertexArray(r.vao);
       gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, p.extr.ends[upto]);
     } else {
@@ -856,7 +950,10 @@ const schedule = () => {
     draw();
   });
 };
-window.addEventListener("themechange", schedule);
+window.addEventListener("themechange", () => {
+  V_CLEAR = null;
+  schedule();
+});
 
 /* Depending on the platform, Tauri serves custom protocols in one form or
    the other: try both. */
@@ -872,8 +969,7 @@ function disposeScene() {
   const gl = V.gl;
   if (!gl) return;
   if (V.mesh) {
-    gl.deleteVertexArray(V.mesh.vao);
-    gl.deleteProgram(V.mesh.prog);
+    disposeDrawable(gl, V.mesh);
     V.mesh = null;
   }
   if (V.paths) {
@@ -884,6 +980,7 @@ function disposeScene() {
     if (p.ribbons) {
       gl.deleteVertexArray(p.ribbons.vao);
       gl.deleteBuffer(p.ribbons.widthBuf);
+      gl.deleteBuffer(p.ribbons.heightBuf);
       gl.deleteProgram(p.ribbons.prog);
     }
     gl.deleteProgram(p.prog);
@@ -936,7 +1033,7 @@ async function openViewer(path, name, kind, bust) {
   if (!V.preview || V.preview.path !== path) hidePreviewPanel();
   $("v-layers").classList.toggle("hidden", !gcode);
   $("v-legend").classList.toggle("hidden", !gcode);
-  $("v-travel").classList.toggle("hidden", !gcode);
+  $("v-travel-sw").classList.toggle("hidden", !gcode);
   $("v-colors").classList.toggle("hidden", !gcode);
 
   try {
@@ -974,6 +1071,8 @@ async function openViewer(path, name, kind, bust) {
     $("v-msg").classList.add("hidden");
     frameCamera();
   } catch (e) {
+    // A newer file took the viewer meanwhile: this one's failure is moot.
+    if (V.path !== path) return;
     $("v-msg").textContent = tr(gcode ? "viewer.bad_paths" : "viewer.bad_mesh", { err: e.message });
   }
 }
@@ -1051,7 +1150,8 @@ const fmtSpan = (s) => {
 const fmtG = (x, d = 1) => fmtDec(x ?? 0, d);
 
 /* Opens a sliced G-code with its summary. `opts`: path, name, stats,
-   toolColors ([r,g,b] per head), toolNames, onSend, onSave, onEdit, onClose. */
+   toolColors ([r,g,b] per head), toolNames, onSend, onSave, onEdit, onClose,
+   and the engine's support warnings (`warnings`, `onSupports`). */
 function openPreview(opts) {
   V.preview = opts;
   V.colorMode = "material";
@@ -1070,8 +1170,19 @@ function hidePreviewPanel() {
   $("viewer").classList.remove("previewing");
 }
 
+/* Why an object needs supports, in words: the engine's reasons
+   (`slice::support_warnings`) and the Prepare hint's (`support_hint.rs`). */
+const SUPPORT_REASONS = { floating: "supports.reason.floating", cantilever: "supports.reason.cantilever", overhangs: "supports.reason.overhangs" };
+
 function renderPreviewPanel() {
   const st = V.preview.stats || {};
+  // Objects the engine says need supports: one line each, the reason in
+  // words (its own English sentence for a reason it does not name).
+  const warn = V.preview.warnings || [];
+  $("vp-supports").classList.toggle("hidden", !warn.length || !V.preview.onSupports);
+  $("vp-supports-text").innerHTML = warn
+    .map((w) => `<div>${esc(SUPPORT_REASONS[w.reason] ? tr("supports.banner", { name: w.object, reason: tr(SUPPORT_REASONS[w.reason]) }) : w.text)}</div>`)
+    .join("");
   $("vp-time").textContent = st.print_time_s ? fmtSpan(st.print_time_s) : "—";
   $("vp-first").textContent = [
     st.first_layer_s ? tr("viewer.first_layer", { t: fmtSpan(st.first_layer_s) }) : "",
@@ -1116,6 +1227,7 @@ $("v-colors").addEventListener("click", (e) => {
 $("vp-send").addEventListener("click", () => V.preview?.onSend?.());
 $("vp-save").addEventListener("click", () => V.preview?.onSave?.());
 $("vp-edit").addEventListener("click", () => V.preview?.onEdit?.());
+$("vp-supports-go").addEventListener("click", () => V.preview?.onSupports?.());
 
 /* Moves the camera target in the screen plane. */
 function panBy(dx, dy) {
@@ -1149,6 +1261,7 @@ function bindInteractions(canvas) {
     const dy = e.clientY - V.drag.y;
     V.drag.x = e.clientX;
     V.drag.y = e.clientY;
+    if (dx || dy) V.framed = false;
     if (V.drag.pan) {
       panBy(dx, dy);
     } else {
@@ -1172,6 +1285,7 @@ function bindInteractions(canvas) {
       const pinch = e.ctrlKey;
       // ⇧ + scroll moves the view (a trackpad's ⇧ + two fingers).
       const action = pinch ? "zoom" : e.shiftKey ? "pan" : state.wheelAction || "zoom";
+      V.framed = false;
 
       if (action === "zoom") {
         const s = pinch ? 1 : dir;
@@ -1195,16 +1309,14 @@ $("v-layer").addEventListener("input", () => {
   updateLayerLabel();
   schedule();
 });
-$("v-travel").addEventListener("click", () => {
-  V.showTravel = !V.showTravel;
-  $("v-travel").classList.toggle("on", V.showTravel);
+$("v-travel").addEventListener("change", () => {
+  V.showTravel = $("v-travel").checked;
   draw();
 });
 $("v-close").addEventListener("click", closeViewer);
 $("v-reset").addEventListener("click", frameCamera);
-$("v-plate").addEventListener("click", () => {
-  V.showPlate = !V.showPlate;
-  $("v-plate").classList.toggle("on", V.showPlate);
+$("v-plate").addEventListener("change", () => {
+  V.showPlate = $("v-plate").checked;
   draw();
 });
 document.addEventListener("keydown", (e) => {

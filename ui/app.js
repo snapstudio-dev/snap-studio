@@ -33,13 +33,31 @@ const DEFAULTS = {
   wheelSpeed: 1,
   dir: null,
   recents: [],
-  /* How the AI is used: "container", "local", "both", "off"; null until asked. */
+  /* How the AI is used: "container" (the Sandbox side), "local", "both",
+     "off"; null until asked. */
   aiModes: null,
+  /* Which sandbox the Sandbox side uses: "builtin" (Claude Code's own) or
+     "yolobox"; null until decided once (ai-logic.js aiSandboxDefault). */
+  aiSandbox: null,
+  /* The slice sheet's level, "basic" or "advanced"; null until first set
+     (slice-adv.js, sliceLevelDefault). */
+  sliceLevel: null,
 };
+
+/* A stored value, or {} when there is none or it is unreadable: a corrupt
+   entry must not stop the script, and the whole app with it. */
+function storedObject(key) {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) || "{}");
+    return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  } catch {
+    return {};
+  }
+}
 
 const state = {
   ...DEFAULTS,
-  ...JSON.parse(localStorage.getItem("snapstudio") || "{}"),
+  ...storedObject("snapstudio"),
   files: [],
   meta: new Map(),
   analysis: new Map(),
@@ -52,10 +70,10 @@ const state = {
 };
 
 function save() {
-  const { view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes } = state;
+  const { view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes, aiSandbox, sliceLevel } = state;
   localStorage.setItem(
     "snapstudio",
-    JSON.stringify({ view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes })
+    JSON.stringify({ view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes, aiSandbox, sliceLevel })
   );
 }
 
@@ -103,11 +121,9 @@ function thumbUrl(f, px) {
 
 /* ------------------------------------------------------------------ theme */
 
-/* Light or dark: only the system setting decides. Surfaces drawn outside
-   CSS (WebGL, terminal) listen to the "themechange" event. */
-const darkScheme = matchMedia("(prefers-color-scheme: dark)");
-const isDark = () => darkScheme.matches;
-darkScheme.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
+/* Light or dark, theme and accent: themes.js (loaded in <head>) resolves
+   them, exposes isDark() and fires "themechange"; surfaces drawn outside
+   CSS (WebGL, terminal) listen to it and read the tokens. */
 
 /* ------------------------------------------------------- native menus */
 
@@ -135,6 +151,12 @@ function confirmDelete(title, message, okLabel = tr("common.delete")) {
   });
 }
 
+/* A print the printer started without some of its options: said in a
+   dialog to acknowledge, not in a passing toast. */
+function startWarning(message) {
+  return window.__TAURI__.dialog.message(message, { title: tr("send.options_unapplied.title"), kind: "error" }).catch(() => toast(message, true));
+}
+
 /* No browser context menu, except in text fields. */
 document.addEventListener("contextmenu", (e) => {
   if (!e.target.closest("input, textarea, [contenteditable]")) e.preventDefault();
@@ -151,6 +173,11 @@ function menuUnder(el, items) {
 /* Each view declares its title and subtitle; only the visible view shows
    them. Its controls live in a .tb-actions[data-for] slot. */
 const TB = {};
+/* Simulated printers, in a development build running them: the badge's
+   label comes with the list (window.SIM, set by that build), none in here. */
+const simOf = (id) => !!window.SIM?.on && !!window.SIM.printers?.includes(id);
+const simBadge = (id) => (simOf(id) ? `<span class="sim-badge">${esc(window.SIM.label)}</span>` : "");
+
 function tbSet(view, title, sub = "") {
   TB[view] = { title, sub };
   if ((window.currentView || "files") === view) tbRender();
@@ -160,7 +187,8 @@ function tbRender() {
   const t = TB[v] || { title: "", sub: "" };
   $("tb-title").textContent = t.title;
   $("tb-sub").textContent = t.sub;
-  document.querySelectorAll(".tb-actions").forEach((el) => el.classList.toggle("on", el.dataset.for === v));
+  // `data-for` may name several views ("library snapmaker": the same tabs).
+  document.querySelectorAll(".tb-actions").forEach((el) => el.classList.toggle("on", el.dataset.for.split(" ").includes(v)));
 }
 
 /* ------------------------------------------------------------- sidebar */
@@ -216,6 +244,7 @@ function sideSync() {
   if (v === "files" && state.dir) target = document.querySelector(`#side-recents [data-dir="${CSS.escape(state.dir)}"]`);
   if (v === "printers" && typeof P !== "undefined" && P.sel) target = document.querySelector(`#side-printers [data-id="${CSS.escape(P.sel)}"]`);
   if (v === "heads" && typeof HV !== "undefined" && HV.pid) target = document.querySelector(`#side-printers [data-heads="${CSS.escape(HV.pid)}"]`);
+  if (v === "pfiles" && typeof PFL !== "undefined" && PFL.pid) target = document.querySelector(`#side-printers [data-pfiles="${CSS.escape(PFL.pid)}"]`);
   if (v === "maint" && typeof MT !== "undefined" && MT.pid) target = document.querySelector(`#side-printers [data-maint="${CSS.escape(MT.pid)}"]`);
   if (v === "ia" && typeof IA !== "undefined" && IA.open) target = document.querySelector(`#side-ia [data-conv="${CSS.escape(IA.open)}"]`);
   if (v === "prints" && typeof PJ !== "undefined" && PJ.sel) {
@@ -226,7 +255,12 @@ function sideSync() {
       if (j?.state === "printing") target = document.querySelector(`#side-prints [data-pj="live:${CSS.escape(j.printer_id)}"]`);
     }
   }
-  if (v === "library" && typeof LIB !== "undefined" && LIB.active === "favs") target = $("side-favs");
+  if (v === "library" && typeof LIB !== "undefined") {
+    if (LIB.active === "favs") target = $("side-favs");
+    // A site's tab lights its pinned entry (Snapmaker Space is always there).
+    const t = LIB.tabs.find((x) => x.id === LIB.active);
+    if (t) target = document.querySelector(`.sidebar .side-item[data-site="${CSS.escape(t.site)}"]`);
+  }
   if (!target) target = document.querySelector(`.sidebar .side-item[data-view="${v}"]`);
   document.querySelectorAll(".sidebar .side-item").forEach((el) => el.classList.toggle("on", el === target));
   // The open folder's count shows on its entry.
@@ -989,6 +1023,9 @@ onMenu("nav", (v) => switchView(v));
 onMenu("view", (v) => { switchView("files"); setView(v); });
 onMenu("edit", (what) => {
   if (what === "find" && window.currentView === "files") { $("search").focus(); $("search").select(); }
+  // On macOS ⌘F is the menu's: the AI list has its own search.
+  if (what === "find" && window.currentView === "ia" && !IA.open && IA.list.length) { $("ia-q").focus(); $("ia-q").select(); }
+  if (what === "find" && window.currentView === "prints") { $("pj-q").focus(); $("pj-q").select(); }
 });
 onMenu("files", (what) => {
   if (what === "open") { switchView("files"); pickFolder(); }
@@ -1104,13 +1141,41 @@ function refreshCacheSize() {
 }
 
 
-/* drag and drop of a folder */
-listen("tauri://drag-enter", () => document.body.classList.add("dragover"));
-listen("tauri://drag-leave", () => document.body.classList.remove("dragover"));
+/* drag and drop. Tauri takes every file dropped on the window (the page's
+   own drop never gets them): files go to the AI's creation sheet when it
+   is open, or to the conversation the AI view shows (attach-logic.js,
+   ia.js iaDropPaths); anywhere else, a folder opens in Files. */
+function dropTarget() {
+  return attachTarget({
+    sheetOpen: !$("iamodal").classList.contains("hidden"),
+    iaVisible: !$("view-ia").classList.contains("hidden"),
+    convOpen: !!CHAT.id,
+  });
+}
+listen("tauri://drag-enter", () => {
+  const target = dropTarget();
+  document.body.classList.toggle("dragover", !target);
+  iaDropHint(target);
+});
+listen("tauri://drag-leave", () => {
+  document.body.classList.remove("dragover");
+  iaDropHint(null);
+});
 listen("tauri://drag-drop", (e) => {
   document.body.classList.remove("dragover");
-  const p = e.payload?.paths?.[0];
-  if (p) openDir(p.replace(/\/[^/]+\.3mf$/i, ""));
+  iaDropHint(null);
+  const paths = e.payload?.paths || [];
+  const target = dropTarget();
+  if (target) {
+    iaDropPaths(target, paths);
+    return;
+  }
+  const p = paths[0];
+  // An image has nothing to open outside the AI view.
+  if (!p || /\.(png|jpe?g|gif|webp)$/i.test(p)) return;
+  // A file dropped opens its folder (a file path pushed to the recents
+  // would stay there as a dead entry); a folder opens itself.
+  openDir(p.replace(/[\\/][^\\/]+\.(3mf|stl|gcode|gco|g|obj|step|stp)$/i, ""));
 });
 
 /* rubber-band selection in the empty area */
@@ -1220,6 +1285,16 @@ async function boot() {
   updateStatus();
   if (state.dir) await refresh();
 }
+
+/* Switches (input.sw, role="switch"): Enter toggles them too, as Space
+   does, and is kept from submitting or closing anything around them. */
+document.addEventListener("keydown", (e) => {
+  const t = e.target;
+  if (e.key !== "Enter" || !(t instanceof HTMLInputElement) || !t.classList.contains("sw") || t.disabled) return;
+  e.preventDefault();
+  e.stopPropagation();
+  t.click();
+}, true);
 
 /* A new language: everything Files builds in code is rebuilt. */
 window.addEventListener("langchange", () => {

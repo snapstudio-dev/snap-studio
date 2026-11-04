@@ -32,7 +32,8 @@ et les idées à discuter, il y a les [Discussions](https://github.com/kameka22/
 
 1. **Compiler** : Rust (stable) et la CLI Tauri, puis `cargo tauri dev`.
    L'interface est en HTML/CSS/JavaScript simples dans `ui/`, sans npm.
-2. **Tester** : `cd src-tauri && cargo test --lib`. Certains tests
+2. **Tester** : `cd src-tauri && cargo test --lib`, et la logique de
+   l'interface avec `for t in scripts/test-*.js; do node "$t"; done`. Certains tests
    demandent le moteur de découpe ou un vrai Claude Code et sont facultatifs
    (`--ignored`, voir leurs commentaires).
 3. **Écrire en anglais** : code, commentaires, commits et documentation. Les
@@ -43,11 +44,24 @@ et les idées à discuter, il y a les [Discussions](https://github.com/kameka22/
 5. **Un sujet par pull request**, avec ce qu'elle change et comment elle a
    été vérifiée. Pour un changement plus large, ouvrez d'abord une issue ou
    une discussion ; le travail en cours vit dans [`docs/plans/`](docs/plans/).
+6. **Changelog** : un changement visible pour l'utilisateur ajoute une ligne
+   sous *Unreleased* dans [CHANGELOG.md](CHANGELOG.md) (en anglais), avec le
+   numéro de sa pull request.
 
-## Traduire
+## Traduire Snap Studio
 
-L'anglais est la référence, le français une traduction. Ajouter une langue
-est décrit dans [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#languages) (en anglais).
+L'anglais est la référence ; le français, l'allemand, l'espagnol, le
+portugais du Brésil, l'italien, le japonais, le chinois simplifié et le
+coréen sont des traductions. Chaque langue est un fichier,
+`ui/i18n/<langue>.json`, avec les mêmes clés que `ui/i18n/en.json` ; une clé
+manquante s'affiche en anglais. Gardez les `{paramètres}`, les balises HTML et
+les formes du pluriel (`one`, `other`… ; le japonais, le chinois et le coréen
+n'ont que `other`), et les mots de la communauté des trancheurs (les traductions d'OrcaSlicer sont un bon guide). Avant une
+pull request, lancez `python3 scripts/check-i18n.py` : il vérifie tous les
+catalogues et indique où en est chacun. Une relecture dans
+[Weblate](https://weblate.org/) est prévue ; d'ici là, une pull request sur
+le catalogue fait l'affaire. Ajouter une langue est décrit dans
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#languages) (en anglais).
 
 ## Sécurité
 

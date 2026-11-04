@@ -31,9 +31,7 @@ pub fn run() {
         move_once(&base.join(OLD_ID), &base.join(NEW_ID));
     }
     // AI conversations, then the history Claude Code stores by their path.
-    let xdg = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| dirs::home_dir().map(|h| h.join(".config")));
+    let xdg = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).or_else(|| dirs::home_dir().map(|h| h.join(".config")));
     if let Some(xdg) = xdg {
         let (old_root, new_root) = (xdg.join(OLD_XDG), xdg.join(NEW_XDG));
         copy_once(&old_root, &new_root);
@@ -56,10 +54,7 @@ pub fn run() {
 /// Claude Code names a session's folder after the working path, each
 /// non-alphanumeric character becoming a dash (see `ia::session_file`).
 fn slug(p: &Path) -> String {
-    p.to_string_lossy()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect()
+    p.to_string_lossy().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect()
 }
 
 /// Copies the conversation history under the name derived from the new path,

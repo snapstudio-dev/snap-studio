@@ -1,0 +1,57 @@
+<!doctype html>
+<!-- Mockup only (Prints page redesign). Direction chosen: C, list and record.
+     A, B and D stay for reference. Static sample data for two Snapmaker U1;
+     built on the app's own stylesheet (ui/style.css) and sidebar. The
+     sidebar's Prints submenu is unchanged: running prints, then the queue.
+     Open in a browser; the bar at the bottom switches the proposal, the view
+     and the theme. URL: ?p=c&v=running|finished, ?p=a|b&v=overview|detail,
+     ?p=d&v=overview|detail|finished, &theme=light|dark -->
+<html lang="fr" data-scheme="light" data-theme="studio">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Impressions — refonte, proposition C retenue (maquette)</title>
+<link rel="stylesheet" href="../../../ui/style.css" />
+<link rel="stylesheet" href="mock.css" />
+</head>
+<body>
+<div class="window">
+<aside id="sidebar" class="sidebar">
+  <div class="titlebar"></div>
+  <div class="side-brand"><img src="../../../ui/assets/app-icon.png" alt="" /><b>Snap Studio</b></div>
+  <nav class="side-nav">
+    <div class="side-block">
+      <button class="side-item"><span class="glyph" style="color:#FF9500"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16m4.2 3.8-6 2.4-2.4 6 6-2.4zM12 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2"/></svg></span><span class="lbl">Explorer</span></button>
+    </div>
+    <div class="side-block">
+      <button class="side-item"><span class="glyph" style="color:#AF52DE"><svg viewBox="0 0 24 24"><path d="M12 2.5 14 8l5.5 2-5.5 2-2 5.5L10 12 4.5 10 10 8zm6.5 10 1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1z"/></svg></span><span class="lbl">Créer</span></button>
+    </div>
+    <div class="side-block">
+      <button class="side-item"><span class="glyph" style="color:#007AFF"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span class="lbl">Fichiers</span></button>
+    </div>
+    <div class="side-block">
+      <button class="side-item"><span class="glyph" style="color:#5856D6"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5 8.2v7.6l7 3.9 7-3.9V8.2z"/></svg></span><span class="lbl">Préparer</span></button>
+    </div>
+    <div class="side-block">
+      <button class="side-item on"><span class="glyph" style="color:#FF2D55"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m-2 5.5 7 4.5-7 4.5z"/></svg></span><span class="lbl">Impressions</span><span class="count">6</span></button>
+      <div id="side-prints" class="side-group side-sub"></div>
+    </div>
+    <div class="side-block">
+      <div class="side-section">Imprimantes</div>
+      <div id="side-printers" class="side-group"></div>
+      <button class="side-item side-add"><span class="glyph"><svg viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg></span><span class="lbl">Ajouter une imprimante</span></button>
+    </div>
+  </nav>
+  <div class="side-footer">
+    <button class="side-item"><span class="glyph" style="color:#8E8E93"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg></span><span class="lbl">Réglages</span></button>
+  </div>
+</aside>
+<main id="content" class="content">
+  <header class="toolbar" id="toolbar"></header>
+  <section class="view" id="view"></section>
+</main>
+</div>
+<div class="mk-switch" id="switch"></div>
+<script src="mock.js"></script>
+</body>
+</html>

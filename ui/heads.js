@@ -9,8 +9,11 @@
 
    Stored in localStorage["snapstudio.heads"]:
      { printers: { <printer id | "_none">: { filaments: [name|null…],
-                                             map: { <file path>: { <ext>: head } } } },
+                                             map: { <file path>: { <ext>: head } },
+                                             virtual: [{ uid, a, b, pct }], nextUid } },
        active: <printer id> }
+   A head value is 0–15 for a physical head, 100 + uid for a virtual one
+   (virtual-logic.js). 
    The old per-machine-profile memory ("snapstudio.slice") is read once per
    printer to seed it, and is left untouched. */
 
@@ -109,7 +112,11 @@ function headsSetSlots(pid, slots) {
   if (!pid || !Array.isArray(slots)) return;
   const before = JSON.stringify(HD.slots.get(pid) || null);
   HD.slots.set(pid, slots);
-  if (JSON.stringify(slots) !== before) hdEmit({ pid, what: "slots" });
+  if (JSON.stringify(slots) === before) return;
+  // A spool read: the virtual heads one of whose spools is out go.
+  const gone = vhUnloaded(headsVirtual(pid), slots);
+  if (gone.length) hdVirtualGone(pid, gone);
+  hdEmit({ pid, what: "slots" });
 }
 async function headsRefreshSlots(pid) {
   const p = typeof P !== "undefined" ? P.list.find((x) => x.id === pid) : null;
@@ -133,7 +140,110 @@ function headsCount(pid) {
   return Math.max(1, known || (typeof SL !== "undefined" ? SL.lists?.extruders || 0 : 0));
 }
 
+/* ------------------------------------------------------------ virtual heads */
+
+/* A printer's virtual heads, oldest first; none without a printer: their
+   color needs its spools. */
+function headsVirtual(pid) {
+  if (!pid) return [];
+  const e = headsEntry(pid);
+  return (e.virtual ||= []);
+}
+
+/* A new virtual head ({ a, b, pct }): its value (100 + uid). */
+function headsVirtualAdd(pid, mix) {
+  const e = headsEntry(pid);
+  e.virtual ||= [];
+  if (!vhCanAdd(e.virtual)) return null;
+  e.nextUid = Math.max(e.nextUid || 1, ...e.virtual.map((v) => v.uid + 1));
+  const v = { uid: e.nextUid++, a: mix.a, b: mix.b, pct: mix.pct };
+  e.virtual.push(v);
+  hdSave();
+  hdEmit({ pid, what: "virtual" });
+  return vhValue(v.uid);
+}
+
+function headsVirtualSet(pid, uid, mix) {
+  const v = headsVirtual(pid).find((x) => x.uid === uid);
+  if (!v) return;
+  Object.assign(v, { a: mix.a, b: mix.b, pct: mix.pct });
+  hdSave();
+  hdEmit({ pid, what: "virtual" });
+}
+
+/* Deleted (by hand, or a spool unloaded): what used them is left as it is,
+   an orphan value meaning "no head" until a head is chosen. */
+function headsVirtualDelete(pid, uids) {
+  const e = headsEntry(pid);
+  e.virtual = (e.virtual || []).filter((v) => !uids.includes(v.uid));
+  hdSave();
+  hdEmit({ pid, what: "virtual" });
+}
+
+/* Unloaded spools took virtual heads with them: deleted, said once for the
+   whole read, with how many colors of the plate are left without a head. */
+function hdVirtualGone(pid, gone) {
+  const list = headsVirtual(pid);
+  // One sentence per unloaded spool: "T2 was unloaded: V1 (T0 + T2) and
+  // V2 (T3 + T2) were deleted."
+  const by = new Map();
+  for (const { v, out } of gone) {
+    const key = out.map((h) => "T" + h).join(", ");
+    if (!by.has(key)) by.set(key, []);
+    by.get(key).push(`${vhName(list, vhValue(v.uid))} (T${v.a} + T${v.b})`);
+  }
+  const said = [...by].map(([h, names]) => tr("heads.virtual.removed", { h, names: names.join(", "), n: names.length }));
+  const values = gone.map(({ v }) => vhValue(v.uid));
+  headsVirtualDelete(pid, gone.map(({ v }) => v.uid));
+  const n = typeof prVirtualUsers === "function" && pid === headsActive() ? prVirtualUsers(values) : 0;
+  if (n) said.push(tr("heads.virtual.orphans", { n }));
+  const away = window.currentView !== "prepare" && n;
+  toast(said.join(" "), true, away ? { label: tr("heads.virtual.see_prepare"), run: () => switchView("prepare") } : null);
+}
+
+/* A head's spool color, if read. */
+function hdSpoolColor(pid, h) {
+  const s = headsSlots(pid).find((x) => x.index === h);
+  return s?.present && s.color ? s.color : "";
+}
+
+/* Mixed colors, from the engine's mixer (mix_colors), kept by colors and
+   share; linear light meanwhile. Orca mixes from the lower head to the
+   higher one, `t` being the higher one's share: so does this, so that the
+   swatch matches Snapmaker Orca's. */
+const HD_MIX = new Map();
+function hdMix(ca, cb, a, b, shareB) {
+  if (!ca || !cb) return ca || cb || "";
+  const [lo, hi, t] = a < b ? [ca, cb, shareB] : [cb, ca, 1 - shareB];
+  const key = `${lo}|${hi}|${t.toFixed(4)}`;
+  if (HD_MIX.has(key)) return HD_MIX.get(key) || vhMixLinear(lo, hi, t);
+  HD_MIX.set(key, null);
+  invoke("mix_colors", { a: lo, b: hi, shares: [t] })
+    .then(([c]) => {
+      HD_MIX.set(key, c);
+      hdEmit({ what: "mix" });
+    })
+    .catch(() => HD_MIX.delete(key));
+  return vhMixLinear(lo, hi, t);
+}
+
+/* A virtual head's color now: its two spools mixed at its cadence. */
+function headsVirtualColor(pid, v) {
+  return v ? hdMix(hdSpoolColor(pid, v.a), hdSpoolColor(pid, v.b), v.a, v.b, vhShare(v.pct)) : "";
+}
+
+/* A head value's color: a physical head's spool, a virtual head's mix,
+   nothing for an orphan. */
+const headsColorOf = (pid, h) => (vhIs(h) ? headsVirtualColor(pid, vhFind(headsVirtual(pid), h)) : hdSpoolColor(pid, +h));
+
 /* ------------------------------------------------------------ models */
+
+/* A file added to the plate again may have been exported again with
+   other filaments: what was read of it is forgotten. */
+function headsForget(path) {
+  HD.models.delete(path);
+  hdModelNow.delete(path);
+}
 
 function headsModel(path) {
   if (!HD.models.has(path)) {
@@ -296,6 +406,7 @@ async function hvRender() {
     </div>`;
   }).join("");
   $("hv-msg").textContent = list ? "" : $("hv-msg").textContent;
+  vsRenderSection(pid);
 }
 
 $("hv-grid").addEventListener("click", async (e) => {

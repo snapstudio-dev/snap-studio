@@ -31,7 +31,9 @@ const BED_TEMP_KEY = {
 
 async function pdSchema() {
   if (PD.schema?.lang !== LANG) {
-    PD.schema = await fetch(`assets/orca-settings.${LANG}.json`).then((r) => r.json());
+    // A language Orca's settings were not generated for reads them in English.
+    const get = (l) => fetch(`assets/orca-settings.${l}.json`).then((r) => (r.ok ? r.json() : Promise.reject(r.status)));
+    PD.schema = await get(LANG).catch(() => get("en"));
     PD.schema.lang = LANG;
   }
   return PD.schema;

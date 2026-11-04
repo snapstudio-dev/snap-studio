@@ -12,7 +12,7 @@ const UP = {
   installing: false,
   /* Status line shown in Settings, as a key and its parameters. */
   status: ["update.never", {}],
-  prefs: { auto: true, last: null, ...JSON.parse(localStorage.getItem("snapstudio.update") || "{}") },
+  prefs: { auto: true, last: null, ...storedObject("snapstudio.update") },
 };
 
 const UP_RELEASES = "https://github.com/kameka22/snap-studio/releases/latest";

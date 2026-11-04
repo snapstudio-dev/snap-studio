@@ -110,6 +110,26 @@ jobs:
           npx --yes @tauri-apps/cli@^2 build ${{ matrix.args }} \
             --config '{"bundle":{"createUpdaterArtifacts":true}}'
 
+      # The printer simulator is for development builds only (Cargo feature
+      # `sim`, docs/DEVELOPMENT.md): neither its server nor its code may
+      # reach a release.
+      - name: No simulator in the release
+        working-directory: src-tauri
+        run: |
+          if cargo tree -e normal --prefix none | grep -qE '^axum v'; then
+            echo "::error::axum, the simulator's server, is among the release's dependencies"
+            exit 1
+          fi
+          bins=$(find target -type f \( -name snap-studio -o -name snap-studio.exe \) -path '*/release/*' -not -path '*/deps/*' -not -path '*/bundle/*')
+          [ -n "$bins" ] || { echo "::error::no release binary found"; exit 1; }
+          for b in $bins; do
+            if grep -aqE 'sim_status|SIMULATED' "$b"; then
+              echo "::error::$b carries the printer simulator"
+              exit 1
+            fi
+            echo "$b: no simulator"
+          done
+
       - name: Packages (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -161,16 +181,25 @@ jobs:
           path: dist
           merge-multiple: true
 
-      # Notes: the commits since the previous release.
+      # Notes: this version's section of CHANGELOG.md (written by
+      # scripts/release.sh); otherwise the commits since the previous
+      # release. notes-app.md is the same as plain text, for the app's
+      # update sheet (latest.json).
       - name: Release notes
         run: |
-          prev=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
-          if [ -n "$prev" ]; then
-            git log "$prev..HEAD" --no-merges --format='- %s' > notes.md
+          if python3 scripts/changelog.py notes "$VERSION" > notes.md; then
+            python3 scripts/changelog.py notes "$VERSION" --plain > notes-app.md
+            printf '\n[Full changelog](https://github.com/%s/blob/v%s/CHANGELOG.md)\n' "${{ github.repository }}" "$VERSION" >> notes.md
           else
-            git log -20 --no-merges --format='- %s' > notes.md
+            prev=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+            if [ -n "$prev" ]; then
+              git log "$prev..HEAD" --no-merges --format='- %s' > notes.md
+            else
+              git log -20 --no-merges --format='- %s' > notes.md
+            fi
+            [ -s notes.md ] || echo "- Rebuild without changes" > notes.md
+            cp notes.md notes-app.md
           fi
-          [ -s notes.md ] || echo "- Reconstruction sans changement" > notes.md
           cat notes.md
 
       # File read by the installed app: one entry per platform, with the
@@ -184,7 +213,7 @@ jobs:
           arm="Snap-Studio_${VERSION}_arm64.AppImage"
           jq -n \
             --arg v "$VERSION" \
-            --rawfile notes notes.md \
+            --rawfile notes notes-app.md \
             --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg mu "$base/$mac" --rawfile ms "dist/$mac.sig" \
             --arg wu "$base/$win" --rawfile ws "dist/$win.sig" \

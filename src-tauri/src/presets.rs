@@ -15,7 +15,7 @@
 //! * filaments compatible with the 0.4 nozzle have no suffix in their name:
 //!   they must be filtered on `compatible_printers`, never on the name.
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
@@ -50,8 +50,19 @@ struct Entry {
 
 pub struct Index {
     entries: HashMap<String, Entry>,
+    /// Former names of system presets (`renamed_from`) → current name: user
+    /// presets made with an older Orca still inherit the old one.
+    renamed: HashMap<String, String>,
     /// Presets selected in Snapmaker Orca, if readable.
     pub selected: HashMap<String, String>,
+}
+
+/// Why a preset's inheritance does not resolve.
+enum Unresolved {
+    /// This preset, or an ancestor, is not in the index.
+    Missing(String),
+    /// A cycle, or a chain deeper than 16.
+    Loop,
 }
 
 /// Preset bookkeeping keys, of no interest to the user.
@@ -73,16 +84,34 @@ pub struct Details {
     pub custom: Vec<String>,
 }
 
+/// Overrides the engine reads from the filament presets, not the process
+/// one: a value there is ignored, each filament carrying its own (checked
+/// on a real slice, `engine_advanced_overrides`). `idle_temperature`: a
+/// head's nozzle temperature while another prints (ooze prevention).
+pub const FILAMENT_OVERRIDES: &[&str] = &["idle_temperature"];
+
 /// What Snap Studio adds to the process preset: the plate (the machine's by
-/// default), then the user's overrides.
+/// default), then the user's overrides (but the filaments' own keys).
 pub fn process_extra(index: &Index, machine: &str, overrides: &Map<String, Value>) -> Map<String, Value> {
     let (_, bed) = index.bed_types(machine);
     let mut out = Map::new();
     out.insert("curr_bed_type".into(), Value::String(bed));
     for (k, v) in overrides {
-        out.insert(k.clone(), v.clone());
+        if !FILAMENT_OVERRIDES.contains(&k.as_str()) {
+            out.insert(k.clone(), v.clone());
+        }
     }
     out
+}
+
+/// The user's overrides that go to every filament preset, as the engine
+/// reads them there (one value per filament: an array).
+pub fn filament_overrides(overrides: &Map<String, Value>) -> Map<String, Value> {
+    overrides
+        .iter()
+        .filter(|(k, _)| FILAMENT_OVERRIDES.contains(&k.as_str()))
+        .map(|(k, v)| (k.clone(), if v.is_array() { v.clone() } else { Value::Array(vec![v.clone()]) }))
+        .collect()
 }
 
 /// What Snap Studio adds to a filament preset: the spool's real color.
@@ -124,18 +153,13 @@ fn read_json(p: &Path) -> Option<Value> {
 
 /// Snapmaker Orca's data folder.
 pub fn datadir() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("Snapmaker_Orca")
+    dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("Snapmaker_Orca")
 }
 
 /// Snap Studio's own profiles (`<config>/fr.carlini.snapstudio/profiles/<kind>`):
 /// what the app saves never goes into Snapmaker Orca's folder.
 pub fn app_profiles_dir() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("fr.carlini.snapstudio")
-        .join("profiles")
+    dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio").join("profiles")
 }
 
 /// Folder of the profiles shipped with the app.
@@ -143,14 +167,29 @@ fn system_profiles(app: &Path) -> Option<PathBuf> {
     crate::slicers::resources(app).map(|r| r.join("profiles/Snapmaker"))
 }
 
+/// Which presets an index reads besides `app`'s system profiles.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Scope {
+    /// The user's presets and Orca's selection too.
+    WithUser,
+    /// System profiles only: what tests see does not depend on the machine.
+    SystemOnly,
+}
+
 impl Index {
-    /// Inventories `app`'s system profiles and the user's presets.
+    /// Inventories `app`'s system profiles and the user's presets (system
+    /// profiles only under test).
     pub fn build(app: &Path) -> Result<Index> {
+        Self::build_scoped(app, if cfg!(test) { Scope::SystemOnly } else { Scope::WithUser })
+    }
+
+    fn build_scoped(app: &Path, scope: Scope) -> Result<Index> {
         let Some(sys) = system_profiles(app).filter(|p| p.is_dir()) else {
             return Err(anyhow!(crate::t!("err.not_orca", path = app.display())));
         };
         let mut entries = HashMap::new();
-        let add = |dir: PathBuf, kind: Kind, user: bool, entries: &mut HashMap<String, Entry>| {
+        let mut renamed = HashMap::new();
+        let mut add = |dir: PathBuf, kind: Kind, user: bool, entries: &mut HashMap<String, Entry>| {
             let Ok(rd) = std::fs::read_dir(&dir) else { return };
             for e in rd.flatten() {
                 let p = e.path();
@@ -163,6 +202,13 @@ impl Index {
                     .and_then(|v| v.as_str())
                     .map(String::from)
                     .unwrap_or_else(|| p.file_stem().unwrap_or_default().to_string_lossy().to_string());
+                if !user {
+                    // Several former names, separated by `;`.
+                    let old = json.get("renamed_from").and_then(|v| v.as_str()).unwrap_or_default();
+                    for alias in old.split(';').map(str::trim).filter(|a| !a.is_empty()) {
+                        renamed.entry(alias.to_string()).or_insert_with(|| name.clone());
+                    }
+                }
                 // A user preset hides the system one of the same name.
                 if user || !entries.contains_key(&name) {
                     entries.insert(name, Entry { kind, json, user });
@@ -171,6 +217,9 @@ impl Index {
         };
         for kind in [Kind::Machine, Kind::Process, Kind::Filament] {
             add(sys.join(kind.dir()), kind, false, &mut entries);
+        }
+        if scope == Scope::SystemOnly {
+            return Ok(Index { entries, renamed, selected: HashMap::new() });
         }
         let ud = datadir().join("user/default");
         for kind in [Kind::Machine, Kind::Process, Kind::Filament] {
@@ -182,27 +231,49 @@ impl Index {
             add(own.join(kind.dir()), kind, true, &mut entries);
         }
 
-        Ok(Index {
-            entries,
-            selected: read_selected(),
-        })
+        Ok(Index { entries, renamed, selected: read_selected() })
+    }
+
+    /// A preset's current name: `name` itself, or the system preset that
+    /// was renamed from it.
+    fn canonical<'a>(&'a self, name: &'a str) -> &'a str {
+        if self.entries.contains_key(name) {
+            return name;
+        }
+        self.renamed.get(name).map_or(name, String::as_str)
+    }
+
+    fn entry(&self, name: &str) -> Option<&Entry> {
+        self.entries.get(self.canonical(name))
     }
 
     /// Complete configuration of a preset, inheritance resolved.
     pub fn flatten(&self, name: &str) -> Option<Map<String, Value>> {
-        self.flatten_inner(name, &mut HashSet::new(), 0)
+        self.flatten_inner(name, &mut HashSet::new(), 0).ok()
     }
 
-    fn flatten_inner(&self, name: &str, seen: &mut HashSet<String>, depth: u32) -> Option<Map<String, Value>> {
-        if depth > 16 || !seen.insert(name.to_string()) {
-            return None;
-        }
-        let e = self.entries.get(name)?;
-        let obj = e.json.as_object()?;
-        let mut out = match obj.get("inherits").and_then(|v| v.as_str()) {
-            Some(parent) if !parent.is_empty() => {
-                self.flatten_inner(parent, seen, depth + 1).unwrap_or_default()
+    /// As [`Index::flatten`], with an error naming what breaks the chain.
+    pub fn resolve(&self, name: &str) -> Result<Map<String, Value>> {
+        self.flatten_inner(name, &mut HashSet::new(), 0).map_err(|e| match e {
+            Unresolved::Missing(parent) if parent != name => {
+                anyhow!(crate::t!("err.inheritance_missing", name = name, parent = parent))
             }
+            Unresolved::Missing(_) => anyhow!(crate::t!("err.unknown_preset", name = name)),
+            Unresolved::Loop => anyhow!(crate::t!("err.inheritance", name = name)),
+        })
+    }
+
+    fn flatten_inner(&self, name: &str, seen: &mut HashSet<String>, depth: u32) -> Result<Map<String, Value>, Unresolved> {
+        let name = self.canonical(name);
+        if depth > 16 || !seen.insert(name.to_string()) {
+            return Err(Unresolved::Loop);
+        }
+        let obj = self.entries.get(name).and_then(|e| e.json.as_object()).ok_or_else(|| Unresolved::Missing(name.to_string()))?;
+        let mut out = match obj.get("inherits").and_then(|v| v.as_str()) {
+            // A parent that is missing (a user preset from another Orca
+            // version), in a cycle or too deep: no configuration at all,
+            // rather than a partial one the engine fails on.
+            Some(parent) if !parent.is_empty() => self.flatten_inner(parent, seen, depth + 1)?,
             _ => Map::new(),
         };
         for (k, v) in obj {
@@ -211,17 +282,17 @@ impl Index {
             }
             out.insert(k.clone(), v.clone());
         }
-        Some(out)
+        Ok(out)
     }
 
     pub fn kind_of(&self, name: &str) -> Option<Kind> {
-        self.entries.get(name).map(|e| e.kind)
+        self.entry(name).map(|e| e.kind)
     }
 
     /// Inheritance chain, from the preset to its ancestors.
     pub fn chain(&self, name: &str) -> Vec<String> {
         let mut out = vec![];
-        let mut cur = Some(name.to_string());
+        let mut cur = Some(self.canonical(name).to_string());
         while let Some(n) = cur.take() {
             if out.contains(&n) || out.len() > 16 {
                 break;
@@ -232,7 +303,7 @@ impl Index {
                 .and_then(|e| e.json.get("inherits"))
                 .and_then(|v| v.as_str())
                 .filter(|p| !p.is_empty())
-                .map(String::from);
+                .map(|p| self.canonical(p).to_string());
             out.push(n);
         }
         out
@@ -241,7 +312,7 @@ impl Index {
     /// Content of a preset as it goes to the engine: inheritance resolved, then
     /// `extra`, what Snap Studio adds for this slice.
     pub fn details(&self, name: &str, extra: &Map<String, Value>) -> Option<Details> {
-        let e = self.entries.get(name)?;
+        let e = self.entry(name)?;
         let mut values = self.flatten(name)?;
         let mut snap = vec![];
         for (k, v) in extra {
@@ -260,10 +331,7 @@ impl Index {
             .and_then(|base| self.flatten(base))
             .map(|base| {
                 let own = self.flatten(name).unwrap_or_default();
-                own.iter()
-                    .filter(|(k, v)| base.get(*k) != Some(*v) && !META.contains(&k.as_str()))
-                    .map(|(k, _)| k.clone())
-                    .collect()
+                own.iter().filter(|(k, v)| base.get(*k) != Some(*v) && !META.contains(&k.as_str())).map(|(k, _)| k.clone()).collect()
             })
             .unwrap_or_default();
         for k in META {
@@ -277,10 +345,7 @@ impl Index {
         self.entries
             .iter()
             .filter(|(_, e)| e.kind == kind)
-            .filter(|(_, e)| {
-                e.user
-                    || e.json.get("instantiation").and_then(|v| v.as_str()) == Some("true")
-            })
+            .filter(|(_, e)| e.user || e.json.get("instantiation").and_then(|v| v.as_str()) == Some("true"))
             .collect()
     }
 
@@ -303,17 +368,17 @@ impl Index {
         let mut out = vec![machine.to_string()];
         let mut cur = machine.to_string();
         for _ in 0..16 {
-            let Some(parent) = self
-                .entries
-                .get(&cur)
-                .and_then(|e| e.json.get("inherits"))
-                .and_then(|v| v.as_str())
-                .filter(|p| !p.is_empty())
+            let Some(parent) = self.entry(&cur).and_then(|e| e.json.get("inherits")).and_then(|v| v.as_str()).filter(|p| !p.is_empty())
             else {
                 break;
             };
+            // Both names: lists written before the renaming cite the old one.
             out.push(parent.to_string());
-            cur = parent.to_string();
+            let current = self.canonical(parent);
+            if current != parent {
+                out.push(current.to_string());
+            }
+            cur = current.to_string();
         }
         out
     }
@@ -330,9 +395,9 @@ impl Index {
                 // and vendor.
                 let flat = self.flatten(n).unwrap_or_default();
                 let ok = match flat.get("compatible_printers").and_then(|v| v.as_array()) {
-                    Some(list) if !list.is_empty() => list
-                        .iter()
-                        .any(|x| x.as_str().map(|s| names.iter().any(|n| n == s)).unwrap_or(false)),
+                    Some(list) if !list.is_empty() => {
+                        list.iter().any(|x| x.as_str().map(|s| names.iter().any(|n| n == s)).unwrap_or(false))
+                    }
                     // Without an explicit list, the preset applies to everyone.
                     _ => true,
                 };
@@ -361,10 +426,7 @@ impl Index {
 
     /// Usable bed dimensions, in millimeters.
     pub fn plate_size(&self, machine: &str) -> (f32, f32) {
-        let corners = self
-            .flatten(machine)
-            .and_then(|m| m.get("printable_area").and_then(|v| v.as_array()).cloned())
-            .unwrap_or_default();
+        let corners = self.flatten(machine).and_then(|m| m.get("printable_area").and_then(|v| v.as_array()).cloned()).unwrap_or_default();
         let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
         for c in corners {
             // "270.5x271" format.
@@ -382,17 +444,14 @@ impl Index {
         if x1 > x0 && y1 > y0 {
             (x1 - x0, y1 - y0)
         } else {
-            (256.0, 256.0)
+            // Unknown shape: the U1's bed, as `slice::bed` assumes too.
+            (270.0, 270.0)
         }
     }
 
     /// Printer model of a machine preset ("Snapmaker U1"…).
     pub fn printer_model(&self, machine: &str) -> Option<String> {
-        self.flatten(machine)?
-            .get("printer_model")?
-            .as_str()
-            .filter(|s| !s.is_empty())
-            .map(String::from)
+        self.flatten(machine)?.get("printer_model")?.as_str().filter(|s| !s.is_empty()).map(String::from)
     }
 
     /// Plates offered for a machine, and the default one.
@@ -403,17 +462,10 @@ impl Index {
     /// instead of 65 °C.
     pub fn bed_types(&self, machine: &str) -> (Vec<BedType>, String) {
         let cfg = self.flatten(machine).unwrap_or_default();
-        let u1 = cfg
-            .get("printer_model")
-            .and_then(|v| v.as_str())
-            .is_some_and(|m| m.contains("U1"));
+        let u1 = cfg.get("printer_model").and_then(|v| v.as_str()).is_some_and(|m| m.contains("U1"));
         // Same lists as Orca's interface (`PrintConfig.cpp`).
         let list: &[(&str, &str)] = if u1 {
-            &[
-                ("Textured PEI Plate", "bed.textured_pei"),
-                ("High Temp Plate", "bed.smooth_pei"),
-                ("Graphic Effect Plate", "bed.graphic"),
-            ]
+            &[("Textured PEI Plate", "bed.textured_pei"), ("High Temp Plate", "bed.smooth_pei"), ("Graphic Effect Plate", "bed.graphic")]
         } else {
             &[
                 ("Textured PEI Plate", "bed.textured_pei"),
@@ -425,10 +477,7 @@ impl Index {
             ]
         };
         // The second element is the label's translation key.
-        let types: Vec<BedType> = list
-            .iter()
-            .map(|(value, key)| BedType { value: value.to_string(), label: crate::t!(key) })
-            .collect();
+        let types: Vec<BedType> = list.iter().map(|(value, key)| BedType { value: value.to_string(), label: crate::t!(key) }).collect();
         let default = cfg
             .get("default_bed_type")
             .and_then(|v| v.as_str())
@@ -440,14 +489,7 @@ impl Index {
 
     /// Number of heads a machine declares.
     pub fn extruder_count(&self, machine: &str) -> usize {
-        self.flatten(machine)
-            .and_then(|m| {
-                m.get("nozzle_diameter")
-                    .and_then(|v| v.as_array())
-                    .map(|a| a.len())
-            })
-            .unwrap_or(1)
-            .max(1)
+        self.flatten(machine).and_then(|m| m.get("nozzle_diameter").and_then(|v| v.as_array()).map(|a| a.len())).unwrap_or(1).max(1)
     }
 }
 
@@ -517,7 +559,7 @@ fn write_config(dir: &Path, kind: Kind, name: &str, mut cfg: Map<String, Value>,
     cfg.insert("from".into(), Value::String("system".into()));
     cfg.insert("instantiation".into(), Value::String("true".into()));
     let path = dir.join(format!("{}{}.json", kind.dir(), suffix));
-    std::fs::write(&path, serde_json::to_vec_pretty(&Value::Object(cfg))?)?;
+    std::fs::write(&path, serde_json::to_vec_pretty(&Value::Object(cfg))?).with_context(|| format!("writing {}", path.display()))?;
     Ok(path)
 }
 
@@ -568,9 +610,9 @@ fn save_user_process_in(index: &Index, dir: &Path, name: &str, base: &str, value
     cfg.insert("type".into(), Value::String("process".into()));
     cfg.insert("is_custom_defined".into(), Value::String("0".into()));
     cfg.insert("print_settings_id".into(), Value::String(name.into()));
-    std::fs::create_dir_all(dir)?;
+    std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     let path = dir.join(format!("{name}.json"));
-    std::fs::write(&path, serde_json::to_vec_pretty(&Value::Object(cfg))?)?;
+    std::fs::write(&path, serde_json::to_vec_pretty(&Value::Object(cfg))?).with_context(|| format!("writing {}", path.display()))?;
     Ok(path)
 }
 
@@ -595,12 +637,8 @@ pub fn prepare(
     if index.kind_of(process) != Some(Kind::Process) {
         return Err(anyhow!(crate::t!("err.unknown_process", name = process)));
     }
-    let machine_cfg = index
-        .flatten(machine)
-        .ok_or_else(|| anyhow!(crate::t!("err.inheritance", name = machine)))?;
-    let mut process_cfg = index
-        .flatten(process)
-        .ok_or_else(|| anyhow!(crate::t!("err.inheritance", name = process)))?;
+    let machine_cfg = index.resolve(machine)?;
+    let mut process_cfg = index.resolve(process)?;
 
     // Without this copy, `normalize_fdm` looks for `nozzle_diameter` next to
     // `wipe_tower_filament` and hits a null pointer.
@@ -620,18 +658,16 @@ pub fn prepare(
     let count = index.extruder_count(machine);
     let mut paths = Vec::new();
     for i in 0..count {
-        let name = filaments
-            .get(i)
-            .or_else(|| filaments.first())
-            .ok_or_else(|| anyhow!(crate::t!("err.no_filament")))?;
+        let name = filaments.get(i).or_else(|| filaments.first()).ok_or_else(|| anyhow!(crate::t!("err.no_filament")))?;
         if index.kind_of(name) != Some(Kind::Filament) {
             return Err(anyhow!(crate::t!("err.unknown_filament", name = name)));
         }
-        let mut cfg = index
-            .flatten(name)
-            .ok_or_else(|| anyhow!(crate::t!("err.inheritance", name = name)))?;
+        let mut cfg = index.resolve(name)?;
         declare_compatible(&mut cfg, machine);
         for (k, v) in filament_extra(colors.get(i).and_then(|c| c.as_deref())) {
+            cfg.insert(k, v);
+        }
+        for (k, v) in filament_overrides(overrides) {
             cfg.insert(k, v);
         }
         // Every filament declares a color: the engine counts the filaments by
@@ -644,11 +680,7 @@ pub fn prepare(
         paths.push(write_config(dir, Kind::Filament, name, cfg, &format!("_{i}"))?);
     }
 
-    Ok(Prepared {
-        machine: machine_path,
-        process: process_path,
-        filaments: paths,
-    })
+    Ok(Prepared { machine: machine_path, process: process_path, filaments: paths })
 }
 
 #[cfg(test)]
@@ -669,8 +701,11 @@ mod tests {
     #[test]
     fn save_user_process_writes_a_differential() {
         let mut entries = HashMap::new();
-        entries.insert("0.20mm Standard".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "0.20mm Standard", "layer_height": "0.2"}), user: false });
-        let idx = Index { entries, selected: Default::default() };
+        entries.insert(
+            "0.20mm Standard".to_string(),
+            Entry { kind: Kind::Process, json: serde_json::json!({"name": "0.20mm Standard", "layer_height": "0.2"}), user: false },
+        );
+        let idx = Index { entries, renamed: HashMap::new(), selected: Default::default() };
         let dir = std::env::temp_dir().join("snapstudio-save-process");
         let _ = std::fs::remove_dir_all(&dir);
         let mut v = Map::new();
@@ -695,12 +730,7 @@ mod tests {
         };
         let procs = idx.processes_for(&user_machine.name);
         let fils = idx.filaments_for(&user_machine.name);
-        println!(
-            "custom preset “{}”: {} processes, {} filaments",
-            user_machine.name,
-            procs.len(),
-            fils.len()
-        );
+        println!("custom preset “{}”: {} processes, {} filaments", user_machine.name, procs.len(), fils.len());
         assert!(!procs.is_empty(), "the parent's processes stay compatible");
         assert!(!fils.is_empty(), "the parent's filaments stay compatible");
     }
@@ -710,10 +740,7 @@ mod tests {
         let Some(idx) = index() else { return };
         let machines = idx.machines();
         println!("{} machines offered", machines.len());
-        let u1 = machines
-            .iter()
-            .find(|m| m.name == "Snapmaker U1 (0.4 nozzle)")
-            .expect("the U1 0.4 is offered");
+        let u1 = machines.iter().find(|m| m.name == "Snapmaker U1 (0.4 nozzle)").expect("the U1 0.4 is offered");
         println!("current selection: {:?}", idx.selected.get("machine"));
 
         let flat = idx.flatten(&u1.name).unwrap();
@@ -728,14 +755,8 @@ mod tests {
         println!("{} processes, {} filaments compatible", procs.len(), fils.len());
         assert!(!procs.is_empty() && !fils.is_empty());
         // The naming trap: 0.4 nozzle filaments have no suffix.
-        assert!(
-            fils.iter().any(|f| f.name.contains("PLA")),
-            "at least one compatible PLA"
-        );
-        assert!(
-            !fils.iter().any(|f| f.name.contains("0.2 nozzle")),
-            "no filament for another nozzle"
-        );
+        assert!(fils.iter().any(|f| f.name.contains("PLA")), "at least one compatible PLA");
+        assert!(!fils.iter().any(|f| f.name.contains("0.2 nozzle")), "no filament for another nozzle");
     }
 
     /// Profiles of OrcaSlicer's reference clone, if it is there (not versioned).
@@ -745,6 +766,24 @@ mod tests {
     }
 
     /// The details shown are exactly what the engine receives.
+    /// A filament's own key goes to the filaments, as an array, never to
+    /// the process; the rest stays the process's.
+    #[test]
+    fn filament_keys_go_to_the_filaments() {
+        let mut over = Map::new();
+        over.insert("idle_temperature".into(), "150".into());
+        over.insert("ooze_prevention".into(), "1".into());
+        let f = filament_overrides(&over);
+        assert_eq!(f.len(), 1);
+        assert_eq!(f["idle_temperature"], serde_json::json!(["150"]));
+        let mut arr = Map::new();
+        arr.insert("idle_temperature".into(), serde_json::json!(["120", "130"]));
+        assert_eq!(filament_overrides(&arr)["idle_temperature"], serde_json::json!(["120", "130"]), "an array stays as is");
+        let Some(idx) = repo_index().or_else(index) else { return };
+        let p = process_extra(&idx, "Snapmaker U1 (0.4 nozzle)", &over);
+        assert!(!p.contains_key("idle_temperature") && p["ooze_prevention"] == "1");
+    }
+
     #[test]
     fn details_match_what_the_engine_gets() {
         let Some(idx) = repo_index().or_else(index) else { return };
@@ -791,10 +830,7 @@ mod tests {
         assert_eq!(m["from"], "system");
         let pr: Value = serde_json::from_slice(&std::fs::read(&p.process).unwrap()).unwrap();
         assert_eq!(pr["type"], "process");
-        assert!(
-            pr.get("nozzle_diameter").is_some(),
-            "nozzle_diameter copied: it is what avoids the crash"
-        );
+        assert!(pr.get("nozzle_diameter").is_some(), "nozzle_diameter copied: it is what avoids the crash");
         assert_eq!(pr["curr_bed_type"], "Textured PEI Plate", "the U1's default plate");
         println!("process “{process}”, filament “{filament}” → {}", dir.display());
     }
@@ -833,30 +869,23 @@ mod tests {
         let out = dir.join("out");
         std::fs::create_dir_all(&out).unwrap();
         let settings = format!("{};{}", p.machine.display(), p.process.display());
-        let fils = p
-            .filaments
-            .iter()
-            .map(|f| f.display().to_string())
-            .collect::<Vec<_>>()
-            .join(";");
+        let fils = p.filaments.iter().map(|f| f.display().to_string()).collect::<Vec<_>>().join(";");
         let t = std::time::Instant::now();
         let out_cmd = std::process::Command::new(crate::slicers::executable(&app()).unwrap())
             .args(["--arrange", "0", "--allow-newer-file", "--slice", "0"])
-            .arg("--load-settings").arg(&settings)
-            .arg("--load-filaments").arg(&fils)
-            .arg("--outputdir").arg(&out)
+            .arg("--load-settings")
+            .arg(&settings)
+            .arg("--load-filaments")
+            .arg(&fils)
+            .arg("--outputdir")
+            .arg(&out)
             .arg(&model)
             .output()
             .expect("engine can be started");
         let status = out_cmd.status;
         let mut msg = String::from_utf8_lossy(&out_cmd.stdout).to_string();
         msg.push_str(&String::from_utf8_lossy(&out_cmd.stderr));
-        let tail: Vec<&str> = msg
-            .lines()
-            .filter(|l| !l.contains("sentry") && !l.contains("StaticPrintConfigs"))
-            .rev()
-            .take(4)
-            .collect();
+        let tail: Vec<&str> = msg.lines().filter(|l| !l.contains("sentry") && !l.contains("StaticPrintConfigs")).rev().take(4).collect();
         println!("engine: {:?}", tail);
 
         let produced: Vec<_> = std::fs::read_dir(&out)
@@ -878,6 +907,18 @@ mod tests {
         assert!(size > 1000, "G-code too short ({size} bytes)");
     }
 
+    /// Every preset of this machine's user resolves against the installed
+    /// Orca (`cargo test --lib presets -- --ignored`): a user preset whose
+    /// parent Orca renamed or removed shows here, not at slicing time.
+    #[test]
+    #[ignore = "reads the user's own Orca presets"]
+    fn the_users_presets_all_resolve() {
+        let Ok(idx) = Index::build_scoped(&app(), Scope::WithUser) else { return };
+        let broken: Vec<String> =
+            idx.entries.iter().filter(|(_, e)| e.user).filter_map(|(n, _)| idx.resolve(n).err().map(|e| format!("{e:#}"))).collect();
+        assert!(broken.is_empty(), "{broken:#?}");
+    }
+
     #[test]
     fn applies_overrides() {
         let Some(idx) = index() else { return };
@@ -890,5 +931,74 @@ mod tests {
         let p = prepare(&idx, &dir, machine, &process, &[filament], &[], &ovr).unwrap();
         let pr: Value = serde_json::from_slice(&std::fs::read(&p.process).unwrap()).unwrap();
         assert_eq!(pr["layer_height"], "0.28");
+    }
+}
+
+#[cfg(test)]
+mod inheritance_tests {
+    use super::{Entry, Index, Kind};
+    use std::collections::HashMap;
+
+    #[test]
+    fn a_missing_parent_resolves_to_nothing() {
+        let mut entries = HashMap::new();
+        entries.insert(
+            "Child".to_string(),
+            Entry {
+                kind: Kind::Process,
+                json: serde_json::json!({"name": "Child", "inherits": "Gone", "layer_height": "0.2"}),
+                user: true,
+            },
+        );
+        entries.insert(
+            "Whole".to_string(),
+            Entry {
+                kind: Kind::Process,
+                json: serde_json::json!({"name": "Whole", "inherits": "Base", "layer_height": "0.2"}),
+                user: true,
+            },
+        );
+        entries.insert(
+            "Base".to_string(),
+            Entry { kind: Kind::Process, json: serde_json::json!({"name": "Base", "wall_loops": "2"}), user: false },
+        );
+        let idx = Index { entries, renamed: HashMap::new(), selected: Default::default() };
+        assert!(idx.flatten("Child").is_none(), "no partial configuration for a parent that is not there");
+        let whole = idx.flatten("Whole").unwrap();
+        assert_eq!(whole["wall_loops"], "2");
+        assert_eq!(whole["layer_height"], "0.2");
+    }
+
+    #[test]
+    fn a_renamed_parent_resolves_to_its_new_name() {
+        let mut entries = HashMap::new();
+        entries.insert(
+            "Mine".to_string(),
+            Entry {
+                kind: Kind::Process,
+                json: serde_json::json!({"name": "Mine", "inherits": "0.08 Extra Fine", "wall_loops": "4"}),
+                user: true,
+            },
+        );
+        entries.insert(
+            "0.08mm Standard".to_string(),
+            Entry {
+                kind: Kind::Process,
+                json: serde_json::json!({"name": "0.08mm Standard", "layer_height": "0.08", "wall_loops": "2"}),
+                user: false,
+            },
+        );
+        entries.insert(
+            "Orphan".to_string(),
+            Entry { kind: Kind::Process, json: serde_json::json!({"name": "Orphan", "inherits": "Gone"}), user: true },
+        );
+        let renamed = HashMap::from([("0.08 Extra Fine".to_string(), "0.08mm Standard".to_string())]);
+        let idx = Index { entries, renamed, selected: Default::default() };
+        let flat = idx.resolve("Mine").unwrap();
+        assert_eq!((flat["layer_height"].as_str(), flat["wall_loops"].as_str()), (Some("0.08"), Some("4")));
+        assert_eq!(idx.chain("Mine"), ["Mine", "0.08mm Standard"]);
+        assert_eq!(idx.kind_of("0.08 Extra Fine"), Some(Kind::Process));
+        let err = idx.resolve("Orphan").unwrap_err().to_string();
+        assert!(err.contains("Orphan") && err.contains("Gone"), "{err}");
     }
 }
