@@ -29,6 +29,7 @@ lists below.
 | [printer-simulator.md](printer-simulator.md) | Dev builds: simulated printers (a fake Moonraker per printer on this computer) and a full simulation mode, with time acceleration and fault injection | Implemented in draft PR [#87](https://github.com/kameka22/snap-studio/pull/87) (phases 1 to 5); open questions in the PR |
 | [support-needed-hint.md](support-needed-hint.md) | Prepare: tell whether an object needs supports — a badge on the 3D view computed from the mesh, an overhang view, and the engine's warning after the slice | Implemented in draft PR [#89](https://github.com/kameka22/snap-studio/pull/89) (A and B, overhang view); checks in the app on a real slice left |
 | [library-nav-contrast.md](library-nav-contrast.md) | Explore: Back, Forward and Reload almost invisible over dark sites; adaptive pill (dark on light sites, light on dark sites), chosen | Implemented in draft PR [#88](https://github.com/kameka22/snap-studio/pull/88), with the Linux flicker fix; checks on macOS and Windows left |
+| [plate-material-compatibility.md](plate-material-compatibility.md) | Plate and material compatibility: warnings and glue tip in Prepare and at start, plus the plate set per printer in Control, a check when a spool is loaded, a suggested bed temperature and a glue reminder | Written, draft PR [#16](https://github.com/kameka22/snap-studio/pull/16); waiting for the go |
 
 The other planned features each have a draft pull request: see the
 [Roadmap](../../README.md#roadmap).
