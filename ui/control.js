@@ -181,6 +181,7 @@ function ctlHeadHtml(h, { compact = false } = {}) {
         <div class="ct-gauge" data-v="gauge"><span><b data-v="temp">—</b><small data-v="target"></small></span></div>
         <div class="ct-head-set">${slider}<button class="btn small ct-activate" data-act="tool" data-n="${n}">${esc(tr("ctl.activate"))}</button></div>
       </div>
+      <div class="ct-plate-note hidden" data-v="plate-note" role="status"></div>
       <div class="ct-head-acts">
         ${ctlBtn("load", n, tr("ctl.load"))}${ctlBtn("unload", n, tr("ctl.unload"))}
         ${ctlBtn("extrude", n, `↓ ${tr("ctl.extrude")}`, ` title="${esc(tr("ctl.extrude_sub"))}" data-tip="${esc(tr("ctl.extrude_sub"))}"`)}${ctlBtn("retract", n, `↑ ${tr("ctl.retract")}`)}
@@ -199,6 +200,22 @@ function ctlHeadPaint(el, pid, h) {
   if (spool) ctlSpoolPaint(spool, pid, h.index);
   const badge = el.querySelector('[data-v="badge"]');
   if (badge) badge.textContent = active ? tr("ctl.is_active") : "";
+  // A new spool that does not suit the printer's plate (plate.js).
+  const note = el.querySelector('[data-v="plate-note"]');
+  if (note) {
+    const i = typeof plateNote === "function" ? plateNote(pid, h.index) : null;
+    note.classList.toggle("hidden", !i);
+    note.classList.toggle("glue", i?.level === "glue");
+    const html = i
+      ? `<span>${esc(tr(i.level === "warn" ? "plate.warn" : "plate.glue", { mat: i.family, plate: plateLabel(headsPlate(pid), pid) }))}</span>` +
+        (i.level === "glue" ? `<button type="button" class="btn small" data-plate-tip="${h.index}">${esc(tr("plate.how"))}</button>` : "") +
+        `<button type="button" class="ct-note-x" data-plate-dismiss="${h.index}" aria-label="${esc(tr("common.close"))}" title="${esc(tr("common.close"))}">×</button>`
+      : "";
+    if (note.dataset.html !== html) {
+      note.innerHTML = html;
+      note.dataset.html = html;
+    }
+  }
   el.querySelector('[data-v="temp"]').textContent = ctlDeg(hs?.temp);
   el.querySelector('[data-v="target"]').textContent = hs?.target > 0 ? `→ ${ctlDeg(hs.target)}` : tr("ctl.off");
   const g = el.querySelector('[data-v="gauge"]');
@@ -319,6 +336,15 @@ const CTL_DOING = { home: "ctl.doing.home", jog: "ctl.doing.jog", tool: "ctl.doi
 function ctlBind(root) {
   const pidOf = (el) => el.closest("[data-ctl-pid]")?.dataset.ctlPid;
   root.addEventListener("click", (e) => {
+    // A head's plate notice: closed, or the glue tip shown.
+    const x = e.target.closest("[data-plate-dismiss], [data-plate-tip]");
+    if (x && root.contains(x)) {
+      const xpid = pidOf(x);
+      if (x.dataset.plateDismiss != null) return plateNoteDismiss(xpid, +x.dataset.plateDismiss);
+      const i = plateNote(xpid, +x.dataset.plateTip);
+      if (i) plateAsk({ plate: headsPlate(xpid), families: [i.family], pid: xpid });
+      return;
+    }
     const b = e.target.closest("[data-act]");
     if (!b || b.disabled || !root.contains(b)) return;
     const pid = pidOf(b), kind = b.dataset.act;
@@ -692,6 +718,8 @@ $("ctlfil-cancel").addEventListener("click", () => closeSheet($("ctlfil")));
 $("ctlfil-ok").addEventListener("click", async () => {
   const { pid, n, load, pick } = CF;
   closeSheet($("ctlfil"));
+  // Against the printer's plate first: a warning can cancel it.
+  if (!(await plateCheckDeclared(pid, n, pick.material))) return;
   const ok = await ctlRun(pid, { kind: "filament", n, vendor: pick.vendor, material: pick.material, sub_type: pick.sub_type, color: pick.color }, tr("ctl.doing.filament", { n }));
   if (ok && load) ctlRun(pid, { kind: "load", n }, tr("ctl.doing.load", { n }));
 });

@@ -654,6 +654,11 @@ async function startSlice() {
   await ADV.ready?.catch(() => {});
   const simple = currentSimple();
   const bed = $("s-bed").value;
+  // The plate against the materials of the heads used (plate.js): a
+  // warning can stop here, the glue tip is shown.
+  const ftypeOf = spFtypeOf(currentPrinter()?.id || "");
+  const families = heads.map((h) => spMaterialFamily(ftypeOf(filaments[h]) || spMaterialFromName(filaments[h])));
+  if (!(await plateAsk({ plate: bed, families, pid: currentPrinter()?.id }))) return;
   remember(machine, { process, filaments, simple, bed, adv: SL.adv || {}, speed: SL.speed });
   if (typeof prHintRefresh === "function") prHintRefresh();
   const printer = currentPrinter();
