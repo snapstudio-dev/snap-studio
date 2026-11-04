@@ -4,9 +4,9 @@ In Explore, when a site is shown (Snapmaker Space, MakerWorld, Printables…),
 the Back, Forward and Reload buttons at the top left of the page can hardly be
 seen when the site has a dark background.
 
-Plan only: nothing is implemented until the owner gives the go. The owner's
-choice is **[D. Adaptive pill](#d-adaptive-pill-owners-choice)**: the
-floating pill stays, dark on a light site and light on a dark site.
+Implemented in draft PR #88 ([Implementation](#implementation)). The
+owner's choice is **[D. Adaptive pill](#d-adaptive-pill-owners-choice)**:
+the floating pill stays, dark on a light site and light on a dark site.
 
 ## Where the buttons are
 
@@ -301,10 +301,50 @@ color (its baseline).
   luminance, thresholds, majority, fallbacks).
 - Screenshots before and after on a dark site.
 
+## Implementation
+
+- **Baseline** (`ui/overlay.html`): solid, never faded, no
+  `backdrop-filter`, a light ring inside a dark one and a soft shadow;
+  `.on-dark` for the light pill; the colors change by repainting only.
+- **Measure** (`ui/nav-tone.js`, injected by `open_tab`, main frame): as
+  section D. Refinements found on real sites: a small picture (a logo, an
+  icon: 64 px high and 320 px wide at most) is looked under, as on
+  Snapmaker Space, where the logo covers all three points and the
+  theme-color is a brand blue; a gradient background is read from its
+  colors (they are in the computed style); a big picture whose element has
+  an opaque background color takes that color (Thangs' dark hero under a
+  transparent bar). The value kept is the tone and the color under the
+  pill, `"dark #1d1d1e"`, under `Symbol.for("snapstudio.navTone")`.
+- **Reading** (`library.rs`): `eval_with_callback` on the tab shown about
+  every 300 ms and on page load, title change, tab switch and
+  Back/Forward/Reload; only a "light" or "dark" word and a `#rrggbb` color
+  are accepted (`parse_tone`); the pill is told once per change
+  (`setTone`), and a new pill starts with them (`window.__NAV__`).
+- **Tooltips**: `window.__NAV__` carries the language and the three labels;
+  `language_set` relabels the pill shown (`nav_relabel`).
+- **Linux flicker (the addendum)**: cause found in an Ubuntu 26.04 VM
+  (GNOME on Wayland, WebKitGTK 2.52). Each time the pill repainted on its
+  own (hovering it, a button, a tooltip), its whole view showed the
+  desktop for a moment: WebKitGTK paints a transparent view by replacing
+  what is under it rather than drawing over it, and the window is
+  see-through (its rounded corners), so the view's transparent pixels let
+  the desktop through. The old fade and blur only made it more frequent;
+  the new style alone did not remove it. Neither clipping the view's
+  drawing, shaping its window nor marking it see-through for GDK helped;
+  an opaque view did. On Linux the pill's view is now opaque and the
+  pill's own size, at the same place, its corners in the color measured
+  under the pill (`.solid`, `nav_rect`). No hole in about 40 frames taken
+  as the pointer entered and left the pill; the tone's 300 ms reading
+  only repaints the pill when the tone or color changes.
+- Tests: `scripts/test-navtone.js` (colors, blending, luminance,
+  thresholds, pictures, gradients, fallbacks, majority, corner color);
+  `library.rs` (`parse_tone`, the injected script stays read-only).
+
 ## CHANGELOG line (added at implementation, under *Unreleased › Fixed*)
 
 ```
 - **Explore**: the Back, Forward and Reload buttons over a site stay
   visible on any site: the pill turns light on dark sites and dark on light
-  ones, and no longer fades out. Their tooltips are translated.
+  ones, and no longer fades out. Their tooltips are translated, and the
+  pill no longer flickers on Linux (#88).
 ```
