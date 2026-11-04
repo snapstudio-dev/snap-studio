@@ -4554,6 +4554,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .ct-plate { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
 .ct-plate select { font-size: 12px; max-width: 190px; }
 .ctl-c .ct-plate { margin-top: 6px; }
+/* The suggested bed temperature: a chip, set on click only. */
+.ct-suggest { align-self: flex-start; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); cursor: default; }
+.ct-suggest.hidden { display: none; }
+.ct-suggest:disabled { opacity: 0.5; }
+.ctl-c .ct-suggest { margin-top: 4px; }
 .ct-empty { font-size: 12.5px; color: var(--text-secondary); }
 /* The camera, small. */
 .ct-cam-box { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: color-mix(in srgb, var(--text) 8%, var(--content-bg)); display: grid; place-items: center; }

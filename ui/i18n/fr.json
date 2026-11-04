@@ -2525,5 +2525,8 @@
   "plate.mismatch_sub": "Sa température de plateau et sa première couche sont réglées pour l'autre plateau.",
   "plate.glue_applied": "Colle appliquée",
   "plate.glue_for": "Le {mat} sur le plateau {plate} demande une fine couche de colle en bâton.",
-  "plate.hide_short": "Ne plus afficher"
+  "plate.hide_short": "Ne plus afficher",
+  "ctl.suggest": "Conseillé : {t} °C",
+  "ctl.suggest_max": "Conseillé : {t} °C (le plus haut des matériaux chargés)",
+  "ctl.suggest_tip": "D'après les profils de filament pour le plateau {plate} ; cliquez pour l'appliquer"
 }

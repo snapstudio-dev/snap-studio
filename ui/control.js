@@ -28,6 +28,8 @@ const CTL = {
   busy: new Map(), // pid → the action under way (label)
   subs: new Set(),
   plates: new Set(), // printers whose plates were asked for
+  suggest: new Map(), // pid → { want, value }: the suggested bed temperature
+  profiles: new Map(), // "machine|profile" → Promise of its values
 };
 
 function ctlData(pid) {
@@ -228,7 +230,8 @@ function ctlHeadPaint(el, pid, h) {
 function ctlBedHtml(cfg, { compact = false } = {}) {
   const max = Math.round(cfg?.bed_max || 100);
   const slider = `<label class="ct-slider"><span>${esc(tr("ctl.target"))}</span><input type="range" min="0" max="${max}" step="5" data-bed aria-label="${esc(tr("ctl.bed"))}" /><b data-v="set">0°</b></label>`;
-  const plate = `<label class="ct-plate"><span>${esc(tr("ctl.plate"))}</span><select data-plate aria-label="${esc(tr("ctl.plate"))}"></select></label>`;
+  const plate = `<label class="ct-plate"><span>${esc(tr("ctl.plate"))}</span><select data-plate aria-label="${esc(tr("ctl.plate"))}"></select></label>
+    <button type="button" class="ct-suggest hidden" data-bed-suggest></button>`;
   if (compact) {
     return `<div class="ctl-c ctl-c-bed" data-ctl="bed">
         <div class="ctl-c-row"><b>${esc(tr("ctl.bed"))}</b><span class="ctl-c-temp"><b data-v="temp">—</b><small data-v="target"></small></span></div>
@@ -262,8 +265,53 @@ function ctlPlatePaint(sel, pid) {
   }
   sel.value = cur;
 }
+/* The bed temperature the filament profiles give for the printer's plate
+   (`textured_plate_temp`, `hot_plate_temp`…): one per head holding a
+   spool, the highest of them. Read once per profile and plate. → { t, n
+   } (n: the materials it was taken from), or null while not known or not
+   applicable (no plate set, no spool). */
+function ctlSuggest(pid) {
+  const plate = typeof headsPlate === "function" ? headsPlate(pid) : "";
+  const key = typeof BED_TEMP_KEY !== "undefined" ? BED_TEMP_KEY[plate] : null;
+  const list = HD.listsNow[pid], machine = HD.machineNow[pid];
+  if (!key || !list || !machine) return null;
+  const heads = headsSlots(pid).filter((s) => s.present && s.kind);
+  const names = heads.map((s) => headsProfile(pid, s.index, list).name).filter(Boolean);
+  if (!names.length) return null;
+  const want = `${plate}|${machine}|${names.join("|")}`;
+  const c = CTL.suggest.get(pid);
+  if (c?.want === want) return c.value;
+  CTL.suggest.set(pid, { want, value: null });
+  Promise.all(
+    [...new Set(names)].map((name) => {
+      const k = `${machine}|${name}`;
+      if (!CTL.profiles.has(k)) CTL.profiles.set(k, invoke("slice_details", { name, machine }).then((d) => d.values).catch(() => ({})));
+      return CTL.profiles.get(k);
+    })
+  ).then((all) => {
+    if (CTL.suggest.get(pid)?.want !== want) return;
+    const ts = all.map((v) => +one(v?.[key])).filter((t) => t > 0);
+    const mats = new Set(heads.map((s) => spMaterialFamily(s.kind)));
+    CTL.suggest.set(pid, { want, value: ts.length ? { t: Math.max(...ts), n: mats.size } : null });
+    ctlEmit(pid);
+  });
+  return null;
+}
+/* The chip next to the bed's target: clicked, it sets that target; it
+   never changes it by itself. */
+function ctlSuggestPaint(b, pid) {
+  if (!b) return;
+  const s = ctlSuggest(pid);
+  b.classList.toggle("hidden", !s);
+  if (!s) return;
+  b.textContent = tr(s.n > 1 ? "ctl.suggest_max" : "ctl.suggest", { t: fmtNum(s.t) });
+  b.title = tr("ctl.suggest_tip", { plate: typeof plateLabel === "function" ? plateLabel(headsPlate(pid), pid) : headsPlate(pid) });
+  b.dataset.t = String(s.t);
+  b.disabled = !!ctlBusy(pid) || !!ctlWhy("bed_temp", ctlState(pid), ctlData(pid).cfg);
+}
 function ctlBedPaint(el, pid) {
   ctlPlatePaint(el.querySelector("[data-plate]"), pid);
+  ctlSuggestPaint(el.querySelector("[data-bed-suggest]"), pid);
   const bed = ctlState(pid)?.bed;
   el.querySelector('[data-v="temp"]').textContent = ctlDeg(bed?.temp);
   el.querySelector('[data-v="target"]').textContent = bed?.target > 0 ? `→ ${ctlDeg(bed.target)}` : tr("ctl.off");
@@ -344,6 +392,11 @@ function ctlBind(root) {
       const i = plateNote(xpid, +x.dataset.plateTip);
       if (i) plateAsk({ plate: headsPlate(xpid), families: [i.family], pid: xpid });
       return;
+    }
+    // The suggested bed temperature, taken.
+    const sg = e.target.closest("[data-bed-suggest]");
+    if (sg && !sg.disabled && root.contains(sg)) {
+      return ctlRun(pidOf(sg), { kind: "bed_temp", temp: +sg.dataset.t }, tr("ctl.doing.bed", { t: fmtNum(+sg.dataset.t) }));
     }
     const b = e.target.closest("[data-act]");
     if (!b || b.disabled || !root.contains(b)) return;

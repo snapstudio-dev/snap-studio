@@ -2522,5 +2522,8 @@
   "plate.mismatch_sub": "Its bed temperature and first layer were set for the other plate.",
   "plate.glue_applied": "Glue applied",
   "plate.glue_for": "{mat} on the {plate} needs a thin layer of glue stick.",
-  "plate.hide_short": "Don't show again"
+  "plate.hide_short": "Don't show again",
+  "ctl.suggest": "Suggested: {t} °C",
+  "ctl.suggest_max": "Suggested: {t} °C (highest of the materials loaded)",
+  "ctl.suggest_tip": "From the filament profiles for the {plate}; click to set it"
 }
