@@ -1,4 +1,5 @@
 mod access;
+mod analytics;
 mod auth;
 mod bedmesh;
 mod chat;
@@ -1875,6 +1876,25 @@ fn handle_thumb(uri: &str) -> Response<Vec<u8>> {
 // ---------------------------------------------------------------- language
 
 /// Switches language; the native menu bar is rebuilt to follow.
+/// The anonymous usage count: whether this build can send, the choice,
+/// and whether the notice was answered (analytics.rs).
+#[tauri::command]
+fn analytics_status() -> analytics::Status {
+    analytics::status()
+}
+
+/// The first-launch notice answered, with the switch as left.
+#[tauri::command]
+fn analytics_answer(app: tauri::AppHandle, enabled: bool) -> Result<analytics::Status, String> {
+    analytics::answer(&app, enabled).map_err(ui_err)
+}
+
+/// The switch in Settings › Application, effective at once.
+#[tauri::command]
+fn analytics_set(app: tauri::AppHandle, enabled: bool) -> Result<analytics::Status, String> {
+    analytics::set_enabled(&app, enabled).map_err(ui_err)
+}
+
 #[tauri::command]
 fn language_set(app: tauri::AppHandle, lang: String) -> Result<(), String> {
     i18n::set(&lang).map_err(ui_err)?;
@@ -1900,6 +1920,11 @@ pub fn run() {
     std::thread::spawn(slice::cleanup_stale);
 
     let builder = tauri::Builder::default();
+    // The anonymous usage count: a release build with its key only.
+    let builder = match analytics::plugin() {
+        Some(p) => builder.plugin(p),
+        None => builder,
+    };
     // Native menu bar on macOS; elsewhere, the UI keeps its shortcuts.
     #[cfg(target_os = "macos")]
     let builder = builder.menu(|app| menu::app_menu(app));
@@ -1953,6 +1978,8 @@ pub fn run() {
         })
         .on_menu_event(|app, event| menu::forward(app, event.id().as_ref()))
         .setup(|app| {
+            // This launch's count, if the notice was answered with it on.
+            analytics::start(app.handle());
             use tauri::Manager;
             // Background tracking of prints: end of print, queue.
             jobs::start(app.handle().clone());
@@ -2004,6 +2031,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             language_set,
+            analytics_status,
+            analytics_answer,
+            analytics_set,
             titlebar::titlebar_info,
             titlebar::titlebar_system_set,
             update::app_version,
