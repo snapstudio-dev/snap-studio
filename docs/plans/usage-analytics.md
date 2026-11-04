@@ -104,14 +104,34 @@ In **Settings › Application**, a row "Anonymous usage count" with the same
 switch, one line of explanation, and "What is sent" (the same list as the
 notice). Changing it takes effect at once (no restart).
 
-## Documentation
+## Documentation (owner, 2026-11-04: say it clearly everywhere)
 
-- A short `docs/privacy.md` (what is sent, where, how to turn it off, link to
-  Aptabase), linked from the README and from the notice.
-- CHANGELOG line under *Unreleased › Added*, e.g. "**Anonymous usage
-  count**: one anonymous signal at start (version, system, language) to know
-  how many people use Snap Studio, announced at first launch and easy to turn
-  off in Settings."
+The count is written down everywhere a user or a contributor may look, in
+plain words, with the same list (sent / never sent / how to turn it off):
+
+- **`docs/privacy.md`** (new): what is sent, exactly (the event and the
+  plugin's fields, from its source), what is never sent, where it goes
+  (Aptabase, hosted, EU region), how long Aptabase keeps it (from their
+  docs), how to turn it off (the sheet, Settings › Application), that dev
+  builds and forks send nothing, and a link to the code that sends it.
+- **`README.md` and `README.fr.md`**: a short "Privacy" section (or an
+  entry in the FAQ, `## FAQ`): "Snap Studio sends one anonymous signal at
+  start (version, system, language) to count its users. Nothing else. Turn
+  it off in Settings › Application." with a link to `docs/privacy.md`.
+- **The site** (`site/`): one FAQ / footer line with the same sentence and
+  the link, in the site's languages. Kept short: it is a transparency note,
+  not a feature.
+- **What's new** (`ui/whats-new.json` / `site/whats-new`): one entry for
+  the release that brings it, worded as a notice ("Snap Studio now counts
+  its users anonymously; you can turn it off"), not a big feature.
+- **`CHANGELOG.md`**: the line under *Unreleased › Added* (above).
+- **`CONTRIBUTING.md` / `CONTRIBUTING.fr.md`**: a note for contributors:
+  no new event or property without a plan and updating `docs/privacy.md`,
+  the sheet and the README first; local and fork builds send nothing.
+- **`docs/technical-overview.md`**: the `analytics` module, the key at
+  build time, the event.
+- **The Innovation Fund submission**: one line in the next forum update
+  (the owner posts it).
 - `docs/plans/README.md` state.
 
 ## Work
