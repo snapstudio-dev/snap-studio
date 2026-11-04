@@ -2118,6 +2118,101 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
+    /// The engine's support check, supports off, on the plan's four models
+    /// (docs/plans/support-needed-hint.md): its warnings reach the preview,
+    /// and the mesh hint (`support_hint.rs`) agrees with it.
+    /// `SNAPSTUDIO_ENGINE=… cargo test --lib engine_support_warnings -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn engine_support_warnings() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles");
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.20mm Standard")).unwrap_or(&l.processes[0]).name.clone();
+        let pla = l.filaments.iter().find(|f| f.name.contains("PLA")).expect("PLA").name.clone();
+        use crate::mesh::Tri;
+        let tmp = std::env::temp_dir().join("snapstudio-engine-supports");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let bx = |x0: f32, y0: f32, z0: f32, x1: f32, y1: f32, z1: f32| -> Vec<Tri> {
+            #[rustfmt::skip]
+            let p = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
+            #[rustfmt::skip]
+            let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
+                     [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+            f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect()
+        };
+        let models: Vec<(&str, Vec<Tri>, Option<&str>)> = vec![
+            ("cube", bx(0.0, 0.0, 0.0, 20.0, 20.0, 20.0), None),
+            ("T", [bx(20.0, 0.0, 0.0, 30.0, 10.0, 12.0), bx(0.0, 0.0, 10.0, 50.0, 10.0, 15.0)].concat(), Some("cantilever")),
+            (
+                "pendant",
+                [bx(20.0, 0.0, 0.0, 30.0, 10.0, 20.0), bx(20.0, 0.0, 20.0, 50.0, 10.0, 25.0), bx(42.0, 0.0, 10.0, 50.0, 10.0, 21.0)]
+                    .concat(),
+                Some("floating"),
+            ),
+            (
+                "bridge",
+                [bx(0.0, 0.0, 0.0, 10.0, 10.0, 20.0), bx(40.0, 0.0, 0.0, 50.0, 10.0, 20.0), bx(0.0, 0.0, 20.0, 50.0, 10.0, 25.0)].concat(),
+                None,
+            ),
+        ];
+        let mut scene = Vec::new();
+        for (i, (name, tris, _)) in models.iter().enumerate() {
+            let src = tmp.join(format!("{name}.3mf"));
+            crate::write3mf::write_scene(
+                &src,
+                &[crate::write3mf::SceneObject {
+                    name: (*name).into(),
+                    tris: tris.clone(),
+                    transform: crate::mesh::Mat::IDENTITY,
+                    extruder: None,
+                }],
+            )
+            .unwrap();
+            scene.push(crate::plate::SceneItem {
+                path: src.to_string_lossy().to_string(),
+                item: 0,
+                name: (*name).into(),
+                pos: [50.0 + 60.0 * (i % 3) as f32, 60.0 + 80.0 * (i / 3) as f32],
+                rot: [0.0; 3],
+                scale: [1.0; 3],
+                extruder_map: vec![0],
+                piece: None,
+            });
+        }
+        let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+        let sink = seen.clone();
+        run_job(
+            binary(&app).unwrap(),
+            index_for(&app).unwrap(),
+            Request {
+                machine,
+                process,
+                filaments: vec![pla],
+                scene,
+                simple: Some(Simple { supports: Some(false), ..Default::default() }),
+                name: Some("supports".into()),
+                ..Default::default()
+            },
+            "supports".into(),
+            &move |p| sink.lock().unwrap().push(p),
+        );
+        let got = seen.lock().unwrap();
+        let last = got.last().unwrap();
+        assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
+        println!("engine: {:?}", last.warnings);
+        for (name, tris, want) in &models {
+            let said = last.warnings.iter().find(|w| w.object == *name).map(|w| w.reason.as_str());
+            let hint = crate::support_hint::analyse(tris, support_threshold(None));
+            println!("{name}: engine {said:?}, hint {:?} {:?}", hint.verdict, hint.reason);
+            assert_eq!(said, *want, "{name}: the engine");
+            assert_eq!(hint.reason, *want, "{name}: the hint");
+        }
+        discard("supports");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
     /// The prime tower lands where Prepare put it: a two-head plate sliced
     /// with `wipe_tower_x` / `wipe_tower_y` (front-left corner, one per
     /// plate) and `wipe_tower_rotation_angle`, the tower read back from the
