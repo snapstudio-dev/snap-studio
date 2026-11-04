@@ -16,6 +16,10 @@ Short answer:
   under a second. It is not the same test as Orca's, so it is a hint
   ("probably needs supports"), not a verdict.
 
+Decided: both, in this pull request. A badge on the 3D view and an
+overhang button before the slice, the engine's warning after it (see
+[Decisions](#decisions)).
+
 ## How Snapmaker Orca does it
 
 Checked in the 2.4.0 sources (`orca-v240`, tag `v2.4.0`) and on Snapmaker
@@ -186,10 +190,11 @@ overhang patch (area, reach), and a verdict: `none`, `maybe`, `likely`.
 - `maybe`: large overhang patches only (could be bridges).
 - `none`: otherwise.
 
-In Prepare: a small badge on the object in the list / inspector
-("Supports probably needed"), with the reason in a tooltip, and the same
-quick button to turn supports on in the slice settings. Shown only when
-supports are off.
+In Prepare: a badge in the **bottom-left corner of the 3D view**
+("Supports probably needed", decision 2), naming the object(s) and the
+reason, with one quick button, **Turn supports on**, which switches
+supports on in the slice settings (decision 4). Shown only when supports
+are off and an object is `likely`.
 
 - Upfront, live after a rotation, no engine run.
 - A hint: wrong now and then on cantilevers and bridges.
@@ -212,26 +217,35 @@ does, and show the warning in Prepare.
 - A full slice each time (seconds to minutes, CPU and fans), and G-code
   thrown away. Too costly for a hint.
 
-### Overhang view (goes with B, or alone)
+### Overhang view (goes with B)
 
-A "Show overhangs" toggle in Prepare's view tools: faces past the profile's
+A **"Show overhangs" button** in Prepare's view tools, off by default and
+never turned on by itself (decision 3): faces past the profile's
 angle in red, like Orca's. Done in the display shader (world normal against
 the angle), so it follows rotations live, and it explains the badge.
 
-## Recommendation
+## Decisions
 
-**A then B, with the overhang view.**
+Taken by kameka22 on the draft PR (2026-11-04):
 
-1. **A first:** small, exact, and it fixes the real gap: today a slice
-   without supports on a model that needs them goes through in silence,
-   and the user only finds out at the printer. The banner's button turns
-   supports on and slices again.
-2. **B next:** the Prepare badge from tests 1 and 2 (floating points and
-   pieces), which agree with Orca, plus the simple reach test for
-   cantilevers. Large overhangs alone stay a `maybe` shown only in the
-   overhang view, never as a badge, so bridges do not cry wolf. Worded
-   "probably", and the slice's warning (A) has the last word.
-3. **C and D:** not now. C if B's cantilever guess proves too rough in use.
+1. **A and B together, in this pull request.** The engine's warning after
+   the slice (A) and the hint in Prepare (B), with the overhang view. B
+   uses tests 1 and 2 (floating points and pieces, which agree with Orca)
+   plus the simple reach test for cantilevers. Large overhangs alone stay a
+   `maybe`, visible only in the overhang view, never as a badge, so bridges
+   do not cry wolf. Worded "probably": the slice's warning (A) has the last
+   word. C and D are not planned.
+2. **The badge sits on the 3D view, in the bottom-left corner** of
+   Prepare's viewport, not in the object list or the inspector. One badge
+   for the plate: it names the object (or "{n} objects") and the reason;
+   hovering it outlines the objects concerned.
+3. **The overhang view is a button**, a toggle in Prepare's view tools. It
+   is never switched on automatically.
+4. **The quick fix only turns supports on**: no suggestion to auto-orient.
+   In Prepare the badge's button turns supports on in the slice settings;
+   after a slice, the banner's button turns them on and slices again.
+
+Still open: the French wording (see [Texts](#texts-en--fr-to-review)).
 
 ## Impact on the code
 
@@ -244,9 +258,12 @@ the angle), so it follows rotations live, and it explains the badge.
   transformed mesh, with Rust tests on the four models above (cube, T,
   pendant, bridge) and a floating piece.
 - `src-tauri/src/lib.rs`: `plate_support_hint`, like `plate_orient`.
-- `ui/prepare.js`: the badge per object, the request after add / rotate /
-  scale (debounced), only when supports are off.
-- `ui/viewer.js` or Prepare's materials: the overhang shader and its toggle.
+- `ui/prepare.js` and `ui/index.html`: the badge in the bottom-left corner
+  of the 3D view, the outline of the objects on hover, its button (supports
+  on); the request after add / rotate / scale (debounced), only when
+  supports are off.
+- `ui/viewer.js` or Prepare's materials: the overhang shader, and its
+  button in Prepare's view tools.
 - `ui/i18n/*.json`: the banner, the three reasons, the badge, the tooltip,
   the button, the toggle, in the 9 languages.
 
@@ -258,27 +275,26 @@ the angle), so it follows rotations live, and it explains the badge.
 | Reason: floating | Parts start in the air | Des parties commencent dans le vide |
 | Reason: cantilever | A long overhang sticks out | Un long porte-à-faux dépasse |
 | Banner | {name} probably needs supports: {reason}. | {name} a probablement besoin de supports : {reason}. |
-| Button | Turn supports on and slice again | Activer les supports et redécouper |
+| Badge, several objects | {n} objects probably need supports | {n} objets ont probablement besoin de supports |
+| Badge button | Turn supports on | Activer les supports |
+| Banner button | Turn supports on and slice again | Activer les supports et redécouper |
 | View toggle | Show overhangs | Afficher les surplombs |
 
 ## CHANGELOG (planned, not added yet)
 
 Under *Unreleased*, *Added*:
 
-- **Supports hint**: after a slice without supports, the engine's warning
-  that an object needs them is shown, with a button to turn supports on and
-  slice again; in Prepare, an object that probably needs supports gets a
-  badge, and a view shows its overhangs in red.
+- **Supports hint**: in Prepare, a badge in the corner of the 3D view says
+  when an object probably needs supports (parts starting in the air, a
+  long overhang), with a button to turn supports on, and a "Show overhangs"
+  button colors its overhangs in red; after a slice without supports, the
+  engine's warning that an object needs them is shown, with a button to
+  turn supports on and slice again.
 
 ## Open questions
 
-1. Go for A alone first, or A and B together?
-2. The badge: on the object in the list, in the inspector, on the 3D view,
-   or all three?
-3. The overhang view: a toggle in Prepare's view tools, or on automatically
-   while the object is selected and supports are off?
-4. The quick fix: turn supports on in the slice settings only, or also
-   offer "Auto-orient" when a better orientation would avoid them?
+1. The French texts above: "porte-à-faux", "surplombs", "commencent dans
+   le vide" — to be reviewed.
 
 ## Tests
 
@@ -287,5 +303,6 @@ Under *Unreleased*, *Added*:
   (cube none, T likely, pendant likely, bridge none or maybe, a piece in
   the air likely), and after a rotation.
 - In the app: a slice of the T with supports off shows the banner, its
-  button slices again with supports; the badge comes and goes with a
-  rotation and with supports on.
+  button slices again with supports; the badge (bottom left of the 3D view)
+  comes and goes with a rotation and with supports on, its button turns
+  supports on; the overhang button colors and uncolors the overhangs.
