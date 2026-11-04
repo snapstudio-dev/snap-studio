@@ -2532,5 +2532,6 @@
   "supports.badge.go": "Activar soportes",
   "supports.on_toast": "Soportes activados para el próximo laminado",
   "prepare.overhangs": "Mostrar voladizos",
-  "prepare.overhangs.title": "Mostrar voladizos: las caras que apuntan hacia abajo más que el ángulo de soporte del perfil, en rojo"
+  "prepare.overhangs.title": "Mostrar voladizos: las caras que apuntan hacia abajo más que el ángulo de soporte del perfil, en rojo",
+  "library.forward": "Adelante"
 }

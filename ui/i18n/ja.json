@@ -2448,5 +2448,6 @@
   "supports.badge.go": "サポートをオン",
   "supports.on_toast": "次回のスライスでサポートをオンにしました",
   "prepare.overhangs": "オーバーハング表示",
-  "prepare.overhangs.title": "オーバーハング表示：プロファイルのサポート角度より下を向いた面を赤で表示"
+  "prepare.overhangs.title": "オーバーハング表示：プロファイルのサポート角度より下を向いた面を赤で表示",
+  "library.forward": "進む"
 }

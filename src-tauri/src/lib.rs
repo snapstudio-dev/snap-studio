@@ -1871,12 +1871,12 @@ fn handle_thumb(uri: &str) -> Response<Vec<u8>> {
 #[tauri::command]
 fn language_set(app: tauri::AppHandle, lang: String) -> Result<(), String> {
     i18n::set(&lang).map_err(ui_err)?;
+    // The floating navigation over a site is a page of its own.
+    library::nav_relabel(&app);
     #[cfg(target_os = "macos")]
     if let Ok(menu) = menu::app_menu(&app) {
         let _ = app.set_menu(menu);
     }
-    #[cfg(not(target_os = "macos"))]
-    let _ = app;
     Ok(())
 }
 

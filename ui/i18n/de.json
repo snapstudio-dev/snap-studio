@@ -2532,5 +2532,6 @@
   "supports.badge.go": "Stützen einschalten",
   "supports.on_toast": "Stützen für das nächste Slicen eingeschaltet",
   "prepare.overhangs": "Überhänge zeigen",
-  "prepare.overhangs.title": "Überhänge zeigen: Flächen, die steiler nach unten zeigen als der Stützwinkel des Profils, in Rot"
+  "prepare.overhangs.title": "Überhänge zeigen: Flächen, die steiler nach unten zeigen als der Stützwinkel des Profils, in Rot",
+  "library.forward": "Vorwärts"
 }

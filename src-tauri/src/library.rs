@@ -73,9 +73,31 @@ fn visible_tab() -> &'static Mutex<Option<String>> {
     V.get_or_init(Default::default)
 }
 
-/// What the pill's page starts with (`window.__NAV__`): the site's tone.
+/// The pill's tooltips, in the interface's language.
+fn nav_labels() -> serde_json::Value {
+    serde_json::json!({
+        "lang": crate::i18n::lang(),
+        "back": crate::t!("common.back"),
+        "forward": crate::t!("library.forward"),
+        "reload": crate::t!("library.reload"),
+    })
+}
+
+/// What the pill's page starts with (`window.__NAV__`): its tooltips and
+/// the site's tone.
 fn nav_setup() -> String {
-    serde_json::json!({ "tone": *nav_tone().lock().unwrap() }).to_string()
+    let mut v = nav_labels();
+    v["tone"] = serde_json::json!(*nav_tone().lock().unwrap());
+    v.to_string()
+}
+
+/// The interface's language changed: the pill shown takes it at once (the
+/// next ones start with it).
+pub fn nav_relabel(app: &AppHandle) {
+    let lbl = nav_label().lock().unwrap().clone();
+    if let Some(wv) = app.get_webview(&lbl) {
+        let _ = wv.eval(format!("typeof setLabels === 'function' && setLabels({});", nav_labels()));
+    }
 }
 
 fn ensure_nav(app: &AppHandle) -> Result<()> {

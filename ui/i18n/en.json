@@ -2487,5 +2487,6 @@
   "supports.badge.go": "Turn supports on",
   "supports.on_toast": "Supports on for the next slice",
   "prepare.overhangs": "Show Overhangs",
-  "prepare.overhangs.title": "Show overhangs: faces that point down more than the profile's support angle, in red"
+  "prepare.overhangs.title": "Show overhangs: faces that point down more than the profile's support angle, in red",
+  "library.forward": "Forward"
 }

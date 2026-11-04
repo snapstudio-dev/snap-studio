@@ -2532,5 +2532,6 @@
   "supports.badge.go": "Attiva i supporti",
   "supports.on_toast": "Supporti attivati per la prossima elaborazione",
   "prepare.overhangs": "Mostra sporgenze",
-  "prepare.overhangs.title": "Mostra sporgenze: le facce rivolte verso il basso oltre l'angolo di supporto del profilo, in rosso"
+  "prepare.overhangs.title": "Mostra sporgenze: le facce rivolte verso il basso oltre l'angolo di supporto del profilo, in rosso",
+  "library.forward": "Avanti"
 }

@@ -2448,5 +2448,6 @@
   "supports.badge.go": "서포트 켜기",
   "supports.on_toast": "다음 슬라이스에 서포트를 켰습니다",
   "prepare.overhangs": "오버행 표시",
-  "prepare.overhangs.title": "오버행 표시: 프로파일의 서포트 각도보다 더 아래를 향한 면을 빨간색으로 표시"
+  "prepare.overhangs.title": "오버행 표시: 프로파일의 서포트 각도보다 더 아래를 향한 면을 빨간색으로 표시",
+  "library.forward": "앞으로"
 }

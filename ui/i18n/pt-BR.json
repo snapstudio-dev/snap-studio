@@ -2532,5 +2532,6 @@
   "supports.badge.go": "Ligar suportes",
   "supports.on_toast": "Suportes ligados para o próximo fatiamento",
   "prepare.overhangs": "Mostrar saliências",
-  "prepare.overhangs.title": "Mostrar saliências: as faces voltadas para baixo além do ângulo de suporte do perfil, em vermelho"
+  "prepare.overhangs.title": "Mostrar saliências: as faces voltadas para baixo além do ângulo de suporte do perfil, em vermelho",
+  "library.forward": "Avançar"
 }
