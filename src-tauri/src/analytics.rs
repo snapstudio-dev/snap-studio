@@ -65,8 +65,10 @@ fn should_send(s: Status, sent: bool) -> bool {
 
 /// Sends this launch's `app_started` if it should (at start, once the
 /// notice is answered, or when switched back on), at once rather than at
-/// the plugin's next flush: switched off a moment later, nothing is left
-/// waiting to go.
+/// the plugin's next flush. One the plugin could not deliver (offline, a
+/// server error) stays in its queue and is tried again, until the app
+/// quits, even if the count is switched off meanwhile: the plugin offers
+/// no way to empty it (said in docs/privacy.md).
 pub fn start(app: &AppHandle) {
     send_once(status(), &SENT, || {
         use tauri_plugin_aptabase::EventTracker;

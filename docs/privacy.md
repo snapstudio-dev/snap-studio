@@ -56,7 +56,11 @@ for up to 5 years.
   off. Nothing is sent before you close it; switched off there, nothing is
   ever sent.
 - **At any time**: Settings › Application › Anonymous usage count. It takes
-  effect at once.
+  effect at once: nothing new is sent. One exception: if this launch's
+  signal could not be delivered (no network, an Aptabase server error), the
+  plugin keeps it and tries again, until the app quits, even after the count
+  is switched off. It is the signal of a launch made while the count was
+  on; the next launches send nothing.
 
 ## Builds that send nothing
 

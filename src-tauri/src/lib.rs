@@ -1873,9 +1873,8 @@ fn handle_thumb(uri: &str) -> Response<Vec<u8>> {
     }
 }
 
-// ---------------------------------------------------------------- language
+// ---------------------------------------------------------------- analytics
 
-/// Switches language; the native menu bar is rebuilt to follow.
 /// The anonymous usage count: whether this build can send, the choice,
 /// and whether the notice was answered (analytics.rs).
 #[tauri::command]
@@ -1895,6 +1894,9 @@ fn analytics_set(app: tauri::AppHandle, enabled: bool) -> Result<analytics::Stat
     analytics::set_enabled(&app, enabled).map_err(ui_err)
 }
 
+// ---------------------------------------------------------------- language
+
+/// Switches language; the native menu bar is rebuilt to follow.
 #[tauri::command]
 fn language_set(app: tauri::AppHandle, lang: String) -> Result<(), String> {
     i18n::set(&lang).map_err(ui_err)?;

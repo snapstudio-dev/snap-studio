@@ -183,8 +183,10 @@ submission) is enough.
   `analytics.enabled` (default on) and `analytics.noticed` live in the
   app's settings file. `start()` sends `app_started` at most once per
   launch, when available, noticed and enabled, and flushes it at once (not
-  at the plugin's next 60 s flush): switched off a moment later, nothing is
-  left waiting. Commands: `analytics_status`, `analytics_answer` (the
+  at the plugin's next 60 s flush). Known limit, kept by the owner's choice
+  (review, 2026-11-04): an event the plugin could not deliver (offline, 5xx)
+  stays in its queue and is retried until the app quits, even if switched
+  off meanwhile (the plugin cannot empty it); said in `docs/privacy.md`. Commands: `analytics_status`, `analytics_answer` (the
   sheet), `analytics_set` (Settings). Tests: nothing when off, unanswered or
   without a key; one event per launch; switched on later, that launch once.
 - **What the plugin sends** (read in `tauri-plugin-aptabase` 1.3.0's source,
