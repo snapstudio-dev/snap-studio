@@ -27,6 +27,7 @@ const CTL = {
   data: new Map(), // pid → { st, cfg, err, reading, slotsAt }
   busy: new Map(), // pid → the action under way (label)
   subs: new Set(),
+  plates: new Set(), // printers whose plates were asked for
 };
 
 function ctlData(pid) {
@@ -84,6 +85,8 @@ function ctlSpool(pid, n) {
   return ctlSpoolInfo(slots.find((s) => s.index === n), typeof colorName === "function" ? colorName : null);
 }
 window.addEventListener("headschange", (e) => e.detail?.pid && ctlEmit(e.detail.pid));
+// The plates' names, read again in the new language (heads.js).
+window.addEventListener("langchange", () => CTL.plates.clear());
 
 const CTL_CONFIRM = {
   emergency_stop: ["ctl.confirm.estop_t", "ctl.confirm.estop", "ctl.estop_ok"],
@@ -203,22 +206,47 @@ function ctlHeadPaint(el, pid, h) {
   ctlSyncRange(el.querySelector(`[data-temp="${h.index}"]`), Math.round(hs?.target || 0), el.querySelector('[data-v="set"]'), ctlDeg);
 }
 
-/* Bed: full — gauge, target and maximum; compact — temperature and target. */
+/* Bed: full — gauge, target and maximum; compact — temperature and target.
+   Both with the plate on the printer (headsPlate). */
 function ctlBedHtml(cfg, { compact = false } = {}) {
   const max = Math.round(cfg?.bed_max || 100);
   const slider = `<label class="ct-slider"><span>${esc(tr("ctl.target"))}</span><input type="range" min="0" max="${max}" step="5" data-bed aria-label="${esc(tr("ctl.bed"))}" /><b data-v="set">0°</b></label>`;
+  const plate = `<label class="ct-plate"><span>${esc(tr("ctl.plate"))}</span><select data-plate aria-label="${esc(tr("ctl.plate"))}"></select></label>`;
   if (compact) {
     return `<div class="ctl-c ctl-c-bed" data-ctl="bed">
         <div class="ctl-c-row"><b>${esc(tr("ctl.bed"))}</b><span class="ctl-c-temp"><b data-v="temp">—</b><small data-v="target"></small></span></div>
         ${slider}
+        ${plate}
       </div>`;
   }
   return `<div class="ct-head-mid" data-ctl="bed">
       <div class="ct-gauge" data-v="gauge"><span><b data-v="temp">—</b><small data-v="target"></small></span></div>
-      <div class="ct-head-set">${slider}<small class="ct-note">${esc(tr("ctl.max", { t: fmtNum(max) }))}</small></div>
+      <div class="ct-head-set">${slider}<small class="ct-note">${esc(tr("ctl.max", { t: fmtNum(max) }))}</small>${plate}</div>
     </div>`;
 }
+/* The plate menu: the machine's plates (read once), "Not set" first; the
+   printer's own value kept even before the list is known. */
+function ctlPlatePaint(sel, pid) {
+  if (!sel || document.activeElement === sel) return;
+  const plates = typeof headsPlates === "function" ? headsPlates(pid) : [];
+  // Read once per printer: a failure (no engine yet) is not retried at
+  // every repaint.
+  if (!plates.length && typeof headsLists === "function" && !CTL.plates.has(pid) && P.list.some((p) => p.id === pid)) {
+    CTL.plates.add(pid);
+    headsLists(pid).then(() => ctlEmit(pid)).catch(() => {});
+  }
+  const cur = typeof headsPlate === "function" ? headsPlate(pid) : "";
+  const list = [{ value: "", label: tr("ctl.plate_unset") }, ...plates];
+  if (cur && !plates.some((p) => p.value === cur)) list.push({ value: cur, label: cur });
+  const html = list.map((p) => `<option value="${esc(p.value)}">${esc(p.label)}</option>`).join("");
+  if (sel.dataset.html !== html) {
+    sel.innerHTML = html;
+    sel.dataset.html = html;
+  }
+  sel.value = cur;
+}
 function ctlBedPaint(el, pid) {
+  ctlPlatePaint(el.querySelector("[data-plate]"), pid);
   const bed = ctlState(pid)?.bed;
   el.querySelector('[data-v="temp"]').textContent = ctlDeg(bed?.temp);
   el.querySelector('[data-v="target"]').textContent = bed?.target > 0 ? `→ ${ctlDeg(bed.target)}` : tr("ctl.off");
@@ -327,6 +355,8 @@ function ctlBind(root) {
       return ctlRun(pid, { kind: "bed_temp", temp: +r.value }, tr("ctl.doing.bed", { t: fmtNum(+r.value) }));
     }
     if (r.dataset.light != null) return ctlRun(pid, { kind: "light", on: r.checked }, tr("ctl.doing.light"));
+    // The plate on the printer: kept here, not sent (Klipper does not know it).
+    if (r.dataset.plate != null) return headsSetPlate(pid, r.value, "control");
   });
 }
 

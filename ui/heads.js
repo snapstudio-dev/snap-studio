@@ -10,7 +10,8 @@
    Stored in localStorage["snapstudio.heads"]:
      { printers: { <printer id | "_none">: { filaments: [name|null…],
                                              map: { <file path>: { <ext>: head } },
-                                             virtual: [{ uid, a, b, pct }], nextUid } },
+                                             virtual: [{ uid, a, b, pct }], nextUid,
+                                             plate: <curr_bed_type> } },
        active: <printer id> }
    A head value is 0–15 for a physical head, 100 + uid for a virtual one
    (virtual-logic.js). 
@@ -31,6 +32,8 @@ const HD = {
   models: new Map(), // file path -> Promise<{ filaments, used }>
   lists: new Map(), // printer id -> Promise<slice_lists of its machine>
   listsNow: {}, // printer id -> filament profiles, once known
+  platesNow: {}, // printer id -> its machine's plates [{ value, label }], once known
+  machineNow: {}, // printer id -> its machine profile, once known
 };
 HD.data.printers ||= {};
 
@@ -101,6 +104,32 @@ function headsSetActive(pid, src) {
   hdSave();
   hdEmit({ pid, what: "active", src });
 }
+
+/* ------------------------------------------------------------ plate */
+
+/* The build plate on a printer (its `curr_bed_type` value), set in
+   Control's Bed card: Prepare's default plate for that printer, and what
+   the plate checks compare with (plate-rules.js). "" while not set: those
+   checks are skipped, never guessed. */
+const headsPlate = (pid) => (pid && headsEntry(pid).plate) || "";
+function headsSetPlate(pid, plate, src) {
+  if (!pid) return;
+  const e = headsEntry(pid);
+  if ((e.plate || "") === (plate || "")) return;
+  if (plate) e.plate = plate;
+  else delete e.plate;
+  hdSave();
+  hdEmit({ pid, what: "plate", src });
+}
+/* The plates a printer's machine offers, once its lists are read
+   (headsLists). */
+const headsPlates = (pid) => HD.platesNow[pid] || [];
+
+// Plate names come from Rust, in the interface's language: read again.
+window.addEventListener("langchange", () => {
+  HD.lists.clear();
+  HD.platesNow = {};
+});
 
 /* ------------------------------------------------------------ spools */
 
@@ -315,6 +344,8 @@ function headsLists(pid) {
       const machine = (known(mem["printer:" + pid]) && mem["printer:" + pid]) || (p && matchMachine(p, l.machines, asked));
       if (machine && machine !== asked) l = await invoke("slice_lists", { machine });
       HD.listsNow[pid] = l.filaments || [];
+      HD.platesNow[pid] = l.bed_types || [];
+      HD.machineNow[pid] = machine || asked || l.selected?.machine || "";
       hdEmit({ pid, what: "lists" });
       return l;
     })().catch((e) => {

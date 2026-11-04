@@ -210,12 +210,17 @@ function matchMachine(printer, machines, preferred) {
 }
 
 /* The machine's plates: the choice sets the bed temperature, read from the
-   filament profile for that plate type. */
-function fillBeds(saved) {
+   filament profile for that plate type. The plate set on the chosen
+   printer (Control) comes first, then the one last used; `keep`: the
+   current choice stays (the plates' names read again). Changed here, it
+   is this slice's: the printer's stays. */
+function fillBeds(saved, { keep = false } = {}) {
   const sel = $("s-bed");
   const types = SL.lists?.bed_types || [];
+  const onPrinter = !keep && typeof headsPlate === "function" ? headsPlate(currentPrinter()?.id) : "";
+  const want = types.some((t) => t.value === onPrinter) ? onPrinter : saved;
   sel.innerHTML = types.map((t) => `<option value="${esc(t.value)}">${esc(t.label)}</option>`).join("");
-  sel.value = types.some((t) => t.value === saved) ? saved : SL.lists?.bed_type || types[0]?.value || "";
+  sel.value = types.some((t) => t.value === want) ? want : SL.lists?.bed_type || types[0]?.value || "";
   // Tiles: one per plate, with the temperature it will give.
   const tex = { "Textured PEI Plate": "textured", "High Temp Plate": "smooth", "Graphic Effect Plate": "graphic" };
   $("s-beds").innerHTML = types
@@ -1143,7 +1148,7 @@ window.addEventListener("langchange", () => {
     invoke("slice_lists", { machine: $("s-machine").value })
       .then((l) => {
         SL.lists.bed_types = l.bed_types;
-        fillBeds($("s-bed").value);
+        fillBeds($("s-bed").value, { keep: true });
         pdBedLine();
       })
       .catch(() => {});
