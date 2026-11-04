@@ -59,6 +59,11 @@ fn label(id: &str) -> String {
 const NAV_SIZE: (f64, f64) = (112.0, 40.0);
 
 fn nav_rect(r: Rect) -> Rect {
+    // Linux: the view is the pill itself, at the same place (overlay.html
+    // `.solid`): see `nav_setup`.
+    if cfg!(target_os = "linux") {
+        return Rect { x: r.x + 14.0, y: r.y + 14.0, w: 88.0, h: 32.0 };
+    }
     Rect { x: r.x + 10.0, y: r.y + 10.0, w: NAV_SIZE.0, h: NAV_SIZE.1 }
 }
 
@@ -83,11 +88,21 @@ fn nav_labels() -> serde_json::Value {
     })
 }
 
-/// What the pill's page starts with (`window.__NAV__`): its tooltips and
-/// the site's tone.
+/// What the pill's page starts with (`window.__NAV__`): its tooltips, the
+/// site's tone and the color under the pill.
+///
+/// Linux: the pill's view is opaque, the pill's size, its corners in the
+/// color under it (`solid`). A transparent view laid over the site shows
+/// the desktop through its transparent pixels each time it repaints on its
+/// own (hovering a button, a tooltip, a change of tone): WebKitGTK replaces
+/// what is under it rather than drawing over it, and the window is
+/// see-through (rounded corners). That was the pill's flicker on Linux.
 fn nav_setup() -> String {
     let mut v = nav_labels();
-    v["tone"] = serde_json::json!(*nav_tone().lock().unwrap());
+    let (tone, under) = nav_tone().lock().unwrap().clone().map_or((None, None), |(t, u)| (Some(t), u));
+    v["tone"] = serde_json::json!(tone);
+    v["under"] = serde_json::json!(under);
+    v["solid"] = serde_json::json!(cfg!(target_os = "linux"));
     v.to_string()
 }
 
@@ -108,7 +123,7 @@ fn ensure_nav(app: &AppHandle) -> Result<()> {
     let window = app.get_window("main").ok_or_else(|| anyhow!("main window not found"))?;
     // A new pill starts with the tone known: not dark for a moment on a
     // dark site.
-    let tone = *nav_tone().lock().unwrap();
+    let tone = nav_tone().lock().unwrap().clone();
     let builder = tauri::WebviewBuilder::new(&lbl, WebviewUrl::App("overlay.html".into()))
         .initialization_script(&format!("window.__NAV__ = {};", nav_setup()))
         .transparent(true);
@@ -132,30 +147,45 @@ fn ensure_nav(app: &AppHandle) -> Result<()> {
 /// own page, is told when it changes.
 const TONE_JS: &str = include_str!("../../ui/nav-tone.js");
 
-/// The expression read in the tab shown: the word the script keeps, or "".
+/// The expression read in the tab shown: what the script keeps, if it is
+/// a string, or "".
 const TONE_READ: &str = "(function () { try { var t = window[Symbol.for('snapstudio.navTone')]; \
-                         return t === 'light' || t === 'dark' ? t : ''; } catch (e) { return ''; } })()";
+                         return typeof t === 'string' ? t.slice(0, 32) : ''; } catch (e) { return ''; } })()";
 
-fn nav_tone() -> &'static Mutex<Option<&'static str>> {
-    static T: OnceLock<Mutex<Option<&'static str>>> = OnceLock::new();
+/// The site's tone, and the color under the pill ("#rrggbb").
+type Tone = (&'static str, Option<String>);
+
+fn nav_tone() -> &'static Mutex<Option<Tone>> {
+    static T: OnceLock<Mutex<Option<Tone>>> = OnceLock::new();
     T.get_or_init(Default::default)
 }
 
-/// The pill last told, and the tone it was told: nothing is sent (or
-/// redrawn) again while neither changes.
-fn nav_told() -> &'static Mutex<(String, Option<&'static str>)> {
-    static T: OnceLock<Mutex<(String, Option<&'static str>)>> = OnceLock::new();
+/// The pill last told, and what it was told: nothing is sent (or redrawn)
+/// again while neither changes.
+fn nav_told() -> &'static Mutex<(String, Option<Tone>)> {
+    static T: OnceLock<Mutex<(String, Option<Tone>)>> = OnceLock::new();
     T.get_or_init(Default::default)
 }
 
-/// A view's answer (JSON) to `TONE_READ`: "light" or "dark" only; anything
-/// else (nothing measured yet, a page that overwrote it, an error) is none.
-fn parse_tone(json: &str) -> Option<&'static str> {
-    match serde_json::from_str::<String>(json).ok()?.as_str() {
-        "light" => Some("light"),
-        "dark" => Some("dark"),
-        _ => None,
-    }
+/// A view's answer (JSON) to `TONE_READ`: "light" or "dark", and maybe a
+/// "#rrggbb" color after it; anything else (nothing measured yet, a page
+/// that overwrote it, an error) is none.
+fn parse_tone(json: &str) -> Option<Tone> {
+    let s = serde_json::from_str::<String>(json).ok()?;
+    let mut words = s.split(' ');
+    let tone = match words.next()? {
+        "light" => "light",
+        "dark" => "dark",
+        _ => return None,
+    };
+    let under = match (words.next(), words.next()) {
+        (None, _) => None,
+        (Some(c), None) if c.len() == 7 && c.starts_with('#') && c[1..].bytes().all(|b| b.is_ascii_hexdigit()) => {
+            Some(c.to_ascii_lowercase())
+        }
+        _ => return None,
+    };
+    Some((tone, under))
 }
 
 /// Reads the tone of the tab shown, if any (hidden tabs never are).
@@ -175,19 +205,21 @@ fn read_tone(app: &AppHandle) {
     });
 }
 
-/// Gives the pill the tone, once per pill and tone. It answers once its
+/// Gives the pill the tone, once per pill and change. It answers once its
 /// page can take it; until then it is told again at the next reading.
 fn tell_tone(app: &AppHandle) {
-    let Some(tone) = *nav_tone().lock().unwrap() else { return };
+    let Some(tone) = nav_tone().lock().unwrap().clone() else { return };
     let lbl = nav_label().lock().unwrap().clone();
-    if *nav_told().lock().unwrap() == (lbl.clone(), Some(tone)) {
+    if *nav_told().lock().unwrap() == (lbl.clone(), Some(tone.clone())) {
         return;
     }
     let Some(wv) = app.get_webview(&lbl) else { return };
-    let js = format!("typeof setTone === 'function' ? (setTone('{tone}'), 1) : 0");
+    // Both checked by `parse_tone`: a word and a hexadecimal color.
+    let under = tone.1.as_deref().map_or("null".to_string(), |c| format!("'{c}'"));
+    let js = format!("typeof setTone === 'function' ? (setTone('{}', {under}), 1) : 0", tone.0);
     let _ = wv.eval_with_callback(js, move |r| {
         if r.trim() == "1" {
-            *nav_told().lock().unwrap() = (lbl.clone(), Some(tone));
+            *nav_told().lock().unwrap() = (lbl.clone(), Some(tone.clone()));
         }
     });
 }
@@ -823,11 +855,12 @@ pub fn logout(app: &AppHandle, tab: &str, site: &str) -> Result<usize> {
 mod tests {
     use super::*;
 
-    /// Only a plain "light" or "dark" from a site's view is taken.
+    /// Only "light" or "dark", and a plain "#rrggbb", from a site's view
+    /// are taken.
     #[test]
     fn tone_answers_are_checked() {
-        assert_eq!(parse_tone(r#""light""#), Some("light"));
-        assert_eq!(parse_tone(r#""dark""#), Some("dark"));
+        assert_eq!(parse_tone(r#""light""#), Some(("light", None)));
+        assert_eq!(parse_tone(r#""dark #12AB9f""#), Some(("dark", Some("#12ab9f".into()))));
         for bad in [
             r#""""#,
             "null",
@@ -835,10 +868,16 @@ mod tests {
             "1",
             r#""Dark""#,
             r#""dark ""#,
+            r#""dark #12345""#,
+            r#""dark #1234567""#,
+            r#""dark #12345g""#,
+            r#""dark #123456 x""#,
+            r#""dark red""#,
             r#"{"t":"dark"}"#,
             r#"["dark"]"#,
             "undefined",
             r#""light'); alert(1); ('""#,
+            r#""dark #12345');""#,
         ] {
             assert_eq!(parse_tone(bad), None, "{bad}");
         }

@@ -1,7 +1,7 @@
 /* Is the site under the floating navigation light or dark? Injected by
    library.rs into each site's view (main frame), it only reads: the colors
-   under the pill (overlay.html), at most every 250 ms, and keeps one word,
-   "light" or "dark", that Rust reads (`eval_with_callback`) and passes to
+   under the pill (overlay.html), at most every 250 ms, and keeps one
+   value, "light" or "dark" and the color seen there, that Rust reads (`eval_with_callback`) and passes to
    the pill. It makes no request, changes nothing in the page and stores
    nothing. The rules are pure functions, tested in Node
    (scripts/test-navtone.js). */
@@ -70,6 +70,20 @@
      fallbacks. A bigger one (a banner, a cover) leaves the point unread. */
   const smallPicture = (w, h) => h <= 64 && w <= 320;
 
+  /* A background-image made of gradients only (computed style lists their
+     colors): their colors' average, [r, g, b, a]. null with a picture in it
+     (url(), image-set…), which cannot be read. */
+  function gradientColor(image) {
+    if (typeof image !== "string" || !/gradient\(/.test(image) || /url\(|image\(|image-set\(|element\(|cross-fade\(/.test(image)) return null;
+    const stops = (image.match(/rgba?\([^)]*\)/g) || []).map(parseColor).filter(Boolean);
+    if (!stops.length) return null;
+    return [0, 1, 2, 3].map((k) => stops.reduce((a, c) => a + c[k], 0) / stops.length);
+  }
+
+  /* A picture's element background color, when opaque: what the site
+     shows while it loads, close to it more often than the page's colors. */
+  const standIn = (c) => (c && c[3] >= 0.99 ? c : null);
+
   /* When the points cannot be read: the page's theme-color, then the
      background of <body>, then of <html> (opaque ones only), then its
      color-scheme. null when none of them tells. */
@@ -93,7 +107,23 @@
     return current;
   }
 
-  const rules = { POINTS, parseColor, composite, luminance, toneOf, smallPicture, fallbackTone, decide };
+  /* The color under the pill, "#rrggbb", for Linux, where its view is
+     opaque and shows it in its corners: the readable points' average, else
+     the page's background if it has that tone, else white or near black by
+     the tone. */
+  function underColor(colors, page, tone) {
+    const known = colors.filter(Boolean);
+    const rgb = known.length
+      ? [0, 1, 2].map((k) => known.reduce((a, c) => a + c[k], 0) / known.length)
+      : page && page[3] >= 0.99 && toneOf(page) === tone
+        ? page
+        : tone === "dark"
+          ? [18, 18, 18]
+          : [255, 255, 255];
+    return "#" + rgb.slice(0, 3).map((c) => Math.round(Math.min(255, Math.max(0, c))).toString(16).padStart(2, "0")).join("");
+  }
+
+  const rules = { POINTS, parseColor, composite, luminance, toneOf, smallPicture, gradientColor, standIn, fallbackTone, decide, underColor };
   if (typeof module !== "undefined" && module.exports) {
     module.exports = rules;
     return;
@@ -105,11 +135,15 @@
   if (window.top !== window) return;
   // Kept under a symbol: not listed among the page's own variables.
   const KEY = Symbol.for("snapstudio.navTone");
-  let tone = null;
-  const keep = (t) => {
+  let tone = null, kept = null;
+  /* What Rust reads: the tone and the color under the pill, "dark #121212". */
+  const keep = (t, color) => {
     tone = t;
+    const v = `${t} ${color}`;
+    if (v === kept) return;
+    kept = v;
     try {
-      Object.defineProperty(window, KEY, { value: t, writable: true, configurable: true, enumerable: false });
+      Object.defineProperty(window, KEY, { value: v, writable: true, configurable: true, enumerable: false });
     } catch (e) {}
   };
 
@@ -136,8 +170,8 @@
   const dark = () => matchMedia("(prefers-color-scheme: dark)").matches;
   const scheme = () => getComputedStyle(document.documentElement).colorScheme || "";
 
-  /* The tone of one point, or null when a picture is in the way. */
-  function pointTone(x, y, canvas) {
+  /* The color seen at one point, or null when a picture is in the way. */
+  function pointColor(x, y, canvas) {
     const layers = [];
     for (const el of document.elementsFromPoint(x, y)) {
       if (MEDIA.has(el.tagName)) return null;
@@ -149,16 +183,27 @@
       }
       const cs = getComputedStyle(el);
       if (cs.backgroundImage && cs.backgroundImage !== "none") {
-        const r = el.getBoundingClientRect();
-        if (smallPicture(r.width, r.height)) continue;
-        return null;
+        // A gradient: its colors, over the element's own background color.
+        const g = gradientColor(cs.backgroundImage);
+        if (g) {
+          layers.push(g);
+          if (g[3] >= 0.99) break;
+        } else {
+          const r = el.getBoundingClientRect();
+          if (smallPicture(r.width, r.height)) continue;
+          // A big picture: its element's own color stands in, if any.
+          const s = standIn(parseColor(cs.backgroundColor));
+          if (!s) return null;
+          layers.push(s);
+          break;
+        }
       }
       const c = parseColor(cs.backgroundColor);
       if (!c || c[3] === 0) continue;
       layers.push(c);
       if (c[3] >= 0.99) break;
     }
-    return toneOf(composite(layers, canvas));
+    return composite(layers, canvas);
   }
 
   function measure() {
@@ -169,17 +214,15 @@
     // black for a page that asks for dark.
     const darkCanvas = /\bdark\b/.test(cs) && (!/\blight\b/.test(cs) || dark());
     const canvas = darkCanvas ? [18, 18, 18, 1] : [255, 255, 255, 1];
-    const fb = fallbackTone({
-      themeColor: meta ? cssColor(meta.content) : null,
-      body: document.body ? parseColor(getComputedStyle(document.body).backgroundColor) : null,
-      html: parseColor(getComputedStyle(document.documentElement).backgroundColor),
-      colorScheme: cs,
-    });
+    const body = document.body ? parseColor(getComputedStyle(document.body).backgroundColor) : null;
+    const html = parseColor(getComputedStyle(document.documentElement).backgroundColor);
+    const fb = fallbackTone({ themeColor: meta ? cssColor(meta.content) : null, body, html, colorScheme: cs });
     // Pinch zoom: the pill's points in the page's pixels.
     const vv = window.visualViewport;
     const at = vv ? ([x, y]) => [vv.offsetLeft + x / (vv.scale || 1), vv.offsetTop + y / (vv.scale || 1)] : (p) => p;
-    const t = decide(POINTS.map((p) => pointTone(...at(p), canvas)), fb, tone);
-    if (t !== tone) keep(t);
+    const colors = POINTS.map((p) => pointColor(...at(p), canvas));
+    const t = decide(colors.map((c) => c && toneOf(c)), fb, tone);
+    if (t) keep(t, underColor(colors, body && body[3] >= 0.99 ? body : html, t));
   }
 
   /* One measure at most every 250 ms, in an animation frame. */

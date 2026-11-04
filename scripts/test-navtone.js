@@ -43,6 +43,20 @@ assert.strictEqual(T.smallPicture(140, 32), true, "a wordmark");
 assert.strictEqual(T.smallPicture(1200, 400), false, "a banner");
 assert.strictEqual(T.smallPicture(200, 120), false, "a cover");
 
+// A gradient background: its colors are in the computed style.
+assert.deepStrictEqual(T.gradientColor("linear-gradient(rgb(20, 20, 20), rgb(40, 40, 40))"), [30, 30, 30, 1]);
+assert.deepStrictEqual(T.gradientColor("linear-gradient(90deg, rgba(0, 0, 0, 0.5) 0%, rgb(0, 0, 0) 100%)"), [0, 0, 0, 0.75]);
+assert.strictEqual(T.gradientColor('url("https://x/banner.jpg")'), null, "a picture");
+assert.strictEqual(T.gradientColor('linear-gradient(rgb(0, 0, 0), rgb(0, 0, 0)), url("x.png")'), null, "a picture under a gradient");
+assert.strictEqual(T.gradientColor("none"), null);
+assert.strictEqual(T.toneOf(T.composite([T.gradientColor("linear-gradient(rgb(27, 27, 31), rgb(60, 20, 90))")], white)), "dark");
+
+// A big picture's own background color stands in for it, when opaque
+// (Thangs' dark hero, under a transparent bar).
+assert.deepStrictEqual(T.standIn([29, 29, 30, 1]), [29, 29, 30, 1]);
+assert.strictEqual(T.standIn([0, 0, 0, 0]), null);
+assert.strictEqual(T.standIn(null), null);
+
 // Fallbacks, in order: theme-color, body, html, color-scheme.
 assert.strictEqual(T.fallbackTone({ themeColor: [0, 0, 0, 1], body: white }), "dark", "theme-color first");
 assert.strictEqual(T.fallbackTone({ themeColor: null, body: [20, 20, 20, 1], html: white }), "dark", "then <body>");
@@ -62,5 +76,13 @@ assert.strictEqual(T.decide([null, null, "light"], "dark", null), "dark", "a pic
 assert.strictEqual(T.decide([null, null, null], null, "light"), "light", "nothing readable: unchanged");
 assert.strictEqual(T.decide([null, null, null], null, null), null, "nothing yet: none");
 assert.strictEqual(T.POINTS.length, 3);
+
+// The color under the pill (Linux's opaque view): the readable points'
+// average, the page's background, or white / near black by the tone.
+assert.strictEqual(T.underColor([[255, 255, 255], [243, 243, 245], null], null, "light"), "#f9f9fa");
+assert.strictEqual(T.underColor([null, null, null], [18, 18, 18, 1], "dark"), "#121212");
+assert.strictEqual(T.underColor([null], [0, 0, 0, 0], "dark"), "#121212", "a transparent page: by the tone");
+assert.strictEqual(T.underColor([], null, "light"), "#ffffff");
+assert.strictEqual(T.underColor([null, null, null], [255, 255, 255, 1], "dark"), "#121212", "a white page under a dark banner: by the tone");
 
 console.log("navtone: ok");
