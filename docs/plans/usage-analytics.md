@@ -141,11 +141,16 @@ notice). Changing it takes effect at once (no restart).
 - The payload seen on the wire contains only version, OS, locale, session id
   and timestamp.
 
-## Open questions for the owner
+## Decisions (owner, 2026-11-04)
 
-- On by default with the notice (as asked), or off by default and the
-  notice asks? (On by default gives a real count; off by default counts very
-  few people.)
-- Aptabase hosted (EU) or self-hosted.
-- Whether the Innovation Fund rules say anything about telemetry (checked
-  separately before merging).
+1. **On by default**, announced by the first-launch sheet, which lets the
+   user turn it off right there.
+2. **Aptabase hosted**, with the owner's Aptabase account (not
+   self-hosted). The owner creates the app (EU region) and adds its key as
+   the `APTABASE_APP_KEY` repository secret.
+3. **Also off-switchable in Settings** (Settings › Application), effective at
+   once.
+
+Innovation Fund rules (checked 2026-11-04): nothing about telemetry or
+analytics; disclosing it (the sheet, `docs/privacy.md`, one line in the
+submission) is enough.
