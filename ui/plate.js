@@ -112,6 +112,9 @@ function plateAsk({ plate, families, pid = null, title = null }) {
    spools are taken as they are, without a word). */
 function pltCheckSpools(pid, { fresh = true } = {}) {
   const slots = typeof headsSlots === "function" ? headsSlots(pid) : [];
+  // No heads reported (yet): nothing seen, the first real read is still
+  // the one whose spools are taken as they are.
+  if (!slots.length) return;
   const plate = headsPlate(pid);
   const first = !PLT.seen[pid];
   const seen = (PLT.seen[pid] ||= {});
