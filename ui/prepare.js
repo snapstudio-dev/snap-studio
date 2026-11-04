@@ -36,19 +36,49 @@ const PR = {
   framed: false,
   /* Objects whose colors are folded in the list. */
   fold: new Set(),
+  /* Supports hint (support_hint.rs), by plHintKey; keys being asked. */
+  hints: new Map(),
+  hintAsk: new Set(),
+  /* Objects the badge names, and whether it is hovered (they are outlined). */
+  hintIds: new Set(),
+  hintHover: false,
+  /* Overhang view, and the angle it colors with (the hint's). */
+  overhangs: false,
+  overAngle: null,
 };
 
 /* Live colors: each vertex carries its model extruder (aExt); when that
    extruder goes to a head holding a spool, the spool's color replaces the
    file's. An empty or unknown head keeps the file's color. */
-const PREP_VS = MESH_VS.replace("in vec3 aCol;", "in vec3 aCol;\nin float aExt;\nuniform vec3 uHeadCol[17];\nuniform float uHeadOn[17];").replace(
-  "vCol = aCol;",
-  "int e = clamp(int(aExt + 0.5), 0, 16);\n  vCol = uHeadOn[e] > 0.5 ? uHeadCol[e] : aCol;"
-);
-const PREP_FS = MESH_FS.replace("out vec4 frag;", "uniform vec4 uTint;\nuniform float uAlpha;\nout vec4 frag;").replace(
-  "frag = vec4(c, 1.0);",
-  "c = mix(c, uTint.rgb, uTint.a);\n  frag = vec4(c, uAlpha);"
-);
+const PREP_VS = MESH_VS.replace("in vec3 aCol;", "in vec3 aCol;\nin float aExt;\nuniform vec3 uHeadCol[17];\nuniform float uHeadOn[17];")
+  .replace("vCol = aCol;", "int e = clamp(int(aExt + 0.5), 0, 16);\n  vCol = uHeadOn[e] > 0.5 ? uHeadCol[e] : aCol;")
+  .replace("out vec3 vPosV;", "out vec3 vPosV;\nout vec3 vPosW;\nuniform mat4 uModel;")
+  .replace("vPosV = (uMV * vec4(aPos, 1.0)).xyz;", "vPosV = (uMV * vec4(aPos, 1.0)).xyz;\n  vPosW = (uModel * vec4(aPos, 1.0)).xyz;");
+/* Overhang view (uOver 1): faces pointing down more than the profile's
+   angle, above the first layer, in red. Seen from above (the camera stays
+   above the bed), an underside is hidden: a second pass (uOver 2) draws the
+   hidden ones only, hatched, through what covers them; the winding tells
+   their outward side (uFlip: a mirroring scale). */
+const PREP_FS = MESH_FS.replace("in vec3 vPosV;", "in vec3 vPosV;\nin vec3 vPosW;")
+  .replace("out vec4 frag;", "uniform vec4 uTint;\nuniform float uAlpha;\nuniform float uOver;\nuniform float uOverCos;\nuniform float uFlip;\nuniform vec3 uOverCol;\nuniform vec3 uEye;\nout vec4 frag;")
+  .replace(
+    "frag = vec4(c, 1.0);",
+    `if (uOver > 0.5) {
+    vec3 nw = normalize(cross(dFdx(vPosW), dFdy(vPosW)));
+    if (dot(nw, uEye - vPosW) < 0.0) nw = -nw;
+    if (uOver > 1.5 && gl_FrontFacing == (uFlip > 0.5)) nw = -nw;
+    bool over = -nw.z >= uOverCos && vPosW.z > 0.25;
+    if (uOver > 1.5) {
+      // Hatched: seen through, not on the visible surface.
+      if (!over || mod(gl_FragCoord.x + gl_FragCoord.y, 9.0) > 3.0) discard;
+      frag = vec4(uOverCol, 0.7);
+      return;
+    }
+    if (over) c = mix(c, uOverCol, 0.75);
+  }
+  c = mix(c, uTint.rgb, uTint.a);
+  frag = vec4(c, uAlpha);`
+  );
 const FOV = 0.72;
 
 /* Solid-color drawing (rotation rings, hovered facet). */
@@ -74,6 +104,7 @@ function prSave() {
   localStorage.setItem("snapstudio.plate", JSON.stringify({ objects, nextId: PR.nextId, colourHeads: PR.colourHeads, tower: prTowerStored(), smoothMix: vhSmoothOn(PR) }));
   prStatus();
   prPruneMeshes();
+  prHintRefresh();
 }
 
 /* Smooth mix for the plate's virtual heads (the slice sheet's switch):
@@ -468,7 +499,7 @@ function prDraw() {
   gl.clearColor(...prClearColor(), 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
-  const { view, proj } = prCamera(w, h);
+  const { eye, view, proj } = prCamera(w, h);
   const vp = m4.mul(proj, view);
 
   drawBed(gl, PR.plate, PR.grid, vp, view, light);
@@ -483,6 +514,12 @@ function prDraw() {
   gl.useProgram(PR.prog);
   const uMVP = gl.getUniformLocation(PR.prog, "uMVP"), uMV = gl.getUniformLocation(PR.prog, "uMV");
   const uTint = gl.getUniformLocation(PR.prog, "uTint"), uAlpha = gl.getUniformLocation(PR.prog, "uAlpha");
+  const uModel = gl.getUniformLocation(PR.prog, "uModel"), uOver = gl.getUniformLocation(PR.prog, "uOver");
+  const uFlip = gl.getUniformLocation(PR.prog, "uFlip");
+  gl.uniform1f(gl.getUniformLocation(PR.prog, "uOverCos"), Math.cos(rad(PR.overAngle ?? 30)));
+  gl.uniform3fv(gl.getUniformLocation(PR.prog, "uOverCol"), prTok("--danger", [1, 0.23, 0.19]));
+  gl.uniform3fv(gl.getUniformLocation(PR.prog, "uEye"), eye);
+  gl.uniform1f(uOver, PR.overhangs ? 1 : 0);
   const boxes = [];
   const overlap = prOverlaps();
   for (const o of PR.objects) {
@@ -493,6 +530,7 @@ function prDraw() {
     const selected = PR.sel.has(o.id);
     gl.uniformMatrix4fv(uMVP, false, m4.mul(vp, model));
     gl.uniformMatrix4fv(uMV, false, m4.mul(view, model));
+    gl.uniformMatrix4fv(uModel, false, model);
     const tint =
       st === "partial" ? [...prTok("--danger", [1, 0.23, 0.19]), 0.45]
       : selected ? [...accent, 0.28]
@@ -506,36 +544,30 @@ function prDraw() {
     gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
     if (selected) boxes.push(o);
   }
-
-  // Selection box
-  if (boxes.length) {
-    const pts = [];
-    for (const o of boxes) {
-      const { r, t } = placement(o);
-      // Box slightly bigger than the object: its edges must not merge with the
-      // surface, which the depth test would favor.
-      const grow = (p, k) => p + Math.sign(p) * Math.max(0.6, Math.abs(o.size[k]) * 0.02) / Math.abs(o.scale[k] || 1);
-      const c = corners(o).map((p) => add3(applyRS(r, o.scale, p.map(grow)), t));
-      for (const [a, b] of [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]]) {
-        pts.push(...c[a], ...c[b]);
-      }
+  // Overhang view: the undersides hidden behind the parts (those farther
+  // than what is drawn), hatched, over them.
+  if (PR.overhangs) {
+    gl.uniform1f(uOver, 2);
+    gl.depthMask(false);
+    gl.depthFunc(gl.GREATER);
+    for (const o of PR.objects) {
+      const mesh = PR.meshes.get(meshKey(o));
+      if (!mesh?.vao || bedState(o) === "out") continue;
+      const model = modelMatrix(o);
+      gl.uniformMatrix4fv(uMVP, false, m4.mul(vp, model));
+      gl.uniformMatrix4fv(uMV, false, m4.mul(view, model));
+      gl.uniformMatrix4fv(uModel, false, model);
+      gl.uniform1f(uFlip, o.scale[0] * o.scale[1] * o.scale[2] < 0 ? 1 : 0);
+      gl.bindVertexArray(mesh.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
     }
-    const buf = gl.createBuffer();
-    const vao = gl.createVertexArray();
-    gl.bindVertexArray(vao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pts), gl.STREAM_DRAW);
-    const aPos = gl.getAttribLocation(PR.line, "aPos");
-    gl.enableVertexAttribArray(aPos);
-    gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
-    gl.vertexAttrib1f(gl.getAttribLocation(PR.line, "aMain"), 1);
-    gl.useProgram(PR.line);
-    gl.uniformMatrix4fv(gl.getUniformLocation(PR.line, "uMVP"), false, vp);
-    gl.uniform3fv(gl.getUniformLocation(PR.line, "uColor"), accent);
-    gl.drawArrays(gl.LINES, 0, pts.length / 3);
-    gl.deleteVertexArray(vao);
-    gl.deleteBuffer(buf);
+    gl.depthFunc(gl.LESS);
+    gl.depthMask(true);
   }
+
+  // Selection box; the supports badge hovered outlines the objects it names.
+  prDrawBoxes(gl, vp, boxes, accent);
+  if (PR.hintHover) prDrawBoxes(gl, vp, PR.objects.filter((o) => PR.hintIds.has(o.id)), prTok("--warning", [1, 0.58, 0]));
   // The prime tower: translucent, after the parts.
   prTowerDraw(gl, vp, accent);
   // Rotate tool: three rings (ribbons) around the selection, always visible;
@@ -575,6 +607,38 @@ function prDraw() {
   }
   gl.disable(gl.BLEND);
   gl.bindVertexArray(null);
+}
+
+/* Boxes around objects, in one color: the selection, the objects the
+   supports badge names. */
+function prDrawBoxes(gl, vp, list, color) {
+  if (!list.length) return;
+  const pts = [];
+  for (const o of list) {
+    const { r, t } = placement(o);
+    // Box slightly bigger than the object: its edges must not merge with the
+    // surface, which the depth test would favor.
+    const grow = (p, k) => p + Math.sign(p) * Math.max(0.6, Math.abs(o.size[k]) * 0.02) / Math.abs(o.scale[k] || 1);
+    const c = corners(o).map((p) => add3(applyRS(r, o.scale, p.map(grow)), t));
+    for (const [a, b] of [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]]) {
+      pts.push(...c[a], ...c[b]);
+    }
+  }
+  const buf = gl.createBuffer();
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pts), gl.STREAM_DRAW);
+  const aPos = gl.getAttribLocation(PR.line, "aPos");
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+  gl.vertexAttrib1f(gl.getAttribLocation(PR.line, "aMain"), 1);
+  gl.useProgram(PR.line);
+  gl.uniformMatrix4fv(gl.getUniformLocation(PR.line, "uMVP"), false, vp);
+  gl.uniform3fv(gl.getUniformLocation(PR.line, "uColor"), color);
+  gl.drawArrays(gl.LINES, 0, pts.length / 3);
+  gl.deleteVertexArray(vao);
+  gl.deleteBuffer(buf);
 }
 
 /* One-off drawing of a single-color shape (with transparency). */
@@ -1161,6 +1225,7 @@ function prStatus() {
     tool: PR.tool,
     orienting: !!PR.orienting,
     splitting: !!PR.splitting,
+    overhangs: PR.overhangs,
   });
   for (const [id, t] of Object.entries(tools)) {
     const b = $(id);
@@ -2183,6 +2248,105 @@ async function prOrient(all) {
   }
 }
 
+/* ------------------------------------------------------------ supports hint */
+
+/* The overhang angle of the hint and the overhang view: the advanced
+   settings' when changed there, otherwise the print profile's (read by
+   Rust from `process`). */
+function prHintAngle() {
+  const m = SL.memory.last ? rememberFor(SL.memory.last) : {};
+  const a = parseFloat(m.adv?.support_threshold_angle);
+  return { process: m.process || null, threshold: a > 0 && a < 90 ? a : null };
+}
+
+/* After a change of the plate or of the supports: the badge at once,
+   what Rust has to read a moment later. */
+function prHintRefresh() {
+  clearTimeout(PR.hintTimer);
+  PR.hintTimer = setTimeout(prHintAsk, 400);
+  prHintRender();
+}
+
+/* Asks Rust, in the background, for the hints not known yet: an object
+   added, tilted or scaled (moved or turned on the bed, it keeps its own),
+   on the plate, while supports are off. The overhang view needs the angle
+   only. */
+async function prHintAsk() {
+  const { process, threshold } = prHintAngle();
+  const tag = threshold ?? process;
+  const objs = slSupportsNext()
+    ? []
+    : PR.objects.filter((o) => bedState(o) !== "out" && !PR.hints.has(plHintKey(o, tag)) && !PR.hintAsk.has(plHintKey(o, tag)));
+  const keys = [...new Set(objs.map((o) => plHintKey(o, tag)))];
+  const angle = PR.overhangs && PR.overTag !== tag;
+  if (!keys.length && !angle) return;
+  keys.forEach((k) => PR.hintAsk.add(k));
+  const items = keys.map((k) => objs.find((o) => plHintKey(o, tag) === k)).map((o) => ({ path: o.path, item: o.item, piece: o.piece ?? null, rot: o.rot, scale: o.scale }));
+  try {
+    const r = await invoke("plate_support_hint", { items, process, threshold });
+    keys.forEach((k, i) => PR.hints.set(k, r.items[i] || { verdict: "none" }));
+    PR.overAngle = r.threshold;
+    PR.overTag = tag;
+  } catch (e) {
+    // Not asked again for these: the slice's own check remains.
+    console.warn("supports hint:", e);
+    keys.forEach((k) => PR.hints.set(k, { verdict: "none" }));
+  } finally {
+    keys.forEach((k) => PR.hintAsk.delete(k));
+  }
+  // Old placements go first.
+  for (const k of PR.hints.keys()) if (PR.hints.size > 400) PR.hints.delete(k);
+  prHintRender();
+  prSchedule();
+}
+
+/* The badge in the 3D view's bottom-left corner: the objects that
+   probably need supports, named (or counted), and why. */
+function prHintRender() {
+  const { process, threshold } = prHintAngle();
+  const tag = threshold ?? process;
+  const on = PR.objects.filter((o) => bedState(o) !== "out");
+  const b = plSupportBadge(on, (o) => PR.hints.get(plHintKey(o, tag)), slSupportsNext());
+  PR.hintIds = new Set(b?.ids || []);
+  $("p-supports").classList.toggle("hidden", !b);
+  $("p-canvas").parentElement.classList.toggle("p-hinting", !!b);
+  if (!b) {
+    if (PR.hintHover) {
+      PR.hintHover = false;
+      prSchedule();
+    }
+    return;
+  }
+  const reasons = b.reasons.map((r) => tr(SUPPORT_REASONS[r]));
+  const one = b.ids.length === 1;
+  $("p-supports-title").textContent = one ? tr("supports.badge") : tr("supports.badge.many", { n: b.ids.length });
+  $("p-supports-why").textContent = one ? tr("supports.badge.why", { name: b.names[0], reason: reasons[0] || "" }) : reasons.join(" · ");
+  $("p-supports").title = (one ? "" : b.names.join(", ") + "\n") + tr("supports.badge.title");
+}
+
+function prSetOverhangs(on) {
+  PR.overhangs = on;
+  $("p-overhangs").classList.toggle("on", on);
+  $("p-overhangs").setAttribute("aria-pressed", String(on));
+  prStatus();
+  if (on) prHintRefresh();
+  prSchedule();
+}
+
+$("p-supports").addEventListener("mouseenter", () => {
+  PR.hintHover = true;
+  prSchedule();
+});
+$("p-supports").addEventListener("mouseleave", () => {
+  PR.hintHover = false;
+  prSchedule();
+});
+$("p-supports-go").addEventListener("click", () => {
+  slSetSupports(true);
+  toast(tr("supports.on_toast"));
+});
+$("p-overhangs").addEventListener("click", () => prSetOverhangs(!PR.overhangs));
+
 /* Saves the whole plate as 3MF (the model's parts and extruders kept). */
 async function prSavePlate() {
   if (!PR.objects.length) return;
@@ -2456,6 +2620,8 @@ async function prepareShow() {
   await Promise.all([...PR.objects.map(prLoadMesh), prRefreshColors()]);
   prRenderInspector();
   prSchedule();
+  // The profile or its overhang angle may have changed meanwhile.
+  prHintRefresh();
 }
 
 /* Scene handed to slicing: objects on the plate only. */

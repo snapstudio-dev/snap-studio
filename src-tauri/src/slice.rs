@@ -408,6 +408,55 @@ pub struct Progress {
     pub stage: Option<String>,
     /// Slicing summary, in the `preview` phase.
     pub stats: Option<crate::gcode::SliceStats>,
+    /// In the `preview` phase: the objects the engine says need supports
+    /// (sliced without them).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<SupportWarning>,
+}
+
+/// The engine's warning that an object needs supports: it slices anyway,
+/// supports off, and says so in its log ("It seems object X has floating
+/// regions"), the same check as Orca's.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct SupportWarning {
+    /// The object's name in the 3MF: the scene item's.
+    pub object: String,
+    /// floating | cantilever | overhangs | other
+    pub reason: String,
+    /// The engine's message, in English: shown when the reason is unknown.
+    pub text: String,
+}
+
+/// The engine's support warnings in its log, one per object and reason.
+/// A slice with supports off checks each object (`is_support_necessary`)
+/// and logs, on success:
+/// `[…] [warning] plate 1: found NON_CRITICAL slicing warnings: It seems
+/// object T.stl has floating cantilever. Please re-orient the object or
+/// enable support generation.`
+fn support_warnings(logs: &str) -> Vec<SupportWarning> {
+    const MARK: &str = "found NON_CRITICAL slicing warnings: ";
+    const START: &str = "It seems object ";
+    const REASONS: [(&str, &str); 3] =
+        [(" has floating regions", "floating"), (" has floating cantilever", "cantilever"), (" has large overhangs", "overhangs")];
+    let mut out: Vec<SupportWarning> = Vec::new();
+    for line in logs.lines() {
+        let Some(i) = line.find(MARK) else { continue };
+        let text = line[i + MARK.len()..].trim();
+        let Some(said) = text.strip_prefix(START) else { continue };
+        // The object's name may hold anything, " has " included: the known
+        // reasons are matched at the end of the sentence.
+        let said = said.split(". Please").next().unwrap_or(said).trim_end_matches('.');
+        let (object, reason) = REASONS
+            .iter()
+            .find_map(|(tail, r)| said.strip_suffix(tail).map(|o| (o, *r)))
+            .or_else(|| said.rfind(" has ").map(|k| (&said[..k], "other")))
+            .unwrap_or((said, "other"));
+        let w = SupportWarning { object: object.to_string(), reason: reason.into(), text: text.to_string() };
+        if !out.contains(&w) {
+            out.push(w);
+        }
+    }
+    out
 }
 
 /// Finished slice awaiting a decision: save, send, discard.
@@ -989,6 +1038,7 @@ pub fn run_job(bin: PathBuf, idx: Arc<Index>, req: Request, job_id: String, repo
             elapsed_s: el(&t0),
             gcode: Some(first.to_string_lossy().to_string()),
             stats,
+            warnings: support_warnings(&logs),
             ..Default::default()
         });
     }
@@ -2068,6 +2118,101 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
+    /// The engine's support check, supports off, on the plan's four models
+    /// (docs/plans/support-needed-hint.md): its warnings reach the preview,
+    /// and the mesh hint (`support_hint.rs`) agrees with it.
+    /// `SNAPSTUDIO_ENGINE=… cargo test --lib engine_support_warnings -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn engine_support_warnings() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles");
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.20mm Standard")).unwrap_or(&l.processes[0]).name.clone();
+        let pla = l.filaments.iter().find(|f| f.name.contains("PLA")).expect("PLA").name.clone();
+        use crate::mesh::Tri;
+        let tmp = std::env::temp_dir().join("snapstudio-engine-supports");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let bx = |x0: f32, y0: f32, z0: f32, x1: f32, y1: f32, z1: f32| -> Vec<Tri> {
+            #[rustfmt::skip]
+            let p = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
+            #[rustfmt::skip]
+            let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
+                     [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+            f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect()
+        };
+        let models: Vec<(&str, Vec<Tri>, Option<&str>)> = vec![
+            ("cube", bx(0.0, 0.0, 0.0, 20.0, 20.0, 20.0), None),
+            ("T", [bx(20.0, 0.0, 0.0, 30.0, 10.0, 12.0), bx(0.0, 0.0, 10.0, 50.0, 10.0, 15.0)].concat(), Some("cantilever")),
+            (
+                "pendant",
+                [bx(20.0, 0.0, 0.0, 30.0, 10.0, 20.0), bx(20.0, 0.0, 20.0, 50.0, 10.0, 25.0), bx(42.0, 0.0, 10.0, 50.0, 10.0, 21.0)]
+                    .concat(),
+                Some("floating"),
+            ),
+            (
+                "bridge",
+                [bx(0.0, 0.0, 0.0, 10.0, 10.0, 20.0), bx(40.0, 0.0, 0.0, 50.0, 10.0, 20.0), bx(0.0, 0.0, 20.0, 50.0, 10.0, 25.0)].concat(),
+                None,
+            ),
+        ];
+        let mut scene = Vec::new();
+        for (i, (name, tris, _)) in models.iter().enumerate() {
+            let src = tmp.join(format!("{name}.3mf"));
+            crate::write3mf::write_scene(
+                &src,
+                &[crate::write3mf::SceneObject {
+                    name: (*name).into(),
+                    tris: tris.clone(),
+                    transform: crate::mesh::Mat::IDENTITY,
+                    extruder: None,
+                }],
+            )
+            .unwrap();
+            scene.push(crate::plate::SceneItem {
+                path: src.to_string_lossy().to_string(),
+                item: 0,
+                name: (*name).into(),
+                pos: [50.0 + 60.0 * (i % 3) as f32, 60.0 + 80.0 * (i / 3) as f32],
+                rot: [0.0; 3],
+                scale: [1.0; 3],
+                extruder_map: vec![0],
+                piece: None,
+            });
+        }
+        let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+        let sink = seen.clone();
+        run_job(
+            binary(&app).unwrap(),
+            index_for(&app).unwrap(),
+            Request {
+                machine,
+                process,
+                filaments: vec![pla],
+                scene,
+                simple: Some(Simple { supports: Some(false), ..Default::default() }),
+                name: Some("supports".into()),
+                ..Default::default()
+            },
+            "supports".into(),
+            &move |p| sink.lock().unwrap().push(p),
+        );
+        let got = seen.lock().unwrap();
+        let last = got.last().unwrap();
+        assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
+        println!("engine: {:?}", last.warnings);
+        for (name, tris, want) in &models {
+            let said = last.warnings.iter().find(|w| w.object == *name).map(|w| w.reason.as_str());
+            let hint = crate::support_hint::analyse(tris, support_threshold(None));
+            println!("{name}: engine {said:?}, hint {:?} {:?}", hint.verdict, hint.reason);
+            assert_eq!(said, *want, "{name}: the engine");
+            assert_eq!(hint.reason, *want, "{name}: the hint");
+        }
+        discard("supports");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
     /// The prime tower lands where Prepare put it: a two-head plate sliced
     /// with `wipe_tower_x` / `wipe_tower_y` (front-left corner, one per
     /// plate) and `wipe_tower_rotation_angle`, the tower read back from the
@@ -2860,6 +3005,28 @@ mod tests {
         // A tower on a part: said in words, not "plate 1: found slicing result conflict!".
         let raw = "[2026-10-25 20:51:02.1] [0x1] [error]   plate 1: found slicing result conflict!\nrun found error, exit";
         assert_eq!(engine_error(raw), crate::t!("err.slice_conflict"));
+    }
+
+    /// The engine's lines, as its 2.4.0 build logs them with supports off.
+    #[test]
+    fn support_warnings_are_read_from_the_log() {
+        let logs = "[2026-11-04 10:00:00.1] [0x1] [warning] plate 1: found NON_CRITICAL slicing warnings: It seems object T.stl has floating cantilever. Please re-orient the object or enable support generation.\n\
+                    \n\
+                    [2026-11-04 10:00:00.2] [0x1] [warning] plate 1: found NON_CRITICAL slicing warnings: It seems object pendant.stl has floating regions. Please re-orient the object or enable support generation.\n\
+                    [2026-11-04 10:00:00.3] [0x1] [warning] plate 1: found NON_CRITICAL slicing warnings: It seems object T.stl has floating cantilever. Please re-orient the object or enable support generation.\n\
+                    [2026-11-04 10:00:00.4] [0x1] [warning] plate 1: found NON_CRITICAL slicing warnings: It seems object Cat has a tail has wobbly bits. Please re-orient the object or enable support generation.\n\
+                    [2026-11-04 10:00:00.5] [0x1] [warning] plate 1: found NON_CRITICAL slicing warnings: Detected print speed exceeds max speed.\n\
+                    [2026-11-04 10:00:00.6] [0x1] [warning] plate 1: found slicing warnings: It seems object X has floating regions., no_check=0";
+        let w = support_warnings(logs);
+        let got: Vec<(&str, &str)> = w.iter().map(|w| (w.object.as_str(), w.reason.as_str())).collect();
+        // Once per object and reason; an unknown reason kept with its text;
+        // other warnings ignored.
+        assert_eq!(got, vec![("T.stl", "cantilever"), ("pendant.stl", "floating"), ("Cat has a tail", "other")]);
+        assert!(w[2].text.starts_with("It seems object Cat has a tail has wobbly bits."));
+        // A name holding " has " keeps it.
+        let w = support_warnings("[x] [0x1] [warning] plate 1: found NON_CRITICAL slicing warnings: It seems object Bob has a hat has large overhangs. Please re-orient the object or enable support generation.");
+        assert_eq!((w[0].object.as_str(), w[0].reason.as_str()), ("Bob has a hat", "overhangs"));
+        assert!(support_warnings("").is_empty());
     }
 
     #[test]

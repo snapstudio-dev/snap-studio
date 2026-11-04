@@ -2433,5 +2433,20 @@
   "window.restore": "元に戻す (縮小)",
   "window.close": "閉じる",
   "display.system_titlebar": "システムのタイトルバーを使用",
-  "display.system_titlebar.sub": "Snap Studio のものの代わりに、デスクトップのタイトルバーとウィンドウボタンを使います"
+  "display.system_titlebar.sub": "Snap Studio のものの代わりに、デスクトップのタイトルバーとウィンドウボタンを使います",
+  "supports.banner": "{name} にはサポートが必要と思われます：{reason}。",
+  "supports.banner.go": "サポートをオンにして再スライス",
+  "supports.reason.floating": "宙に浮いた部分から始まります",
+  "supports.reason.cantilever": "長いオーバーハングが突き出ています",
+  "supports.reason.overhangs": "大きなオーバーハング",
+  "supports.badge": "サポートが必要と思われます",
+  "supports.badge.many": {
+    "other": "{n} 個のオブジェクトにサポートが必要と思われます"
+  },
+  "supports.badge.why": "{name}：{reason}",
+  "supports.badge.title": "サポートをオフにした状態で、置かれた形状から推定しています。スライス時に確実に確認されます。",
+  "supports.badge.go": "サポートをオン",
+  "supports.on_toast": "次回のスライスでサポートをオンにしました",
+  "prepare.overhangs": "オーバーハング表示",
+  "prepare.overhangs.title": "オーバーハング表示：プロファイルのサポート角度より下を向いた面を赤で表示"
 }

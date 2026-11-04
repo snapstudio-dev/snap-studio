@@ -175,6 +175,7 @@
     <button id="p-face" class="tb-btn labeled" title="Lay on face (F)" data-i18n-title="prepare.face"><svg viewBox="0 0 24 24"><path d="M12 3 4 8v8l8 5 8-5V8zm0 2.3 5.6 3.5L12 12.3 6.4 8.8zM3 20h18v2H3z"/></svg><span data-i18n="prepare.face.short">Lay on Face</span></button>
     <button id="p-orient" class="tb-btn labeled" title="Auto-orient (Q; ⇧Q: whole plate)" data-i18n-title="prepare.orient"><svg viewBox="0 0 24 24"><path d="M12 2.5 14 8l5.5 2-5.5 2-2 5.5L10 12 4.5 10 10 8zM3 20h18v2H3z"/></svg><span data-i18n="prepare.orient.short">Orient</span></button>
     <button id="p-arrange" class="tb-btn labeled" title="Arrange plate (A)" data-i18n-title="prepare.arrange"><svg viewBox="0 0 24 24"><path d="M3 3h8v8H3zm10 0h8v5h-8zm0 7h8v11h-8zM3 13h8v8H3z"/></svg><span data-i18n="prepare.arrange.short">Arrange</span></button>
+    <button id="p-overhangs" class="tb-btn labeled" aria-pressed="false" title="Show overhangs: faces that point down more than the profile's support angle, in red" data-i18n-title="prepare.overhangs.title"><svg viewBox="0 0 24 24"><path d="M3 4h18v5h-7v11h-4V9H3z"/><path d="M3 11h5v1.5H3zm0 3h5v1.5H3zm0 3h5v1.5H3z" opacity=".5"/></svg><span data-i18n="prepare.overhangs">Show Overhangs</span></button>
     </div>
     <div class="tb-group tb-objects">
     <button id="p-dup" class="tb-btn labeled" title="Duplicate (⌘D)" data-i18n-title="prepare.duplicate"><svg viewBox="0 0 24 24"><path d="M8 8h12v12H8zm-4-4h12v2H6v10H4z"/></svg><span data-i18n="prepare.duplicate.short">Duplicate</span></button>
@@ -313,6 +314,12 @@
       <div id="p-angle" class="p-angle hidden"></div>
       <div id="p-tower-tip" class="p-angle hidden"></div>
       <div id="p-toolhint" class="p-toolhint hidden"></div>
+      <!-- Supports hint from the mesh (support_hint.rs), supports off: hovered, it outlines the objects it names. -->
+      <div id="p-supports" class="p-supports hidden" role="status">
+        <svg class="p-supports-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 1.5 21h21zm0 4 7.1 12.5H4.9zM11 10h2v4.5h-2zm0 6h2v2h-2z"/></svg>
+        <div class="p-supports-text"><b id="p-supports-title"></b><small id="p-supports-why"></small></div>
+        <button id="p-supports-go" type="button" class="btn small" data-i18n="supports.badge.go">Turn supports on</button>
+      </div>
       <div class="v-hint" data-i18n="prepare.hint">drag: move · ⌥ drag: rotate · ⌘ drag from an empty spot: select an area · ⇧ or right drag, ⇧ scroll: pan the view · arrows: 1 mm (⇧ 10 mm) · A: arrange · ⌘D: duplicate · ⌘Z: undo</div>
       <div id="p-objects" class="p-float p-objects prep-inspector">
         <div class="p-float-head" id="p-objects-head">
@@ -1480,6 +1487,11 @@
   </div>
   <div id="v-legend" class="v-legend hidden"></div>
   <aside id="v-panel" class="v-panel hidden">
+    <!-- The engine's warning that an object needs supports (sliced without). -->
+    <div id="vp-supports" class="vp-supports hidden" role="status">
+      <div id="vp-supports-text"></div>
+      <button id="vp-supports-go" class="btn wide" data-i18n="supports.banner.go">Turn supports on and slice again</button>
+    </div>
     <div class="vp-section" data-i18n="viewer.est_time">Estimated time</div>
     <div id="vp-time" class="vp-time"></div>
     <div id="vp-first" class="vp-sub"></div>

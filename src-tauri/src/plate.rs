@@ -672,6 +672,42 @@ pub fn orient(it: &OrientItem, threshold_deg: f64) -> Result<[[f64; 3]; 3]> {
     Ok(crate::orient::rotation_between(up, [0.0, 0.0, 1.0]))
 }
 
+/// Object whose need for supports is guessed: as it sits on the plate
+/// (its position on the bed changes nothing).
+#[derive(Deserialize, Clone, Debug)]
+pub struct HintItem {
+    pub path: String,
+    pub item: usize,
+    #[serde(default)]
+    pub piece: Option<usize>,
+    #[serde(default)]
+    pub rot: [f32; 3],
+    #[serde(default = "unit_scale")]
+    pub scale: [f32; 3],
+}
+
+/// Triangles read for the supports hint: the whole mesh up to there,
+/// simplified beyond (the welding of millions of vertices costs the most).
+const HINT_BUDGET: usize = 3_000_000;
+
+/// Does the object probably need supports, placed as it is
+/// (`support_hint.rs`)?
+pub fn support_hint(it: &HintItem, threshold_deg: f64) -> Result<crate::support_hint::Hint> {
+    let (mut m, _) = load(Path::new(&it.path), it.item, it.piece, HINT_BUDGET)?;
+    let placed = SceneItem {
+        path: String::new(),
+        item: it.item,
+        name: String::new(),
+        pos: [0.0, 0.0],
+        rot: it.rot,
+        scale: it.scale,
+        extruder_map: Vec::new(),
+        piece: it.piece,
+    };
+    place(&mut m.tris, &placed);
+    Ok(crate::support_hint::analyse(&m.tris, threshold_deg))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

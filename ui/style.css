@@ -2599,6 +2599,10 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .vp-seg .seg-btn { font-size: 12px; }
 .vp-actions { margin-top: auto; padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 .vp-actions .btn { justify-content: center; }
+/* The engine says an object needs supports: above the summary. */
+.vp-supports { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--warning) 10%, transparent); border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent); font-size: 12px; line-height: 1.4; }
+.vp-supports.hidden { display: none; }
+.vp-supports .btn { justify-content: center; }
 /* The layer slider shifts to make room for the panel. */
 .viewer.previewing .v-layers { right: 324px; }
 
@@ -2859,6 +2863,34 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
   pointer-events: none;
 }
 .p-loading .spinner { margin: 0; }
+/* Supports probably needed: the 3D view's bottom-left corner, under the
+   object list (shortened to make room), the view's hint line gives way. */
+.p-supports {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  max-width: min(300px, calc(100% - 24px));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sheet-bg) var(--glass-mix), transparent);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-edge), var(--sheet-shadow);
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.p-supports.hidden { display: none; }
+.p-supports-ico { flex: none; width: 18px; height: 18px; fill: var(--warning); }
+.p-supports-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.p-supports-text small { color: var(--text-secondary); overflow-wrap: anywhere; }
+.p-supports-text small::first-letter { text-transform: uppercase; }
+.p-supports .btn { flex: none; }
+.prep-stage.p-hinting .p-objects { max-height: calc(100% - 120px); }
+.prep-stage.p-hinting .v-hint { display: none; }
 .p-toolhint {
   position: absolute;
   top: 12px;
