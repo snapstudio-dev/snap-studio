@@ -27,7 +27,7 @@ lists below.
 | [prints-redesign.md](prints-redesign.md) | Prints page redesign: list and record (C, chosen from three mockup directions; the stats go to the printer page and a Statistics page in a follow-up) | Implemented in draft PR [#65](https://github.com/kameka22/snap-studio/pull/65) |
 | [ai-source-models.md](ai-source-models.md) | STL and 3MF files as source models in AI conversations (creation sheet and chat); dropped files reach the AI view; a message for files that can't be attached | Merged in [#83](https://github.com/kameka22/snap-studio/pull/83), in 0.18.0; checks in the app on the three systems left |
 | [printer-simulator.md](printer-simulator.md) | Dev builds: simulated printers (a fake Moonraker per printer on this computer) and a full simulation mode, with time acceleration and fault injection | Implemented in draft PR [#87](https://github.com/kameka22/snap-studio/pull/87) (phases 1 to 5); open questions in the PR |
-| [support-needed-hint.md](support-needed-hint.md) | Prepare: tell whether an object needs supports — a badge on the 3D view computed from the mesh, an overhang view, and the engine's warning after the slice | Written and decided, draft PR [#89](https://github.com/kameka22/snap-studio/pull/89) |
+| [support-needed-hint.md](support-needed-hint.md) | Prepare: tell whether an object needs supports — a badge on the 3D view computed from the mesh, an overhang view, and the engine's warning after the slice | Implemented in draft PR [#89](https://github.com/kameka22/snap-studio/pull/89) (A and B, overhang view); checks in the app on a real slice left |
 
 The other planned features each have a draft pull request: see the
 [Roadmap](../../README.md#roadmap).

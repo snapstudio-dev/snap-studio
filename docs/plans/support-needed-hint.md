@@ -1,6 +1,7 @@
 # Prepare: telling whether a print needs supports
 
-Plan only, nothing implemented. The question: in Prepare, before slicing,
+Implemented in draft PR #89 (A and B with the overhang view, see
+[Implementation](#implementation)). The question: in Prepare, before slicing,
 can Snap Studio tell that an object will need supports, the way Snapmaker
 Orca warns "It seems object X has floating regions"? And must that come from
 the engine, or can we compute it ourselves?
@@ -280,7 +281,7 @@ Still open: the French wording (see [Texts](#texts-en--fr-to-review)).
 | Banner button | Turn supports on and slice again | Activer les supports et redécouper |
 | View toggle | Show overhangs | Afficher les surplombs |
 
-## CHANGELOG (planned, not added yet)
+## CHANGELOG (added under Unreleased)
 
 Under *Unreleased*, *Added*:
 
@@ -294,7 +295,49 @@ Under *Unreleased*, *Added*:
 ## Open questions
 
 1. The French texts above: "porte-à-faux", "surplombs", "commencent dans
-   le vide" — to be reviewed.
+   le vide" — used as proposed, to be reviewed.
+
+## Implementation
+
+- **A** (`slice.rs`): `support_warnings` reads the `found NON_CRITICAL
+  slicing warnings: It seems object … has …` lines of the kept log, once
+  per object and reason (`floating`, `cantilever`, `overhangs`, `other`
+  with the engine's sentence), into `Progress.warnings` of the `preview`
+  phase. The preview panel shows them in a banner above the summary; its
+  button goes back to the plate's Slice sheet, turns supports on and slices
+  again (`sliceWithSupports`).
+- **B** (`support_hint.rs`, `plate_support_hint`): the mesh as placed
+  (scale and rotation, resting on the bed), read whole up to 3 million
+  triangles, welded on exact coordinates.
+  - Floating: vertices taken from the lowest up, each growing its region
+    within a layer (0.2 mm) above it; a region that reaches lower ground is
+    not a low point. A low point above the first layer is floating unless
+    another shell of the object is right under it (nearest face below
+    pointing down, or above pointing up: right where shells touch or
+    overlap).
+  - Cantilever: overhang faces (past the angle, above the first layer)
+    grouped in patches by their edges. The corners of each patch's outline
+    (where it turns, seen from above, as Orca's contour points) are measured
+    to the nearest anchor holding them one layer down: a wall going down
+    from the patch's edge, another shell under the patch, a lower part of
+    the patch itself, or the bed. Over 6 mm: `cantilever`. A bridge is held
+    at its corners; a gentle slope is held layer by layer.
+  - Verdict `likely` (floating first, then cantilever), `maybe` (overhang
+    area over 100 mm², not shown), `none`. About 45 ms for 160 000
+    triangles.
+  - Prepare asks for the objects on the plate whose key changed (mesh,
+    tilt, scale, angle; a move or a turn around Z keeps the hint), 400 ms
+    after the last change, only while supports are off. The angle is the
+    advanced settings' `support_threshold_angle` if changed there, else the
+    profile's.
+- **Badge**: bottom-left of the 3D view, the object list shortened above
+  it and the view's hint line hidden while it shows. Hovered, the objects
+  it names get an orange box. "Turn supports on" sets them on in the
+  machine's remembered adjustments (as switched by hand on the sheet).
+- **Overhang view**: a toggle in the view tools (off at each launch). The
+  camera never goes below the bed, where undersides would show: besides
+  the red on visible faces, a second pass draws the hidden overhangs
+  hatched, through what covers them (their outward side from the winding).
 
 ## Tests
 
