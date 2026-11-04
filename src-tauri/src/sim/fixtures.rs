@@ -98,6 +98,9 @@ pub fn sample_gcode(f: &SampleFile, spools: &[Spool]) -> String {
     let _ = writeln!(g, "; thumbnail end\n; THUMBNAIL_BLOCK_END\n;");
     let _ = writeln!(g, "; CONFIG_BLOCK_START");
     let _ = writeln!(g, "; printer_model = Snapmaker U1");
+    // The plate it was sliced for, as Orca writes it (the start sheet's
+    // plate check).
+    let _ = writeln!(g, "; curr_bed_type = Textured PEI Plate");
     let _ = writeln!(g, "; layer_height = {lh}");
     let _ = writeln!(g, "; first_layer_bed_temperature = {}", if materials.iter().any(|m| m.contains("PETG")) { 70 } else { 60 });
     let _ = writeln!(

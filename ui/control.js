@@ -27,6 +27,9 @@ const CTL = {
   data: new Map(), // pid → { st, cfg, err, reading, slotsAt }
   busy: new Map(), // pid → the action under way (label)
   subs: new Set(),
+  plates: new Set(), // printers whose plates were asked for
+  suggest: new Map(), // pid → { want, value }: the suggested bed temperature
+  profiles: new Map(), // "machine|profile" → Promise of its values
 };
 
 function ctlData(pid) {
@@ -84,6 +87,8 @@ function ctlSpool(pid, n) {
   return ctlSpoolInfo(slots.find((s) => s.index === n), typeof colorName === "function" ? colorName : null);
 }
 window.addEventListener("headschange", (e) => e.detail?.pid && ctlEmit(e.detail.pid));
+// The plates' names, read again in the new language (heads.js).
+window.addEventListener("langchange", () => CTL.plates.clear());
 
 const CTL_CONFIRM = {
   emergency_stop: ["ctl.confirm.estop_t", "ctl.confirm.estop", "ctl.estop_ok"],
@@ -178,6 +183,7 @@ function ctlHeadHtml(h, { compact = false } = {}) {
         <div class="ct-gauge" data-v="gauge"><span><b data-v="temp">—</b><small data-v="target"></small></span></div>
         <div class="ct-head-set">${slider}<button class="btn small ct-activate" data-act="tool" data-n="${n}">${esc(tr("ctl.activate"))}</button></div>
       </div>
+      <div class="ct-plate-note hidden" data-v="plate-note" role="status"></div>
       <div class="ct-head-acts">
         ${ctlBtn("load", n, tr("ctl.load"))}${ctlBtn("unload", n, tr("ctl.unload"))}
         ${ctlBtn("extrude", n, `↓ ${tr("ctl.extrude")}`, ` title="${esc(tr("ctl.extrude_sub"))}" data-tip="${esc(tr("ctl.extrude_sub"))}"`)}${ctlBtn("retract", n, `↑ ${tr("ctl.retract")}`)}
@@ -196,6 +202,22 @@ function ctlHeadPaint(el, pid, h) {
   if (spool) ctlSpoolPaint(spool, pid, h.index);
   const badge = el.querySelector('[data-v="badge"]');
   if (badge) badge.textContent = active ? tr("ctl.is_active") : "";
+  // A new spool that does not suit the printer's plate (plate.js).
+  const note = el.querySelector('[data-v="plate-note"]');
+  if (note) {
+    const i = typeof plateNote === "function" ? plateNote(pid, h.index) : null;
+    note.classList.toggle("hidden", !i);
+    note.classList.toggle("glue", i?.level === "glue");
+    const html = i
+      ? `<span>${esc(tr(i.level === "warn" ? "plate.warn" : "plate.glue", { mat: i.family, plate: plateLabel(headsPlate(pid), pid) }))}</span>` +
+        (i.level === "glue" ? `<button type="button" class="btn small" data-plate-tip="${h.index}">${esc(tr("plate.how"))}</button>` : "") +
+        `<button type="button" class="ct-note-x" data-plate-dismiss="${h.index}" aria-label="${esc(tr("common.close"))}" title="${esc(tr("common.close"))}">×</button>`
+      : "";
+    if (note.dataset.html !== html) {
+      note.innerHTML = html;
+      note.dataset.html = html;
+    }
+  }
   el.querySelector('[data-v="temp"]').textContent = ctlDeg(hs?.temp);
   el.querySelector('[data-v="target"]').textContent = hs?.target > 0 ? `→ ${ctlDeg(hs.target)}` : tr("ctl.off");
   const g = el.querySelector('[data-v="gauge"]');
@@ -203,22 +225,101 @@ function ctlHeadPaint(el, pid, h) {
   ctlSyncRange(el.querySelector(`[data-temp="${h.index}"]`), Math.round(hs?.target || 0), el.querySelector('[data-v="set"]'), ctlDeg);
 }
 
-/* Bed: full — gauge, target and maximum; compact — temperature and target. */
+/* Bed: full — gauge, target and maximum; compact — temperature and target.
+   Both with the plate on the printer (headsPlate). */
 function ctlBedHtml(cfg, { compact = false } = {}) {
   const max = Math.round(cfg?.bed_max || 100);
   const slider = `<label class="ct-slider"><span>${esc(tr("ctl.target"))}</span><input type="range" min="0" max="${max}" step="5" data-bed aria-label="${esc(tr("ctl.bed"))}" /><b data-v="set">0°</b></label>`;
+  const plate = `<div class="ct-plate"><span>${esc(tr("ctl.plate"))}</span><div class="ct-plates" role="radiogroup" aria-label="${esc(tr("ctl.plate"))}" data-plates></div></div>
+    <button type="button" class="ct-suggest hidden" data-bed-suggest></button>`;
   if (compact) {
     return `<div class="ctl-c ctl-c-bed" data-ctl="bed">
         <div class="ctl-c-row"><b>${esc(tr("ctl.bed"))}</b><span class="ctl-c-temp"><b data-v="temp">—</b><small data-v="target"></small></span></div>
         ${slider}
+        ${plate}
       </div>`;
   }
   return `<div class="ct-head-mid" data-ctl="bed">
       <div class="ct-gauge" data-v="gauge"><span><b data-v="temp">—</b><small data-v="target"></small></span></div>
-      <div class="ct-head-set">${slider}<small class="ct-note">${esc(tr("ctl.max", { t: fmtNum(max) }))}</small></div>
+      <div class="ct-head-set">${slider}<small class="ct-note">${esc(tr("ctl.max", { t: fmtNum(max) }))}</small>${plate}</div>
     </div>`;
 }
+/* The plate choice: one tile per plate of the machine (read once), with
+   its pattern as in the slice sheet, "Not set" first; the printer's own
+   value kept even before the list is known. */
+function ctlPlatePaint(box, pid) {
+  if (!box) return;
+  const plates = typeof headsPlates === "function" ? headsPlates(pid) : [];
+  // Read once per printer: a failure (no engine yet) is not retried at
+  // every repaint.
+  if (!plates.length && typeof headsLists === "function" && !CTL.plates.has(pid) && P.list.some((p) => p.id === pid)) {
+    CTL.plates.add(pid);
+    headsLists(pid).then(() => ctlEmit(pid)).catch(() => {});
+  }
+  const cur = typeof headsPlate === "function" ? headsPlate(pid) : "";
+  const list = [{ value: "", label: tr("ctl.plate_unset") }, ...plates];
+  if (cur && !plates.some((p) => p.value === cur)) list.push({ value: cur, label: cur });
+  const tex = (v) => (!v ? "unset" : (typeof PLATE_TEX !== "undefined" && PLATE_TEX[v]) || "plain");
+  // One Tab stop: the plate chosen.
+  const html = list
+    .map((p) => {
+      const on = p.value === cur;
+      return `<button type="button" class="sl-bed ct-bed-tile${on ? " on" : ""}" role="radio" aria-checked="${on}" tabindex="${on ? 0 : -1}" data-plate-pick="${esc(p.value)}" title="${esc(p.label)}"><span class="sl-bed-tex ${tex(p.value)}"></span><b>${esc(p.label)}</b></button>`;
+    })
+    .join("");
+  if (box.dataset.html === html) return;
+  const focused = box.contains(document.activeElement) ? document.activeElement.dataset.platePick : null;
+  box.innerHTML = html;
+  box.dataset.html = html;
+  if (focused != null) box.querySelector(`[data-plate-pick="${CSS.escape(focused)}"]`)?.focus();
+}
+/* The bed temperature the filament profiles give for the printer's plate
+   (`textured_plate_temp`, `hot_plate_temp`…): one per head holding a
+   spool, the highest of them. Read once per profile and plate. → { t, n
+   } (n: the materials it was taken from), or null while not known or not
+   applicable (no plate set, no spool). */
+function ctlSuggest(pid) {
+  const plate = typeof headsPlate === "function" ? headsPlate(pid) : "";
+  const key = typeof BED_TEMP_KEY !== "undefined" ? BED_TEMP_KEY[plate] : null;
+  const list = HD.listsNow[pid], machine = HD.machineNow[pid];
+  if (!key || !list || !machine) return null;
+  const heads = headsSlots(pid).filter((s) => s.present && s.kind);
+  const names = heads.map((s) => headsProfile(pid, s.index, list).name).filter(Boolean);
+  if (!names.length) return null;
+  const want = `${plate}|${machine}|${names.join("|")}`;
+  const c = CTL.suggest.get(pid);
+  if (c?.want === want) return c.value;
+  CTL.suggest.set(pid, { want, value: null });
+  Promise.all(
+    [...new Set(names)].map((name) => {
+      const k = `${machine}|${name}`;
+      if (!CTL.profiles.has(k)) CTL.profiles.set(k, invoke("slice_details", { name, machine }).then((d) => d.values).catch(() => ({})));
+      return CTL.profiles.get(k);
+    })
+  ).then((all) => {
+    if (CTL.suggest.get(pid)?.want !== want) return;
+    const ts = all.map((v) => +one(v?.[key])).filter((t) => t > 0);
+    const mats = new Set(heads.map((s) => spMaterialFamily(s.kind)));
+    CTL.suggest.set(pid, { want, value: ts.length ? { t: Math.max(...ts), n: mats.size } : null });
+    ctlEmit(pid);
+  });
+  return null;
+}
+/* The chip next to the bed's target: clicked, it sets that target; it
+   never changes it by itself. */
+function ctlSuggestPaint(b, pid) {
+  if (!b) return;
+  const s = ctlSuggest(pid);
+  b.classList.toggle("hidden", !s);
+  if (!s) return;
+  b.textContent = tr(s.n > 1 ? "ctl.suggest_max" : "ctl.suggest", { t: fmtNum(s.t) });
+  b.title = tr("ctl.suggest_tip", { plate: typeof plateLabel === "function" ? plateLabel(headsPlate(pid), pid) : headsPlate(pid) });
+  b.dataset.t = String(s.t);
+  b.disabled = !!ctlBusy(pid) || !!ctlWhy("bed_temp", ctlState(pid), ctlData(pid).cfg);
+}
 function ctlBedPaint(el, pid) {
+  ctlPlatePaint(el.querySelector("[data-plates]"), pid);
+  ctlSuggestPaint(el.querySelector("[data-bed-suggest]"), pid);
   const bed = ctlState(pid)?.bed;
   el.querySelector('[data-v="temp"]').textContent = ctlDeg(bed?.temp);
   el.querySelector('[data-v="target"]').textContent = bed?.target > 0 ? `→ ${ctlDeg(bed.target)}` : tr("ctl.off");
@@ -291,6 +392,23 @@ const CTL_DOING = { home: "ctl.doing.home", jog: "ctl.doing.jog", tool: "ctl.doi
 function ctlBind(root) {
   const pidOf = (el) => el.closest("[data-ctl-pid]")?.dataset.ctlPid;
   root.addEventListener("click", (e) => {
+    // A head's plate notice: closed, or the glue tip shown.
+    const x = e.target.closest("[data-plate-dismiss], [data-plate-tip]");
+    if (x && root.contains(x)) {
+      const xpid = pidOf(x);
+      if (x.dataset.plateDismiss != null) return plateNoteDismiss(xpid, +x.dataset.plateDismiss);
+      const i = plateNote(xpid, +x.dataset.plateTip);
+      if (i) plateAsk({ plate: headsPlate(xpid), families: [i.family], pid: xpid });
+      return;
+    }
+    // The plate on the printer: kept here, not sent (Klipper does not know it).
+    const pl = e.target.closest("[data-plate-pick]");
+    if (pl && root.contains(pl)) return headsSetPlate(pidOf(pl), pl.dataset.platePick, "control");
+    // The suggested bed temperature, taken.
+    const sg = e.target.closest("[data-bed-suggest]");
+    if (sg && !sg.disabled && root.contains(sg)) {
+      return ctlRun(pidOf(sg), { kind: "bed_temp", temp: +sg.dataset.t }, tr("ctl.doing.bed", { t: fmtNum(+sg.dataset.t) }));
+    }
     const b = e.target.closest("[data-act]");
     if (!b || b.disabled || !root.contains(b)) return;
     const pid = pidOf(b), kind = b.dataset.act;
@@ -308,6 +426,17 @@ function ctlBind(root) {
     const action = { kind };
     if (n !== undefined) action.n = n;
     ctlRun(pid, action, CTL_DOING[kind] ? tr(CTL_DOING[kind], { n }) : tr("ctl.doing.any"));
+  });
+  // The plate tiles: arrows move and choose, as a radio group.
+  root.addEventListener("keydown", (e) => {
+    const t = e.target.closest?.("[data-plate-pick]");
+    if (!t || !root.contains(t)) return;
+    const row = [...t.parentElement.querySelectorAll("[data-plate-pick]")];
+    const j = swMove(row, row.indexOf(t), e.key);
+    if (j < 0) return;
+    e.preventDefault();
+    row[j].focus();
+    row[j].click();
   });
   root.addEventListener("input", (e) => {
     const r = e.target;
@@ -662,6 +791,8 @@ $("ctlfil-cancel").addEventListener("click", () => closeSheet($("ctlfil")));
 $("ctlfil-ok").addEventListener("click", async () => {
   const { pid, n, load, pick } = CF;
   closeSheet($("ctlfil"));
+  // Against the printer's plate first: a warning can cancel it.
+  if (!(await plateCheckDeclared(pid, n, pick.material))) return;
   const ok = await ctlRun(pid, { kind: "filament", n, vendor: pick.vendor, material: pick.material, sub_type: pick.sub_type, color: pick.color }, tr("ctl.doing.filament", { n }));
   if (ok && load) ctlRun(pid, { kind: "load", n }, tr("ctl.doing.load", { n }));
 });

@@ -318,6 +318,47 @@ async fn tools_uncached(host: &str, port: u16, b: &str, path: &str) -> Result<Ve
     Ok(read?.unwrap_or_else(|| meta.map(|m| m.tools).unwrap_or_else(|| vec![0])))
 }
 
+/// Bytes read from a print file's end for its plate: Orca's settings block
+/// closes the file.
+const PLATE_TAIL: u64 = 256 * 1024;
+/// A server that ignores the range sends the whole file: read only when it
+/// is this small.
+const PLATE_WHOLE_MAX: u64 = 4 * 1024 * 1024;
+
+fn plate_cache() -> &'static Mutex<HashMap<MetaKey, Option<String>>> {
+    static C: OnceLock<Mutex<HashMap<MetaKey, Option<String>>>> = OnceLock::new();
+    C.get_or_init(Default::default)
+}
+
+/// The build plate a print file on the printer was sliced for
+/// (`curr_bed_type`), read from the end of its G-code with an HTTP range:
+/// the file is not downloaded whole. None when the file does not say
+/// (another slicer, an older file). Kept until the file changes.
+pub async fn plate(host: &str, port: u16, path: &str, modified: f64) -> Result<Option<String>> {
+    let b = base(host, port);
+    let key = (b.clone(), path.to_string(), modified.to_bits());
+    if let Some(p) = plate_cache().lock().ok().and_then(|c| c.get(&key).cloned()) {
+        return Ok(p);
+    }
+    let url = file_url(&b, "gcodes", path)?;
+    let r =
+        client().get(url).header(reqwest::header::RANGE, format!("bytes=-{PLATE_TAIL}")).timeout(Duration::from_secs(20)).send().await?;
+    let p = match r.status().as_u16() {
+        206 => crate::gcode::bed_type(&String::from_utf8_lossy(&r.bytes().await?)),
+        200 if r.content_length().is_some_and(|n| n <= PLATE_WHOLE_MAX) => {
+            let all = r.bytes().await?;
+            let from = all.len().saturating_sub(PLATE_TAIL as usize);
+            crate::gcode::bed_type(&String::from_utf8_lossy(&all[from..]))
+        }
+        200 => None,
+        code => return Err(anyhow!("HTTP {code}")),
+    };
+    if let Ok(mut c) = plate_cache().lock() {
+        c.insert(key, p.clone());
+    }
+    Ok(p)
+}
+
 /// Tools a print uses: the slicer's own list, otherwise the filaments
 /// actually consumed, otherwise a single-color print on T0.
 pub fn tools_of(referenced: &[u8], m: &FileMeta) -> Vec<u8> {

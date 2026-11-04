@@ -1060,6 +1060,30 @@
         </span>
         <input type="checkbox" id="set-spool-check" class="sw" role="switch" />
       </label>
+      <label class="grow-row">
+        <span class="k"><span data-i18n="settings.plate.pair">Warn when a material does not suit the plate</span>
+          <span class="sub" data-i18n="settings.plate.pair.sub">When slicing, declaring a spool in Control, and before a print starts</span>
+        </span>
+        <input type="checkbox" id="set-plate-pair" class="sw" role="switch" />
+      </label>
+      <label class="grow-row">
+        <span class="k"><span data-i18n="settings.plate.glue">Show the glue tip</span>
+          <span class="sub" data-i18n="settings.plate.glue.sub">When a material needs glue on the chosen plate</span>
+        </span>
+        <input type="checkbox" id="set-plate-glue" class="sw" role="switch" />
+      </label>
+      <label class="grow-row">
+        <span class="k"><span data-i18n="settings.plate.reminder">Remind to apply glue before a print</span>
+          <span class="sub" data-i18n="settings.plate.reminder.sub">A box to tick in the start sheet; Start is never blocked</span>
+        </span>
+        <input type="checkbox" id="set-plate-reminder" class="sw" role="switch" />
+      </label>
+      <label class="grow-row">
+        <span class="k"><span data-i18n="settings.plate.mismatch">Warn when the printer has another plate</span>
+          <span class="sub" data-i18n="settings.plate.mismatch.sub">The plate set in Control differs from the one the print was sliced for</span>
+        </span>
+        <input type="checkbox" id="set-plate-mismatch" class="sw" role="switch" />
+      </label>
       <div class="grow-row">
         <span class="k"><span data-i18n="settings.assoc">Colour to head assignment</span>
           <span class="sub" data-i18n="settings.assoc.sub">The mode Prepare starts with; it can be changed above the object list at any time</span>
@@ -2161,6 +2185,26 @@
   </div>
 </div>
 
+<!-- Plate and materials (plate.js): a warning, or the glue tip. -->
+<div id="plmodal" class="modal hidden">
+  <div class="modal-box pl-box" role="alertdialog" aria-labelledby="pl-title">
+    <h3 id="pl-title"></h3>
+    <div id="pl-list" class="pl-list"></div>
+    <div id="pl-tip" class="pl-tip hidden">
+      <div id="pl-tip-art"></div>
+      <p data-i18n="plate.tip">Spread a thin, even layer of glue stick where the part will sit and let it dry. It washes off with warm water.</p>
+    </div>
+    <div class="pl-hides">
+      <label><input type="checkbox" id="pl-hide-pair" /> <span data-i18n="plate.hide.pair">Don't warn about plates and materials again</span></label>
+      <label><input type="checkbox" id="pl-hide-glue" /> <span data-i18n="plate.hide.glue">Don't show the glue tip again</span></label>
+    </div>
+    <div class="modal-actions">
+      <button id="pl-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="pl-go" class="btn primary"></button>
+    </div>
+  </div>
+</div>
+
 <div id="spmodal" class="modal hidden">
   <div class="modal-box sp-box" role="alertdialog" aria-labelledby="sp-title">
     <div class="sp-head">
@@ -2171,8 +2215,10 @@
         <div id="sp-info" class="sp-info"></div>
       </div>
     </div>
-    <div class="sp-cols" aria-hidden="true"><span data-i18n="spool.col_model">Model color</span><span></span><span data-i18n="spool.use">Print with</span></div>
+    <div id="sp-cols" class="sp-cols" aria-hidden="true"><span data-i18n="spool.col_model">Model color</span><span></span><span data-i18n="spool.use">Print with</span></div>
     <div id="sp-list" class="sp-list"></div>
+    <!-- The plate: another one than sliced for, a material that does not suit it, glue (spoolcheck.js). -->
+    <div id="sp-plate" class="sp-plate hidden"></div>
     <div id="sp-hint" class="sp-hint"></div>
     <div class="modal-actions">
       <button id="sp-edit" class="btn left" data-i18n="spool.edit">Edit in Prepare</button>
@@ -2218,7 +2264,9 @@
 <script src="prepare-pillars.js"></script>
 <script src="heads.js"></script>
 <script src="virtual.js"></script>
+<script src="plate-rules.js"></script>
 <script src="spoolcheck.js"></script>
+<script src="plate.js"></script>
 <script src="bedmesh-logic.js"></script>
 <script src="maint.js"></script>
 <script src="bedmesh.js"></script>
