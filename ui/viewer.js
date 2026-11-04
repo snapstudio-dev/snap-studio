@@ -1150,7 +1150,8 @@ const fmtSpan = (s) => {
 const fmtG = (x, d = 1) => fmtDec(x ?? 0, d);
 
 /* Opens a sliced G-code with its summary. `opts`: path, name, stats,
-   toolColors ([r,g,b] per head), toolNames, onSend, onSave, onEdit, onClose. */
+   toolColors ([r,g,b] per head), toolNames, onSend, onSave, onEdit, onClose,
+   and the engine's support warnings (`warnings`, `onSupports`). */
 function openPreview(opts) {
   V.preview = opts;
   V.colorMode = "material";
@@ -1169,8 +1170,22 @@ function hidePreviewPanel() {
   $("viewer").classList.remove("previewing");
 }
 
+/* Why an object needs supports, in words: the engine's reasons
+   (`slice::support_warnings`) and the Prepare hint's (`support_hint.rs`). */
+const SUPPORT_REASONS = { floating: "supports.reason.floating", cantilever: "supports.reason.cantilever", overhangs: "supports.reason.overhangs" };
+
 function renderPreviewPanel() {
   const st = V.preview.stats || {};
+  // Objects the engine says need supports: one line each, the reason in
+  // words (its own English text for a reason it does not name).
+  const warn = V.preview.warnings || [];
+  $("vp-supports").classList.toggle("hidden", !warn.length || !V.preview.onSupports);
+  $("vp-supports-text").innerHTML = warn
+    .map((w) => {
+      const reason = SUPPORT_REASONS[w.reason] ? tr(SUPPORT_REASONS[w.reason]) : w.text;
+      return `<div>${esc(tr("supports.banner", { name: w.object, reason }))}</div>`;
+    })
+    .join("");
   $("vp-time").textContent = st.print_time_s ? fmtSpan(st.print_time_s) : "—";
   $("vp-first").textContent = [
     st.first_layer_s ? tr("viewer.first_layer", { t: fmtSpan(st.first_layer_s) }) : "",
@@ -1215,6 +1230,7 @@ $("v-colors").addEventListener("click", (e) => {
 $("vp-send").addEventListener("click", () => V.preview?.onSend?.());
 $("vp-save").addEventListener("click", () => V.preview?.onSave?.());
 $("vp-edit").addEventListener("click", () => V.preview?.onEdit?.());
+$("vp-supports-go").addEventListener("click", () => V.preview?.onSupports?.());
 
 /* Moves the camera target in the screen plane. */
 function panBy(dx, dy) {

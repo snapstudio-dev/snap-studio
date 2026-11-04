@@ -2471,5 +2471,10 @@
   "window.restore": "Restore Down",
   "window.close": "Close",
   "display.system_titlebar": "Use the system title bar",
-  "display.system_titlebar.sub": "The desktop's own title bar and window buttons, in place of Snap Studio's"
+  "display.system_titlebar.sub": "The desktop's own title bar and window buttons, in place of Snap Studio's",
+  "supports.banner": "{name} probably needs supports: {reason}.",
+  "supports.banner.go": "Turn supports on and slice again",
+  "supports.reason.floating": "parts start in the air",
+  "supports.reason.cantilever": "a long overhang sticks out",
+  "supports.reason.overhangs": "large overhangs"
 }

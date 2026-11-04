@@ -441,7 +441,8 @@ async function loadDefaults(saved) {
   $("s-layer-val").textContent = h ? `${fmtDec(+h, 2)} mm` : "—";
   setRange("s-infill", v.infill ?? 15, (x) => Math.round(x) + " %");
   setRange("s-walls", v.walls ?? 2, (x) => String(Math.round(x)));
-  $("s-supports").checked = !!v.supports;
+  $("s-supports").checked = !!(SL.supportsNext ?? v.supports);
+  SL.supportsNext = null;
   $("s-brim").checked = !!v.brim;
   slQuality();
   slSummary();
@@ -537,6 +538,29 @@ function setRange(id, value, fmt) {
   el.oninput = () => ($(id + "-val").textContent = fmt(+el.value));
 }
 
+/* Supports on or off for the next slices, as if switched by hand: on the
+   sheet, and kept with the machine's adjustments (or, before any, for the
+   sheet's next loading). Prepare's hint follows. */
+function slSetSupports(on) {
+  $("s-supports").checked = on;
+  slTouch("s-supports");
+  // An open sheet updates its summary; a closed one reloads from memory.
+  if (!$("smodal").classList.contains("hidden")) $("s-supports").dispatchEvent(new Event("change", { bubbles: true }));
+  const machine = $("s-machine").value || SL.memory.last;
+  if (machine) {
+    const m = rememberFor(machine);
+    remember(machine, { simple: { ...(m.simple || {}), supports: on } });
+  } else SL.supportsNext = on;
+  if (typeof prHintRefresh === "function") prHintRefresh();
+}
+
+/* Whether the next slice has supports: the machine's remembered
+   adjustments; off before any (the profiles' default). */
+function slSupportsNext() {
+  const m = SL.memory.last ? rememberFor(SL.memory.last) : {};
+  return !!(m.simple?.supports ?? SL.supportsNext);
+}
+
 function currentSimple() {
   return {
     infill: +$("s-infill").value,
@@ -623,6 +647,7 @@ async function startSlice() {
   const simple = currentSimple();
   const bed = $("s-bed").value;
   remember(machine, { process, filaments, simple, bed, adv: SL.adv || {}, speed: SL.speed });
+  if (typeof prHintRefresh === "function") prHintRefresh();
   const printer = currentPrinter();
   rememberPrinter(printer?.id || "");
   if (printer) {
@@ -748,6 +773,9 @@ function showPreview(job, p) {
     onSend: openSend,
     onSave: savePreview,
     onEdit: () => editInPrepare(),
+    // The engine's warning that objects need supports, and its quick fix.
+    warnings: p.warnings || [],
+    onSupports: sliceWithSupports,
     // Closing the preview deletes it: what was saved stays.
     onClose: () => {
       if (SL.preview) invoke("slice_discard", { id: SL.preview.job }).catch(() => {});
@@ -763,7 +791,18 @@ function editInPrepare(printerId) {
   closeViewer();
   switchView("prepare");
   if (printerId) rememberPrinter(printerId);
-  openSlice({ replaces });
+  SL.opening = openSlice({ replaces });
+}
+
+/* The engine said objects need supports: back to this plate's Slice
+   sheet, supports on, and slice again. */
+async function sliceWithSupports() {
+  editInPrepare();
+  await SL.opening;
+  // The sheet did not open (an empty plate), or it asks for the engine.
+  if ($("smodal").classList.contains("hidden") || engNeeded()) return;
+  slSetSupports(true);
+  startSlice();
 }
 
 async function savePreview() {

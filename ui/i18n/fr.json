@@ -2474,5 +2474,10 @@
   "window.restore": "Restaurer",
   "window.close": "Fermer",
   "display.system_titlebar": "Utiliser la barre de titre du système",
-  "display.system_titlebar.sub": "La barre de titre et les boutons de fenêtre du bureau, à la place de ceux de Snap Studio"
+  "display.system_titlebar.sub": "La barre de titre et les boutons de fenêtre du bureau, à la place de ceux de Snap Studio",
+  "supports.banner": "{name} a probablement besoin de supports : {reason}.",
+  "supports.banner.go": "Activer les supports et redécouper",
+  "supports.reason.floating": "des parties commencent dans le vide",
+  "supports.reason.cantilever": "un long porte-à-faux dépasse",
+  "supports.reason.overhangs": "de grands surplombs"
 }
