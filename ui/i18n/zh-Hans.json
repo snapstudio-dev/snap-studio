@@ -2486,5 +2486,19 @@
   "plate.mismatch_sub": "其热床温度和首层是按另一块打印板设置的。",
   "plate.glue_applied": "已涂胶",
   "plate.glue_for": "在 {plate} 上使用 {mat} 需要涂一层薄薄的固体胶。",
-  "plate.hide_short": "不再显示"
+  "plate.hide_short": "不再显示",
+  "an.title": "一个小小的匿名统计",
+  "an.why": "为了了解有多少人在使用 Snap Studio 并持续改进它，应用每次启动时会发送一个匿名信号。",
+  "an.sent_k": "发送的内容：",
+  "an.sent": "应用版本、你的系统及其语言（例如 macOS 15、简体中文），以及每次启动都会变化的随机数。仅此而已。",
+  "an.never_k": "绝不发送：",
+  "an.never": "你的文件、模型、打印机、AI 对话、账户，以及任何能指向你的标识。",
+  "an.where": "数据经由 Aptabase 发送，这是一个开源且注重隐私的服务。你可以随时在 设置 › 应用程序 中更改。",
+  "an.switch": "发送匿名统计",
+  "an.ok": "知道了",
+  "an.more": "具体发送了什么？",
+  "settings.analytics": "匿名使用统计",
+  "settings.analytics.sub": "每次启动发送一个匿名信号，用于统计 Snap Studio 的用户数",
+  "settings.analytics.na": "此版本中不可用",
+  "settings.analytics.what": "发送的内容"
 }

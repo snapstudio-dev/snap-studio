@@ -2486,5 +2486,19 @@
   "plate.mismatch_sub": "ベッド温度と1層目はもう一方のプレート用に設定されています。",
   "plate.glue_applied": "のりを塗った",
   "plate.glue_for": "{plate} での {mat} には、スティックのりを薄く塗る必要があります。",
-  "plate.hide_short": "今後表示しない"
+  "plate.hide_short": "今後表示しない",
+  "an.title": "ちょっとした匿名カウント",
+  "an.why": "Snap Studio を使っている人数を知り、開発を続けるために、アプリは起動のたびに匿名の信号を1つ送ります。",
+  "an.sent_k": "送信されるもの:",
+  "an.sent": "アプリのバージョン、お使いのシステムとその言語（例: macOS 15、日本語）、起動のたびに変わる乱数。それだけです。",
+  "an.never_k": "送信されないもの:",
+  "an.never": "ファイル、モデル、プリンター、AI との会話、アカウント、あなたを特定できる識別子。",
+  "an.where": "送信先は、オープンソースでプライバシーを重視したサービス Aptabase です。設定 › アプリケーション でいつでも変更できます。",
+  "an.switch": "匿名カウントを送信",
+  "an.ok": "OK",
+  "an.more": "具体的に何が送信されますか？",
+  "settings.analytics": "匿名の利用カウント",
+  "settings.analytics.sub": "起動のたびに匿名の信号を1つ送り、Snap Studio の利用者数を数えます",
+  "settings.analytics.na": "このビルドでは利用できません",
+  "settings.analytics.what": "送信されるもの"
 }

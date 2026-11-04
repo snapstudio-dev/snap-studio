@@ -2570,5 +2570,19 @@
   "plate.mismatch_sub": "Betttemperatur und erste Schicht sind für die andere Platte eingestellt.",
   "plate.glue_applied": "Kleber aufgetragen",
   "plate.glue_for": "{mat} auf der Platte {plate} braucht eine dünne Schicht Klebestift.",
-  "plate.hide_short": "Nicht mehr anzeigen"
+  "plate.hide_short": "Nicht mehr anzeigen",
+  "an.title": "Eine kleine anonyme Zählung",
+  "an.why": "Um zu wissen, wie viele Menschen Snap Studio nutzen, und es weiterzuentwickeln, sendet die App bei jedem Start ein anonymes Signal.",
+  "an.sent_k": "Was gesendet wird:",
+  "an.sent": "die Version der App, dein System und seine Sprache (zum Beispiel macOS 15, Deutsch) und eine Zufallszahl, die sich bei jedem Start ändert. Das ist alles.",
+  "an.never_k": "Nie gesendet:",
+  "an.never": "deine Dateien, deine Modelle, deine Drucker, deine KI-Gespräche, dein Konto oder irgendeine Kennung, die auf dich verweist.",
+  "an.where": "Es läuft über Aptabase, einen quelloffenen, datenschutzfreundlichen Dienst. Du kannst es dir jederzeit unter Einstellungen › Anwendung anders überlegen.",
+  "an.switch": "Anonyme Zählung senden",
+  "an.ok": "Verstanden",
+  "an.more": "Was genau wird gesendet?",
+  "settings.analytics": "Anonyme Nutzungszählung",
+  "settings.analytics.sub": "Ein anonymes Signal bei jedem Start, um die Nutzer von Snap Studio zu zählen",
+  "settings.analytics.na": "In diesem Build nicht verfügbar",
+  "settings.analytics.what": "Was gesendet wird"
 }

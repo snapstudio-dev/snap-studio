@@ -2486,5 +2486,19 @@
   "plate.mismatch_sub": "베드 온도와 첫 레이어가 다른 플레이트에 맞춰져 있습니다.",
   "plate.glue_applied": "풀 바름",
   "plate.glue_for": "{plate}에서 {mat}은(는) 딱풀을 얇게 발라야 합니다.",
-  "plate.hide_short": "다시 표시 안 함"
+  "plate.hide_short": "다시 표시 안 함",
+  "an.title": "작은 익명 집계",
+  "an.why": "Snap Studio를 얼마나 많은 사람이 쓰는지 알고 계속 발전시키기 위해, 앱은 시작할 때마다 익명 신호를 하나 보냅니다.",
+  "an.sent_k": "보내는 정보:",
+  "an.sent": "앱 버전, 사용 중인 시스템과 언어(예: macOS 15, 한국어), 그리고 시작할 때마다 바뀌는 임의의 숫자. 그게 전부입니다.",
+  "an.never_k": "절대 보내지 않는 정보:",
+  "an.never": "파일, 모델, 프린터, AI 대화, 계정, 그리고 당신을 가리키는 어떤 식별자도 보내지 않습니다.",
+  "an.where": "오픈 소스이며 개인정보를 중시하는 서비스 Aptabase를 거칩니다. 설정 › 애플리케이션에서 언제든 바꿀 수 있습니다.",
+  "an.switch": "익명 집계 보내기",
+  "an.ok": "확인",
+  "an.more": "정확히 무엇을 보내나요?",
+  "settings.analytics": "익명 사용 집계",
+  "settings.analytics.sub": "시작할 때마다 익명 신호를 하나 보내 Snap Studio 사용자를 집계합니다",
+  "settings.analytics.na": "이 빌드에서는 사용할 수 없습니다",
+  "settings.analytics.what": "보내는 정보"
 }
