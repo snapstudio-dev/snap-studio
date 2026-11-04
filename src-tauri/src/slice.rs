@@ -2118,6 +2118,76 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
+    /// The plate a print was sliced for is in its G-code (`curr_bed_type`,
+    /// the settings block), as the start sheet reads it for a file with no
+    /// slice record (`gcode::bed_type`, `SliceStats::bed_type`).
+    /// `SNAPSTUDIO_ENGINE=… cargo test --lib engine_writes_the_plate -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn engine_writes_the_plate() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles");
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.20mm Standard")).unwrap_or(&l.processes[0]).name.clone();
+        let pla = l.filaments.iter().find(|f| f.name.contains("PLA")).expect("PLA").name.clone();
+        let tmp = std::env::temp_dir().join("snapstudio-engine-plate");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        #[rustfmt::skip]
+        let p = [[0., 0., 0.], [20., 0., 0.], [20., 20., 0.], [0., 20., 0.], [0., 0., 10.], [20., 0., 10.], [20., 20., 10.], [0., 20., 10.]];
+        #[rustfmt::skip]
+        let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+        let tris: Vec<crate::mesh::Tri> =
+            f.iter().map(|t| crate::mesh::Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect();
+        let src = tmp.join("box.3mf");
+        crate::write3mf::write_scene(
+            &src,
+            &[crate::write3mf::SceneObject { name: "box".into(), tris, transform: crate::mesh::Mat::IDENTITY, extruder: None }],
+        )
+        .unwrap();
+        for plate in ["High Temp Plate", "Textured PEI Plate"] {
+            let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+            let sink = seen.clone();
+            let mut overrides = Map::new();
+            overrides.insert("curr_bed_type".into(), Value::String(plate.into()));
+            run_job(
+                binary(&app).unwrap(),
+                index_for(&app).unwrap(),
+                Request {
+                    machine: machine.clone(),
+                    process: process.clone(),
+                    filaments: vec![pla.clone()],
+                    scene: vec![crate::plate::SceneItem {
+                        path: src.to_string_lossy().to_string(),
+                        item: 0,
+                        name: "box".into(),
+                        pos: [135.0, 135.0],
+                        rot: [0.0; 3],
+                        scale: [1.0; 3],
+                        extruder_map: vec![0],
+                        piece: None,
+                    }],
+                    overrides,
+                    name: Some("plate".into()),
+                    ..Default::default()
+                },
+                "plate".into(),
+                &move |p| sink.lock().unwrap().push(p),
+            );
+            let got = seen.lock().unwrap();
+            let last = got.last().unwrap();
+            assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
+            let gcode = std::fs::read_to_string(last.gcode.clone().unwrap()).unwrap();
+            println!("{plate}: {:?}", gcode.lines().find(|l| l.contains("curr_bed_type")));
+            assert_eq!(last.stats.as_ref().and_then(|s| s.bed_type.as_deref()), Some(plate));
+            // From the file's end alone, as for a file on the printer.
+            let tail = &gcode[gcode.len().saturating_sub(256 * 1024)..];
+            assert_eq!(crate::gcode::bed_type(tail).as_deref(), Some(plate));
+            discard("plate");
+        }
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
     /// The engine's support check, supports off, on the plan's four models
     /// (docs/plans/support-needed-hint.md): its warnings reach the preview,
     /// and the mesh hint (`support_hint.rs`) agrees with it.
