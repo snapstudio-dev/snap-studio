@@ -1076,6 +1076,8 @@ async function sendRemote(queue) {
     SL.checking = true;
     let ok;
     try {
+      // The plate it was sliced for, from the end of the file (read once).
+      if (stats.bed_type === undefined) stats.bed_type = await invoke("pf_plate", { printerId: src.id, path: file.path, modified: file.modified || 0 }).catch(() => null);
       ok = await spCheckBeforeStart(p, { tools: stats.tools, profile: {}, stats, canEdit: false, print: { thumb, name: pflName(file.path), printer: p.name || p.host } });
     } catch (e) {
       setSendMessage(String(e.message || e), "err");

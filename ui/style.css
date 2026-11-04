@@ -4524,6 +4524,14 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .ct-plate-note.hidden { display: none; }
 .ct-plate-note > span { flex: 1; min-width: 0; }
 .ct-note-x { border: 0; background: none; color: var(--text-secondary); font-size: 15px; line-height: 1; padding: 2px 4px; cursor: default; }
+/* The start sheet's plate rows (spoolcheck.js). */
+.sp-plate { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 4px; }
+.sp-plate.hidden, .sp-cols.hidden, .sp-list.hidden { display: none; }
+.sp-plate .pl-row > span:nth-child(2), .sp-glue > span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sp-glue { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 8%, var(--control-bg)); }
+.sp-glue input { margin-top: 2px; }
+.sp-glue small { color: var(--text-secondary); font-size: 12px; }
+.sp-hide { flex: none; align-self: center; border: 0; background: none; color: var(--text-secondary); font-size: 11.5px; text-decoration: underline; cursor: default; padding: 0 2px; }
 /* The plate and materials sheet. */
 .pl-box { width: min(440px, calc(100vw - 48px)); }
 .pl-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }

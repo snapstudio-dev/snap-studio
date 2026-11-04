@@ -307,12 +307,27 @@ async function spReadSpools(printer) {
 
 /* Spool check of a print about to start, printer read first. Unreachable:
    an error, nothing sent. No spools reported: nothing to compare, sent as
-   sliced. Otherwise `spoolCheck`, with the same answer. */
+   sliced (the plate still checked, against the materials sliced).
+   Otherwise `spoolCheck`, with the same answer. The plate the print was
+   sliced for: the slice record's (`profile.bed`), else the G-code's
+   (`stats.bed_type`); the printer's: set in Control (heads.js). */
 async function spCheckBeforeStart(printer, args) {
   const { online, slots } = await spReadSpools(printer);
   if (!online) throw new Error(tr("spool.unreachable", { name: printer.name || printer.host }));
-  if (!slots.length) return { map: [] };
-  return spoolCheck({ ...args, pid: printer.id, slots });
+  const plate = { sliced: args.profile?.bed || args.stats?.bed_type || null, printer: typeof headsPlate === "function" ? headsPlate(printer.id) : "" };
+  return spoolCheck({ ...args, pid: printer.id, slots, plate });
+}
+
+/* What the plate rows say for the materials that will print (plate.js):
+   each head's loaded spool, else the material sliced. */
+function spPlateRows(plate, expected, picks, slots) {
+  if (!plate?.printer && !plate?.sliced) return { mismatch: null, warn: [], glue: [] };
+  const families = expected.map((e) => {
+    const h = picks[e.tool];
+    const l = h != null ? spLoaded(slots, h) : null;
+    return spMaterialFamily(l?.material || e.material);
+  });
+  return plateStartRows({ sliced: plate.sliced, printer: plate.printer || null, families, hidden: plateHidden });
 }
 
 /* "red PLA" / "PLA rouge"; parts left out when unknown. */
@@ -332,12 +347,15 @@ const spSwatch = (c) => `<i class="sp-sw${c ? "" : " none"}"${c ? ` style="--c:$
    Prepare.
    → { map: [[tool, head]…] } to send (empty: as sliced), { edit: true } to
    slice again in Prepare, or null. */
-function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print = {} }) {
+function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print = {}, plate = null }) {
   const used = [...new Set(tools?.length ? tools : [0])].sort((a, b) => a - b);
   const expected = spExpected({ tools: used, profile, stats, ftypeOf: spFtypeOf(pid) });
-  if (!spMismatches(expected, slots).length || !spEnabled()) return Promise.resolve({ map: [] });
-
-  const picks = spDefaults(expected, slots);
+  // The spools are only compared when the printer reports them; the plate
+  // rows, whenever there is something to say.
+  const spools = !!slots?.length && spEnabled() && spMismatches(expected, slots).length > 0;
+  const picks = spools ? spDefaults(expected, slots) : {};
+  const rows0 = spPlateRows(plate, expected, picks, slots);
+  if (!spools && !rows0.mismatch && !rows0.warn.length && !rows0.glue.length) return Promise.resolve({ map: [] });
   // Every head of the printer, empty ones too (shown, not choosable).
   const heads = [...new Set([0, 1, 2, 3, ...(slots || []).map((x) => x.index)])].sort((a, b) => a - b);
   const what = (e) => spDescribe(e.material, e.color, "T" + e.tool);
@@ -360,7 +378,29 @@ function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print 
     .join(" · ");
 
   const modal = $("spmodal");
+  // Only the plate to say: the spools' part stays out.
+  $("sp-title").textContent = tr(spools ? "spool.title" : "plate.start_title");
+  $("sp-cols").classList.toggle("hidden", !spools);
+  $("sp-list").classList.toggle("hidden", !spools);
+  let glued = false;
+  const renderPlate = () => {
+    const r = spPlateRows(plate, expected, picks, slots);
+    const label = (v) => (typeof plateLabel === "function" ? plateLabel(v, pid) : v);
+    const hide = (kind) => `<button type="button" class="sp-hide" data-plate-hide="${kind}">${esc(tr("plate.hide_short"))}</button>`;
+    const out = [];
+    if (r.mismatch) {
+      out.push(`<div class="pl-row warn"><span class="pl-ic" aria-hidden="true">!</span><span><b>${esc(tr("plate.mismatch", { sliced: label(r.mismatch.sliced), printer: label(r.mismatch.printer) }))}</b><small>${esc(tr("plate.mismatch_sub"))}</small></span>${hide("mismatch")}</div>`);
+    }
+    for (const i of r.warn) out.push(plateIssueHtml(i, plate.printer, pid).replace(/<\/div>$/, `${hide("pair")}</div>`));
+    if (r.glue.length) {
+      const mats = r.glue.map((i) => i.family).join(", ");
+      out.push(`<label class="sp-glue"><input type="checkbox" id="sp-glue-ok"${glued ? " checked" : ""} /><span><b>${esc(tr("plate.glue_applied"))}</b><small>${esc(tr("plate.glue_for", { mat: mats, plate: label(plate.printer) }))}</small></span>${hide("reminder")}</label>`);
+    }
+    $("sp-plate").innerHTML = out.join("");
+    $("sp-plate").classList.toggle("hidden", !out.length);
+  };
   const render = () => {
+    renderPlate();
     $("sp-list").innerHTML = expected
       .map((e) => {
         const h = picks[e.tool];
@@ -402,7 +442,7 @@ function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print 
         </div>`;
       })
       .join("");
-    const missing = expected.some((e) => picks[e.tool] == null);
+    const missing = spools && expected.some((e) => picks[e.tool] == null);
     $("sp-go").disabled = missing;
     $("sp-go").title = missing ? tr("spool.choose_first") : "";
     $("sp-edit").disabled = !canEdit;
@@ -415,6 +455,7 @@ function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print 
   return new Promise((resolve) => {
     const done = (v) => {
       $("sp-go").onclick = $("sp-edit").onclick = $("sp-cancel").onclick = $("sp-list").onclick = $("sp-list").onkeydown = modal.onkeydown = null;
+      $("sp-plate").onclick = $("sp-plate").onchange = null;
       closeSheet(modal);
       resolve(v);
     };
@@ -442,9 +483,23 @@ function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print 
       for (const x of row) x.tabIndex = x === next ? 0 : -1;
       next.focus();
     };
+    // The plate rows: a kind hidden for good, the glue box ticked (a
+    // reminder: Send never waits for it).
+    $("sp-plate").onclick = (e) => {
+      const k = e.target.closest("[data-plate-hide]")?.dataset.plateHide;
+      if (k) {
+        e.preventDefault();
+        plateSetHidden(k, true);
+        if (typeof plateSettingsPaint === "function") plateSettingsPaint();
+        render();
+      }
+    };
+    $("sp-plate").onchange = (e) => {
+      if (e.target.id === "sp-glue-ok") glued = e.target.checked;
+    };
     $("sp-go").onclick = () => {
       try {
-        done({ map: spRemap(used, picks) });
+        done({ map: spools ? spRemap(used, picks) : [] });
       } catch (e) {
         toast(String(e.message || e), true);
       }

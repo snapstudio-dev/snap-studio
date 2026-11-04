@@ -707,6 +707,13 @@ async fn pf_tools(printer_id: String, path: String, modified: f64) -> Result<Vec
     printer_files::tools(&p.host, p.port, &path, modified).await.map_err(ui_err)
 }
 
+/// The build plate a print file on a printer was sliced for, if it says.
+#[tauri::command]
+async fn pf_plate(printer_id: String, path: String, modified: f64) -> Result<Option<String>, String> {
+    let p = printer_by_id(&printer_id)?;
+    printer_files::plate(&p.host, p.port, &path, modified).await.map_err(ui_err)
+}
+
 /// A printer's timelapse videos, for the Prints record.
 #[tauri::command]
 async fn pf_videos(printer_id: String) -> Result<Vec<printer_files::RemoteFile>, String> {
@@ -2041,6 +2048,7 @@ pub fn run() {
             pf_count,
             pf_videos,
             pf_tools,
+            pf_plate,
             share_fetch,
             share_caps,
             share_copy,

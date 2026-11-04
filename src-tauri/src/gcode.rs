@@ -86,6 +86,9 @@ pub struct GMeta {
     pub generator: Option<String>,
     /// Color of each filament (`#rrggbb`), empty if the slicer does not write it.
     pub colors: Vec<String>,
+    /// The build plate it was sliced for (`curr_bed_type`, Orca's settings
+    /// block).
+    pub bed_type: Option<String>,
 }
 
 /// Times computed by walking the toolpaths (length ÷ speed), ignoring
@@ -331,6 +334,8 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
                 }
             } else if let Some(v) = comment_value(l, "total filament weight [g]").or_else(|| comment_value(l, "total filament used [g]")) {
                 meta.filament_g = v.split(',').next().and_then(|s| s.trim().parse().ok()).or(meta.filament_g);
+            } else if let Some(v) = comment_value(l, "curr_bed_type") {
+                meta.bed_type = (!v.is_empty()).then(|| v.to_string());
             } else if let Some(v) = comment_value(l, "filament_colour") {
                 meta.colors = hex_list(v);
             } else if let Some(v) = comment_value(l, "extruder_colour") {
@@ -538,6 +543,8 @@ pub struct SliceStats {
     /// The prime tower as printed, if there is one: Prepare shows its real
     /// size once sliced.
     pub tower: Option<TowerBox>,
+    /// The build plate it was sliced for (`curr_bed_type`), if written.
+    pub bed_type: Option<String>,
 }
 
 pub fn stats(d: &GcodeData) -> SliceStats {
@@ -569,7 +576,19 @@ pub fn stats(d: &GcodeData) -> SliceStats {
         filament_types: d.meta.filaments.clone(),
         filament_colors: d.meta.colors.clone(),
         tower: tower_box(d, d.meta.tower_at.map(|v| v.unwrap_or(0.0)), d.meta.tower_angle.unwrap_or(0.0)),
+        bed_type: d.meta.bed_type.clone(),
     }
+}
+
+/// The build plate a G-code was sliced for, from any part of it holding
+/// Orca's settings block (`; curr_bed_type = Textured PEI Plate`): the end
+/// of a file is enough.
+pub fn bed_type(text: &str) -> Option<String> {
+    text.lines()
+        .filter(|l| l.starts_with(';'))
+        .find_map(|l| comment_value(l, "curr_bed_type"))
+        .filter(|v| !v.is_empty())
+        .map(str::to_string)
 }
 
 /// The prime tower as printed, in its own frame (turned with it): the
@@ -893,6 +912,19 @@ G1 X30 Y30 F9000
         assert!(heights.iter().all(|&x| x == 32), "{heights:?}");
         assert_eq!(height_steps(0.0), 0);
         assert_eq!(height_steps(2.0), 255, "clamped");
+    }
+
+    #[test]
+    fn stats_carry_the_plate() {
+        let g = "G1 X1 E1\n; CONFIG_BLOCK_START\n; curr_bed_type = High Temp Plate\n; curr_bed_type_extra = x\n; CONFIG_BLOCK_END\n";
+        let st = stats(&parse(g.as_bytes()).unwrap());
+        assert_eq!(st.bed_type.as_deref(), Some("High Temp Plate"));
+        assert_eq!(bed_type(g).as_deref(), Some("High Temp Plate"));
+        // Cut in the middle of a line (a file's end read alone), or absent.
+        assert_eq!(bed_type("ype = X\n; curr_bed_type = Textured PEI Plate\n").as_deref(), Some("Textured PEI Plate"));
+        assert_eq!(bed_type("; layer_height = 0.2\n"), None);
+        assert_eq!(bed_type("; curr_bed_type = \n"), None);
+        assert!(stats(&parse("G1 X1 E1\n".as_bytes()).unwrap()).bed_type.is_none());
     }
 
     #[test]

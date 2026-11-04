@@ -2516,5 +2516,11 @@
   "settings.plate.reminder": "Remind to apply glue before a print",
   "settings.plate.reminder.sub": "A box to tick in the start sheet; Start is never blocked",
   "settings.plate.mismatch": "Warn when the printer has another plate",
-  "settings.plate.mismatch.sub": "The plate set in Control differs from the one the print was sliced for"
+  "settings.plate.mismatch.sub": "The plate set in Control differs from the one the print was sliced for",
+  "plate.start_title": "Before printing",
+  "plate.mismatch": "Sliced for the {sliced}; the printer has the {printer}",
+  "plate.mismatch_sub": "Its bed temperature and first layer were set for the other plate.",
+  "plate.glue_applied": "Glue applied",
+  "plate.glue_for": "{mat} on the {plate} needs a thin layer of glue stick.",
+  "plate.hide_short": "Don't show again"
 }

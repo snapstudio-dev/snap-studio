@@ -2519,5 +2519,11 @@
   "settings.plate.reminder": "Rappeler de mettre de la colle avant une impression",
   "settings.plate.reminder.sub": "Une case à cocher avant le lancement ; Lancer n'est jamais bloqué",
   "settings.plate.mismatch": "Prévenir quand l'imprimante a un autre plateau",
-  "settings.plate.mismatch.sub": "Le plateau réglé dans Contrôle diffère de celui du découpage"
+  "settings.plate.mismatch.sub": "Le plateau réglé dans Contrôle diffère de celui du découpage",
+  "plate.start_title": "Avant d'imprimer",
+  "plate.mismatch": "Découpé pour le plateau {sliced} ; l'imprimante a le plateau {printer}",
+  "plate.mismatch_sub": "Sa température de plateau et sa première couche sont réglées pour l'autre plateau.",
+  "plate.glue_applied": "Colle appliquée",
+  "plate.glue_for": "Le {mat} sur le plateau {plate} demande une fine couche de colle en bâton.",
+  "plate.hide_short": "Ne plus afficher"
 }
