@@ -30,7 +30,7 @@ lists below.
 | [support-needed-hint.md](support-needed-hint.md) | Prepare: tell whether an object needs supports — a badge on the 3D view computed from the mesh, an overhang view, and the engine's warning after the slice | Implemented in draft PR [#89](https://github.com/kameka22/snap-studio/pull/89) (A and B, overhang view); checks in the app on a real slice left |
 | [library-nav-contrast.md](library-nav-contrast.md) | Explore: Back, Forward and Reload almost invisible over dark sites; adaptive pill (dark on light sites, light on dark sites), chosen | Implemented in draft PR [#88](https://github.com/kameka22/snap-studio/pull/88), with the Linux flicker fix; checks on macOS and Windows left |
 | [plate-material-compatibility.md](plate-material-compatibility.md) | Plate and material compatibility: warnings and glue tip in Prepare and at start, plus the plate set per printer in Control, a check when a spool is loaded, a suggested bed temperature and a glue reminder | Implemented in draft PR [#16](https://github.com/kameka22/snap-studio/pull/16); the rule table to review before merging |
-| [usage-analytics.md](usage-analytics.md) | Anonymous usage count with Aptabase: one `app_started` event, announced in a friendly sheet at first launch, easy to turn off in Settings | Written, draft PR; waiting for the go |
+| [usage-analytics.md](usage-analytics.md) | Anonymous usage count with Aptabase: one `app_started` event, announced in a friendly sheet at first launch, easy to turn off in Settings | Implemented in draft PR [#90](https://github.com/kameka22/snap-studio/pull/90); the What's new entry goes in at release |
 
 The other planned features each have a draft pull request: see the
 [Roadmap](../../README.md#roadmap).

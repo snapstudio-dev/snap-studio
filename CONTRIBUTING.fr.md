@@ -47,6 +47,12 @@ et les idées à discuter, il y a les [Discussions](https://github.com/kameka22/
 6. **Changelog** : un changement visible pour l'utilisateur ajoute une ligne
    sous *Unreleased* dans [CHANGELOG.md](CHANGELOG.md) (en anglais), avec le
    numéro de sa pull request.
+7. **Vie privée** : l'app envoie un seul événement anonyme, `app_started`
+   ([docs/privacy.md](docs/privacy.md), en anglais). Aucun nouvel événement
+   ni propriété sans un plan dans `docs/plans/`, et `docs/privacy.md`, la
+   fenêtre du premier lancement et les README mis à jour d'abord. Les
+   versions locales et les forks n'ont pas de clé Aptabase et n'envoient
+   rien.
 
 ## Traduire Snap Studio
 

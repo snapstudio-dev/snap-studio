@@ -127,7 +127,7 @@ No cloud and no account: everything goes over the LAN to the U1's own **Moonrake
 - **Queue**: when a print ends, the next one is *offered* on the printer you pick. Nothing starts on its own.
 - **Engine and updates**: the engine archive is SHA-256-checked and installed atomically. App updates go through Tauri's updater, with signature verification, so a tampered package is refused.
 - **Sharing to a phone**: one file, read-only, at an unguessable local URL, for 15 minutes at most or until the sheet closes.
-- **Privacy**: no telemetry. The app only talks to GitHub (updates, engine), your printers, the sites you open in Explore, and Anthropic if you use the AI.
+- **Privacy**: the app talks to GitHub (updates, engine), your printers, the sites you open in Explore, and Anthropic if you use the AI. It also sends one anonymous event, `app_started`, once per launch (`analytics.rs`, through `tauri-plugin-aptabase` to Aptabase's EU region): no property of its own, only the plugin's version, system, locale and a session id made at launch ([privacy.md](privacy.md)). The Aptabase app key is read at build time (`option_env!("APTABASE_APP_KEY")`, a secret of the release workflow): dev, local and fork builds have none and do not even load the plugin. Nothing is sent before the first-launch sheet is answered, nor once switched off there or in Settings › Application.
 
 ## 5. Tests and CI
 

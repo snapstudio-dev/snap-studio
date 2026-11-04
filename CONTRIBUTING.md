@@ -46,6 +46,11 @@ ideas to talk over, use the [Discussions](https://github.com/kameka22/snap-studi
    work in progress lives in [`docs/plans/`](docs/plans/).
 6. **Changelog**: a user-visible change adds a line under *Unreleased* in
    [CHANGELOG.md](CHANGELOG.md), with its pull request number.
+7. **Privacy**: the app sends one anonymous event, `app_started`
+   ([docs/privacy.md](docs/privacy.md)). No new event or property without a
+   plan in `docs/plans/`, and `docs/privacy.md`, the first-launch sheet and
+   the READMEs updated first. Local and fork builds have no Aptabase key and
+   send nothing.
 
 ## Translating Snap Studio
 

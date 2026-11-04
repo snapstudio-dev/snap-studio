@@ -1,6 +1,6 @@
 # Anonymous usage count (Aptabase)
 
-Plan only: nothing is implemented until the owner gives the go.
+Implemented in draft PR #90 (see [Implementation](#implementation)).
 
 Goal: know roughly how many people use Snap Studio (daily and monthly active
 users, by version, system and language), nothing more. Snap Studio is open
@@ -174,3 +174,47 @@ plain words, with the same list (sent / never sent / how to turn it off):
 Innovation Fund rules (checked 2026-11-04): nothing about telemetry or
 analytics; disclosing it (the sheet, `docs/privacy.md`, one line in the
 submission) is enough.
+
+## Implementation
+
+- **Rust** (`src-tauri/src/analytics.rs`): `app_key()` is
+  `option_env!("APTABASE_APP_KEY")`, none in a dev build
+  (`cfg!(debug_assertions)`); the plugin is registered only with a key.
+  `analytics.enabled` (default on) and `analytics.noticed` live in the
+  app's settings file. `start()` sends `app_started` at most once per
+  launch, when available, noticed and enabled, and flushes it at once (not
+  at the plugin's next 60 s flush): switched off a moment later, nothing is
+  left waiting. Commands: `analytics_status`, `analytics_answer` (the
+  sheet), `analytics_set` (Settings). Tests: nothing when off, unanswered or
+  without a key; one event per launch; switched on later, that launch once.
+- **What the plugin sends** (read in `tauri-plugin-aptabase` 1.3.0's source,
+  listed in [privacy.md](../privacy.md)): `eventName`, `timestamp`,
+  `sessionId` (launch time in seconds and 8 random digits, in memory only,
+  renewed after 4 h idle), `systemProps` (`appVersion`, `osName`,
+  `osVersion`, `locale`, `engineName`, `engineVersion`, `isDebug`,
+  `sdkVersion`) and `props` (null); headers `App-Key` and a User-Agent of
+  the same system fields. The client only posts what is queued (the polling
+  loop skips an empty queue), so nothing goes out before the first
+  `track_event`; crash reporting is off (not asked for).
+- **Interface** (`ui/analytics.js`): the sheet opens once when available and
+  not noticed, after the welcome assistant (`welcomeClose`) or at start for
+  an existing user; "Got it", Escape or closing answer with the switch as
+  it is. Settings › Application: the switch, "What is sent" and a link to
+  `docs/privacy.md`; greyed out and "Not available in this build" without
+  a key. The copy says a little more than the drafts above: the language
+  example and "a random number that changes at each launch", and "your
+  account" in place of "your address" (the IP address is explained in
+  `docs/privacy.md`).
+- **Release workflow** (`.github/workflows/build.yml`): the secret
+  `APTABASE_APP_KEY` given to the Build step only.
+- **What's new**: not in `versions.json` yet, which the site publishes from
+  `main`; to add with the release, as a small entry:
+  - en: "**Anonymous usage count** — Snap Studio now sends one anonymous
+    signal at start (version, system, language) to count its users,
+    nothing else. A sheet tells you at first launch; you can turn it off
+    there or in Settings › Application."
+  - fr: "**Comptage anonyme** — Snap Studio envoie maintenant un signal
+    anonyme au démarrage (version, système, langue) pour compter ses
+    utilisateurs, rien d'autre. Une fenêtre vous le dit au premier
+    lancement ; vous pouvez le désactiver là ou dans Réglages ›
+    Application."
