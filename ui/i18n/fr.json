@@ -2474,5 +2474,21 @@
   "window.restore": "Restaurer",
   "window.close": "Fermer",
   "display.system_titlebar": "Utiliser la barre de titre du système",
-  "display.system_titlebar.sub": "La barre de titre et les boutons de fenêtre du bureau, à la place de ceux de Snap Studio"
+  "display.system_titlebar.sub": "La barre de titre et les boutons de fenêtre du bureau, à la place de ceux de Snap Studio",
+  "supports.banner": "{name} a probablement besoin de supports : {reason}.",
+  "supports.banner.go": "Activer les supports et redécouper",
+  "supports.reason.floating": "des parties commencent dans le vide",
+  "supports.reason.cantilever": "un long porte-à-faux dépasse",
+  "supports.reason.overhangs": "de grands surplombs",
+  "supports.badge": "Supports probablement nécessaires",
+  "supports.badge.many": {
+    "one": "{n} objet a probablement besoin de supports",
+    "other": "{n} objets ont probablement besoin de supports"
+  },
+  "supports.badge.why": "{name} : {reason}",
+  "supports.badge.title": "Estimé d'après la forme telle que posée, supports désactivés. Le découpage le vérifie pour de bon.",
+  "supports.badge.go": "Activer les supports",
+  "supports.on_toast": "Supports activés pour le prochain découpage",
+  "prepare.overhangs": "Afficher les surplombs",
+  "prepare.overhangs.title": "Afficher les surplombs : les faces qui pointent vers le bas plus que l'angle de support du profil, en rouge"
 }

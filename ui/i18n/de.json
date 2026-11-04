@@ -2516,5 +2516,21 @@
   "window.restore": "Verkleinern",
   "window.close": "Schließen",
   "display.system_titlebar": "Titelleiste des Systems verwenden",
-  "display.system_titlebar.sub": "Titelleiste und Fensterknöpfe der Arbeitsumgebung statt der von Snap Studio"
+  "display.system_titlebar.sub": "Titelleiste und Fensterknöpfe der Arbeitsumgebung statt der von Snap Studio",
+  "supports.banner": "{name} braucht wahrscheinlich Stützen: {reason}.",
+  "supports.banner.go": "Stützen einschalten und neu slicen",
+  "supports.reason.floating": "Teile beginnen in der Luft",
+  "supports.reason.cantilever": "ein langer Überhang ragt hervor",
+  "supports.reason.overhangs": "große Überhänge",
+  "supports.badge": "Stützen wahrscheinlich nötig",
+  "supports.badge.many": {
+    "one": "{n} Objekt braucht wahrscheinlich Stützen",
+    "other": "{n} Objekte brauchen wahrscheinlich Stützen"
+  },
+  "supports.badge.why": "{name}: {reason}",
+  "supports.badge.title": "Aus der Form geschätzt, wie sie liegt, mit ausgeschalteten Stützen. Das Slicen prüft es genau.",
+  "supports.badge.go": "Stützen einschalten",
+  "supports.on_toast": "Stützen für das nächste Slicen eingeschaltet",
+  "prepare.overhangs": "Überhänge zeigen",
+  "prepare.overhangs.title": "Überhänge zeigen: Flächen, die steiler nach unten zeigen als der Stützwinkel des Profils, in Rot"
 }

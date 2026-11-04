@@ -2516,5 +2516,21 @@
   "window.restore": "Ripristina",
   "window.close": "Chiudi",
   "display.system_titlebar": "Usa la barra del titolo di sistema",
-  "display.system_titlebar.sub": "La barra del titolo e i pulsanti della finestra del desktop, al posto di quelli di Snap Studio"
+  "display.system_titlebar.sub": "La barra del titolo e i pulsanti della finestra del desktop, al posto di quelli di Snap Studio",
+  "supports.banner": "{name} probabilmente ha bisogno di supporti: {reason}.",
+  "supports.banner.go": "Attiva i supporti ed elabora di nuovo",
+  "supports.reason.floating": "alcune parti iniziano nel vuoto",
+  "supports.reason.cantilever": "sporge una lunga sporgenza",
+  "supports.reason.overhangs": "grandi sporgenze",
+  "supports.badge": "Probabilmente servono supporti",
+  "supports.badge.many": {
+    "one": "{n} oggetto probabilmente ha bisogno di supporti",
+    "other": "{n} oggetti probabilmente hanno bisogno di supporti"
+  },
+  "supports.badge.why": "{name}: {reason}",
+  "supports.badge.title": "Stimato dalla forma così com'è posata, con i supporti disattivati. L'elaborazione lo verifica con certezza.",
+  "supports.badge.go": "Attiva i supporti",
+  "supports.on_toast": "Supporti attivati per la prossima elaborazione",
+  "prepare.overhangs": "Mostra sporgenze",
+  "prepare.overhangs.title": "Mostra sporgenze: le facce rivolte verso il basso oltre l'angolo di supporto del profilo, in rosso"
 }

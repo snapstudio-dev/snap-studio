@@ -36,6 +36,7 @@ pub mod sim;
 mod slice;
 mod slicers;
 mod stl;
+mod support_hint;
 mod thumbs;
 mod titlebar;
 mod update;
@@ -485,6 +486,28 @@ async fn plate_orient(items: Vec<plate::OrientItem>, process: Option<String>) ->
     })
     .await
     .map_err(ui_err)?
+    .map_err(ui_err)
+}
+
+/// Whether each object probably needs supports, as placed
+/// (`support_hint.rs`), with the overhang angle used: the advanced
+/// settings' `threshold` if given, the print profile's otherwise.
+#[tauri::command]
+async fn plate_support_hint(
+    items: Vec<plate::HintItem>,
+    process: Option<String>,
+    threshold: Option<f64>,
+) -> Result<support_hint::Report, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let threshold = threshold.filter(|a| *a > 0.0 && *a < 90.0).unwrap_or_else(|| slice::support_threshold(process.as_deref()));
+        // An object that cannot be read gets no hint; the others still do.
+        let items = items
+            .iter()
+            .map(|it| plate::support_hint(it, threshold).map_err(|e| eprintln!("[support hint] {}: {e:#}", it.path)).ok())
+            .collect();
+        support_hint::Report { threshold, items }
+    })
+    .await
     .map_err(ui_err)
 }
 
@@ -2009,6 +2032,7 @@ pub fn run() {
             plate_hull,
             plate_pieces,
             plate_orient,
+            plate_support_hint,
             plate_save,
             plate_tower,
             mix_colors,

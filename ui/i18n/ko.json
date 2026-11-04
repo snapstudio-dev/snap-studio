@@ -2433,5 +2433,20 @@
   "window.restore": "이전 크기로 복원",
   "window.close": "닫기",
   "display.system_titlebar": "시스템 제목 표시줄 사용",
-  "display.system_titlebar.sub": "Snap Studio의 것 대신 데스크톱의 제목 표시줄과 창 버튼을 사용합니다"
+  "display.system_titlebar.sub": "Snap Studio의 것 대신 데스크톱의 제목 표시줄과 창 버튼을 사용합니다",
+  "supports.banner": "{name}에는 서포트가 필요할 것 같습니다: {reason}.",
+  "supports.banner.go": "서포트를 켜고 다시 슬라이스",
+  "supports.reason.floating": "공중에서 시작하는 부분이 있습니다",
+  "supports.reason.cantilever": "긴 오버행이 튀어나와 있습니다",
+  "supports.reason.overhangs": "큰 오버행",
+  "supports.badge": "서포트가 필요할 것 같습니다",
+  "supports.badge.many": {
+    "other": "객체 {n}개에 서포트가 필요할 것 같습니다"
+  },
+  "supports.badge.why": "{name}: {reason}",
+  "supports.badge.title": "서포트를 끈 상태에서 놓인 형태로 추정한 것입니다. 슬라이스할 때 확실히 확인합니다.",
+  "supports.badge.go": "서포트 켜기",
+  "supports.on_toast": "다음 슬라이스에 서포트를 켰습니다",
+  "prepare.overhangs": "오버행 표시",
+  "prepare.overhangs.title": "오버행 표시: 프로파일의 서포트 각도보다 더 아래를 향한 면을 빨간색으로 표시"
 }

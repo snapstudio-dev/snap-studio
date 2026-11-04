@@ -2516,5 +2516,21 @@
   "window.restore": "Restaurar",
   "window.close": "Cerrar",
   "display.system_titlebar": "Usar la barra de título del sistema",
-  "display.system_titlebar.sub": "La barra de título y los botones de ventana del escritorio, en lugar de los de Snap Studio"
+  "display.system_titlebar.sub": "La barra de título y los botones de ventana del escritorio, en lugar de los de Snap Studio",
+  "supports.banner": "{name} probablemente necesita soportes: {reason}.",
+  "supports.banner.go": "Activar soportes y volver a laminar",
+  "supports.reason.floating": "hay partes que empiezan en el aire",
+  "supports.reason.cantilever": "sobresale un voladizo largo",
+  "supports.reason.overhangs": "voladizos grandes",
+  "supports.badge": "Probablemente se necesitan soportes",
+  "supports.badge.many": {
+    "one": "{n} objeto probablemente necesita soportes",
+    "other": "{n} objetos probablemente necesitan soportes"
+  },
+  "supports.badge.why": "{name}: {reason}",
+  "supports.badge.title": "Estimado a partir de la forma tal como está colocada, con los soportes desactivados. El laminado lo comprueba con certeza.",
+  "supports.badge.go": "Activar soportes",
+  "supports.on_toast": "Soportes activados para el próximo laminado",
+  "prepare.overhangs": "Mostrar voladizos",
+  "prepare.overhangs.title": "Mostrar voladizos: las caras que apuntan hacia abajo más que el ángulo de soporte del perfil, en rojo"
 }

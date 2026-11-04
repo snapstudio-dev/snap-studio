@@ -11,6 +11,14 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Added
+- **Supports hint**: in Prepare, a badge in the corner of the 3D view says
+  when an object probably needs supports (parts starting in the air, a
+  long overhang), with a button to turn supports on, and a "Show overhangs"
+  button colors its overhangs in red; after a slice without supports, the
+  engine's warning that an object needs them is shown, with a button to
+  turn supports on and slice again (#89).
+
 ## [0.18.0] — 2026-10-31
 
 ### Added

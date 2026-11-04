@@ -158,13 +158,14 @@ const plScaleSplit = (scale, wanted) => !!wanted || !plUniform(scale);
 /* Toolbar of the plate: which buttons show, which act. Only the useful
    ones show; Save, Clear and Slice stay, disabled when they cannot act.
    A button busy (orienting, splitting) or a tool still on stays in view. */
-function plTools({ n = 0, sel = 0, onBed = 0, sliceable = false, tool = null, orienting = false, splitting = false }) {
+function plTools({ n = 0, sel = 0, onBed = 0, sliceable = false, tool = null, orienting = false, splitting = false, overhangs = false }) {
   const t = (show, on) => ({ show: !!show, on: !!(show && on) });
   return {
     "p-rotate": t(sel || tool === "rotate", true),
     "p-face": t(n || tool === "face", true),
     "p-orient": t(sel || onBed || orienting, !orienting),
     "p-arrange": t(onBed, true),
+    "p-overhangs": t(n || overhangs, true),
     "p-dup": t(sel, true),
     "p-split": t(sel || splitting, !splitting && sel),
     "p-del": t(sel, true),
@@ -248,6 +249,29 @@ function plPalette(pick, n) {
   return { heads: Array.from({ length: count }, (_, h) => ({ h, on: pick === h })), plate: pick != null, single: count === 1 };
 }
 
+/* ------------------------------------------------------------ supports hint */
+
+/* The supports badge of the plate: the objects whose mesh hint says
+   supports are "likely" needed (`support_hint.rs`), while supports are off.
+   Their ids and names, and the reasons once each; null when there is
+   nothing to say. `objects`: those sliced (on the plate). */
+function plSupportBadge(objects, hintOf, supportsOn) {
+  if (supportsOn) return null;
+  const hit = objects.filter((o) => hintOf(o)?.verdict === "likely");
+  if (!hit.length) return null;
+  return {
+    ids: hit.map((o) => o.id),
+    names: hit.map((o) => o.name),
+    reasons: [...new Set(hit.map((o) => hintOf(o).reason).filter(Boolean))],
+  };
+}
+
+/* What the hint of an object depends on: its mesh, its tilt (rotations
+   around X then Y; the last, around Z, turns it on the bed) and scale, and
+   the overhang angle; not where it sits on the bed. */
+const plHintKey = (o, angle) =>
+  [o.path, o.item, o.piece ?? "", +o.rot[0].toFixed(3), +o.rot[1].toFixed(3), ...o.scale.map((s) => +s.toFixed(4)), angle ?? ""].join("|");
+
 if (typeof module !== "undefined") {
-  module.exports = { plPalette, plUncoloured, plPlateColours, plMigrateToColour, plMigrateToObject, plUnmapped, plBulk, plBedState, plGroups, plSliced, plRange, plSnapAngle, plWrapDeg, plNudge, plInside, plParkSpot, plRangeIds, plProject, plScreenBox, plMarquee, plUniform, plScaleSplit, plTools };
+  module.exports = { plPalette, plUncoloured, plPlateColours, plMigrateToColour, plMigrateToObject, plUnmapped, plBulk, plBedState, plGroups, plSliced, plRange, plSnapAngle, plWrapDeg, plNudge, plInside, plParkSpot, plRangeIds, plProject, plScreenBox, plMarquee, plUniform, plScaleSplit, plTools, plSupportBadge, plHintKey };
 }

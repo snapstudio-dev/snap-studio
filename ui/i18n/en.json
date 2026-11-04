@@ -2471,5 +2471,21 @@
   "window.restore": "Restore Down",
   "window.close": "Close",
   "display.system_titlebar": "Use the system title bar",
-  "display.system_titlebar.sub": "The desktop's own title bar and window buttons, in place of Snap Studio's"
+  "display.system_titlebar.sub": "The desktop's own title bar and window buttons, in place of Snap Studio's",
+  "supports.banner": "{name} probably needs supports: {reason}.",
+  "supports.banner.go": "Turn supports on and slice again",
+  "supports.reason.floating": "parts start in the air",
+  "supports.reason.cantilever": "a long overhang sticks out",
+  "supports.reason.overhangs": "large overhangs",
+  "supports.badge": "Supports probably needed",
+  "supports.badge.many": {
+    "one": "{n} object probably needs supports",
+    "other": "{n} objects probably need supports"
+  },
+  "supports.badge.why": "{name}: {reason}",
+  "supports.badge.title": "Estimated from the shape as placed, with supports off. Slicing checks it for sure.",
+  "supports.badge.go": "Turn supports on",
+  "supports.on_toast": "Supports on for the next slice",
+  "prepare.overhangs": "Show Overhangs",
+  "prepare.overhangs.title": "Show overhangs: faces that point down more than the profile's support angle, in red"
 }

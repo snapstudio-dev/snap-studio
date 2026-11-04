@@ -2516,5 +2516,21 @@
   "window.restore": "Restaurar",
   "window.close": "Fechar",
   "display.system_titlebar": "Usar a barra de título do sistema",
-  "display.system_titlebar.sub": "A barra de título e os botões de janela da área de trabalho, no lugar dos do Snap Studio"
+  "display.system_titlebar.sub": "A barra de título e os botões de janela da área de trabalho, no lugar dos do Snap Studio",
+  "supports.banner": "{name} provavelmente precisa de suportes: {reason}.",
+  "supports.banner.go": "Ligar suportes e fatiar de novo",
+  "supports.reason.floating": "há partes que começam no ar",
+  "supports.reason.cantilever": "uma saliência longa se projeta",
+  "supports.reason.overhangs": "saliências grandes",
+  "supports.badge": "Provavelmente precisa de suportes",
+  "supports.badge.many": {
+    "one": "{n} objeto provavelmente precisa de suportes",
+    "other": "{n} objetos provavelmente precisam de suportes"
+  },
+  "supports.badge.why": "{name}: {reason}",
+  "supports.badge.title": "Estimado pela forma como está posicionado, com os suportes desligados. O fatiamento confirma com certeza.",
+  "supports.badge.go": "Ligar suportes",
+  "supports.on_toast": "Suportes ligados para o próximo fatiamento",
+  "prepare.overhangs": "Mostrar saliências",
+  "prepare.overhangs.title": "Mostrar saliências: as faces voltadas para baixo além do ângulo de suporte do perfil, em vermelho"
 }
