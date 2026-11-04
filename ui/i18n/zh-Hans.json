@@ -2433,5 +2433,20 @@
   "window.restore": "向下还原",
   "window.close": "关闭",
   "display.system_titlebar": "使用系统标题栏",
-  "display.system_titlebar.sub": "使用桌面环境自带的标题栏和窗口按钮，而不是 Snap Studio 的"
+  "display.system_titlebar.sub": "使用桌面环境自带的标题栏和窗口按钮，而不是 Snap Studio 的",
+  "supports.banner": "{name} 可能需要支撑：{reason}。",
+  "supports.banner.go": "开启支撑并重新切片",
+  "supports.reason.floating": "有部分悬空开始",
+  "supports.reason.cantilever": "有较长的悬垂伸出",
+  "supports.reason.overhangs": "大面积悬垂",
+  "supports.badge": "可能需要支撑",
+  "supports.badge.many": {
+    "other": "{n} 个对象可能需要支撑"
+  },
+  "supports.badge.why": "{name}：{reason}",
+  "supports.badge.title": "根据当前摆放的形状估计（支撑关闭）。切片时会准确检查。",
+  "supports.badge.go": "开启支撑",
+  "supports.on_toast": "下次切片将开启支撑",
+  "prepare.overhangs": "显示悬垂",
+  "prepare.overhangs.title": "显示悬垂：朝下超过配置文件支撑角度的面以红色显示"
 }
