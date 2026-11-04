@@ -313,6 +313,12 @@
       <div id="p-angle" class="p-angle hidden"></div>
       <div id="p-tower-tip" class="p-angle hidden"></div>
       <div id="p-toolhint" class="p-toolhint hidden"></div>
+      <!-- Supports hint from the mesh (support_hint.rs), supports off: hovered, it outlines the objects it names. -->
+      <div id="p-supports" class="p-supports hidden" role="status">
+        <svg class="p-supports-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 1.5 21h21zm0 4 7.1 12.5H4.9zM11 10h2v4.5h-2zm0 6h2v2h-2z"/></svg>
+        <div class="p-supports-text"><b id="p-supports-title"></b><small id="p-supports-why"></small></div>
+        <button id="p-supports-go" type="button" class="btn small" data-i18n="supports.badge.go">Turn supports on</button>
+      </div>
       <div class="v-hint" data-i18n="prepare.hint">drag: move · ⌥ drag: rotate · ⌘ drag from an empty spot: select an area · ⇧ or right drag, ⇧ scroll: pan the view · arrows: 1 mm (⇧ 10 mm) · A: arrange · ⌘D: duplicate · ⌘Z: undo</div>
       <div id="p-objects" class="p-float p-objects prep-inspector">
         <div class="p-float-head" id="p-objects-head">

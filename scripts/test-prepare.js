@@ -150,6 +150,30 @@ assert.strictEqual(L.plTools({ n: 1 })["p-slice"].on, false);
 assert.strictEqual(L.plTools({ n: 1 })["p-save"].on, true);
 
 
+// Supports badge: "likely" objects only, nothing with supports on; each
+// reason once. The hint's key ignores the position on the bed.
+{
+  const objs = [
+    { id: 1, name: "T.stl" },
+    { id: 2, name: "Cube" },
+    { id: 3, name: "Pendant" },
+    { id: 4, name: "Bridge" },
+    { id: 5, name: "Shelf" },
+  ];
+  const hints = { 1: { verdict: "likely", reason: "cantilever" }, 2: { verdict: "none" }, 3: { verdict: "likely", reason: "floating" }, 4: { verdict: "maybe" }, 5: { verdict: "likely", reason: "cantilever" } };
+  const hintOf = (o) => hints[o.id];
+  assert.deepStrictEqual(L.plSupportBadge(objs, hintOf, false), { ids: [1, 3, 5], names: ["T.stl", "Pendant", "Shelf"], reasons: ["cantilever", "floating"] });
+  assert.strictEqual(L.plSupportBadge(objs, hintOf, true), null, "supports on: no badge");
+  assert.strictEqual(L.plSupportBadge(objs.slice(1, 2), hintOf, false), null, "nothing likely");
+  assert.strictEqual(L.plSupportBadge([{ id: 9 }], () => undefined, false), null, "hint not known yet");
+  const o = { path: "/a.stl", item: 0, piece: null, pos: [10, 20], rot: [90, 0, 0], scale: [1, 1, 1] };
+  assert.strictEqual(L.plHintKey(o, 30), L.plHintKey({ ...o, pos: [100, 5] }, 30), "moved: same hint");
+  assert.notStrictEqual(L.plHintKey(o, 30), L.plHintKey({ ...o, rot: [0, 0, 0] }, 30), "tilted: new hint");
+  assert.strictEqual(L.plHintKey(o, 30), L.plHintKey({ ...o, rot: [90, 0, 45] }, 30), "turned on the bed: same hint");
+  assert.notStrictEqual(L.plHintKey(o, 30), L.plHintKey({ ...o, scale: [2, 2, 2] }, 30), "scaled: new hint");
+  assert.notStrictEqual(L.plHintKey(o, 30), L.plHintKey(o, 45), "another angle: new hint");
+}
+
 // Bulk buttons of the object list: "all" without a relevant selection or
 // with the whole side selected, "some" with a count otherwise; a mixed
 // selection counts each side alone.

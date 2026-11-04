@@ -2476,5 +2476,14 @@
   "supports.banner.go": "Turn supports on and slice again",
   "supports.reason.floating": "parts start in the air",
   "supports.reason.cantilever": "a long overhang sticks out",
-  "supports.reason.overhangs": "large overhangs"
+  "supports.reason.overhangs": "large overhangs",
+  "supports.badge": "Supports probably needed",
+  "supports.badge.many": {
+    "one": "{n} object probably needs supports",
+    "other": "{n} objects probably need supports"
+  },
+  "supports.badge.why": "{name}: {reason}",
+  "supports.badge.title": "Estimated from the shape as placed, with supports off. Slicing checks it for sure.",
+  "supports.badge.go": "Turn supports on",
+  "supports.on_toast": "Supports on for the next slice"
 }
