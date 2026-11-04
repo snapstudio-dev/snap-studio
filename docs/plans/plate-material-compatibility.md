@@ -1,7 +1,8 @@
 # Plate and material compatibility warnings
 
-Draft PR [#16](https://github.com/kameka22/snap-studio/pull/16). Plan only:
-nothing is implemented until the owner gives the go.
+Draft PR [#16](https://github.com/kameka22/snap-studio/pull/16).
+Implemented (see [Implementation](#implementation)); the rule table is to be
+reviewed by the owner before merging.
 
 Scope approved by the owner: warn when the build plate and the materials do
 not go together, and show a glue tip when the pair needs one, when preparing
@@ -113,8 +114,57 @@ switch.
 - "Don't show again" for each type, then re-enabled in Settings.
 - Unset plate, unknown material, printer with no spools: nothing shown.
 
+## Implementation
+
+- **Rules** (`ui/plate-rules.js`, `scripts/test-plate.js`): `PLATE_RULES`,
+  per plate value and material family, `warn` or `glue` with a reason
+  (`stick`, `heat`, `bond`, `grip`). Every pair is tested; anything the
+  table does not name is fine; unknown plate or material: nothing.
+- **1. Plate per printer** (`heads.js` `headsPlate`, `control.js`): a
+  plate menu in the Bed card (full and compact), "Not set" first, saved
+  with the printer's heads; the slice sheet takes it as its default
+  (`fillBeds`), a change there is that slice's.
+- **2. Spool loaded** (`ui/plate.js`): declaring a head's material in
+  Control asks first (`plateAsk`: Continue / Cancel, or the glue tip with
+  its drawing). A new spool on a head (RFID or the printer's screen) puts a
+  notice in its card ("How?" opens the tip, × closes it), once per head
+  and spool (`snapstudio.plate.seen`); a printer read for the first time
+  takes its spools as they are; changing the plate checks the spools
+  loaded. Prepare asks the same when slicing (`startSlice`).
+- **3. At start** (`spoolcheck.js`): the spool check sheet gets the plate
+  rows (another plate than sliced for, a material that does not suit the
+  printer's plate) and opens for them alone. The sliced plate: the slice
+  record's `bed`, else the G-code's `curr_bed_type` (`SliceStats.bed_type`;
+  for a file on the printer, `pf_plate` reads its last 256 KB with an HTTP
+  range). Checked with the real engine: Orca writes it in the U1's G-code
+  settings block (`engine_writes_the_plate`, ignored test).
+- **4. Suggested temperature** (`control.js` `ctlSuggest`): the loaded
+  heads' filament profiles (`slice_details`) for the printer's plate, the
+  highest; the chip sets the target on click.
+- **5. Glue reminder**: a "Glue applied" box in the start sheet; Send /
+  Start never waits for it.
+- **Don't show again**: four kinds (`pair`, `glue`, `reminder`,
+  `mismatch`, `snapstudio.plate.hide`), four switches in Settings ›
+  Prepare.
+
+### The rule table (first version, to review)
+
+Pairs not listed are fine (nothing shown).
+
+| Plate | Glue (reason) | Warning (reason) |
+|---|---|---|
+| Textured PEI | PA, PC (grip) | PP, PE (does not stick) |
+| Smooth PEI (High Temp) | PETG, PCTG, PET, TPU, TPE, PEBA (bonds too strongly); PA, PC (grip) | PP, PE (does not stick) |
+| Graphic Effect | PETG, TPU, TPE (bonds too strongly) | ABS, ASA, PC, PA (needs a hotter bed); PP, PE (does not stick) |
+| Cool Plate | PETG, PCTG (bonds too strongly) | ABS, ASA, PC, PA (needs a hotter bed); PP, PE (does not stick) |
+| Textured Cool Plate | — | ABS, ASA, PC, PA (needs a hotter bed); PP, PE (does not stick) |
+| Engineering Plate | PLA, PA, PC (grip); PETG, TPU (bonds too strongly) | PP, PE (does not stick) |
+| Supertack Plate | PETG, TPU, TPE (bonds too strongly) | PP, PE (does not stick) |
+
 ## Open questions for the owner
 
-- The rule table's content (reviewed before merging).
+- The rule table's content (above; reviewed before merging). The Graphic
+  Effect plate's rules are the least sure: Snapmaker's guidance for it is
+  not known here.
 - Whether point 1's plate should also be read from the U1 itself, if its
   firmware ever reports the plate (not known today).

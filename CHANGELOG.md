@@ -18,6 +18,10 @@ with its packages for macOS, Windows and Linux. What comes next:
   button colors its overhangs in red; after a slice without supports, the
   engine's warning that an object needs them is shown, with a button to
   turn supports on and slice again (#89).
+- **Plate and materials**: Snap Studio knows which plate is on each printer
+  (Control), warns when a material does not suit it, when slicing, when a
+  spool is loaded and before a print starts, suggests the bed temperature
+  and reminds to apply glue when needed (#16).
 
 ### Fixed
 - **Explore**: the Back, Forward and Reload buttons over a site stay
