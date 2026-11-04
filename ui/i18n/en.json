@@ -2525,5 +2525,19 @@
   "plate.hide_short": "Don't show again",
   "ctl.suggest": "Suggested: {t} °C",
   "ctl.suggest_max": "Suggested: {t} °C (highest of the materials loaded)",
-  "ctl.suggest_tip": "From the filament profiles for the {plate}; click to set it"
+  "ctl.suggest_tip": "From the filament profiles for the {plate}; click to set it",
+  "an.title": "A small anonymous count",
+  "an.why": "To know how many people use Snap Studio and keep working on it, the app sends one anonymous signal each time it starts.",
+  "an.sent_k": "What is sent:",
+  "an.sent": "the app's version, your system and its language (for example macOS 15, French), and a random number that changes at each launch. That's all.",
+  "an.never_k": "Never sent:",
+  "an.never": "your files, your models, your printers, your AI conversations, your account or any identifier that points to you.",
+  "an.where": "It goes through Aptabase, an open-source, privacy-first service. You can change your mind anytime in Settings › Application.",
+  "an.switch": "Send the anonymous count",
+  "an.ok": "Got it",
+  "an.more": "What exactly is sent?",
+  "settings.analytics": "Anonymous usage count",
+  "settings.analytics.sub": "One anonymous signal at each start, to count Snap Studio's users",
+  "settings.analytics.na": "Not available in this build",
+  "settings.analytics.what": "What is sent"
 }

@@ -2528,5 +2528,19 @@
   "plate.hide_short": "Ne plus afficher",
   "ctl.suggest": "Conseillé : {t} °C",
   "ctl.suggest_max": "Conseillé : {t} °C (le plus haut des matériaux chargés)",
-  "ctl.suggest_tip": "D'après les profils de filament pour le plateau {plate} ; cliquez pour l'appliquer"
+  "ctl.suggest_tip": "D'après les profils de filament pour le plateau {plate} ; cliquez pour l'appliquer",
+  "an.title": "Un petit comptage anonyme",
+  "an.why": "Pour savoir combien de personnes utilisent Snap Studio et continuer à le faire évoluer, l'app envoie un signal anonyme à chaque démarrage.",
+  "an.sent_k": "Ce qui est envoyé :",
+  "an.sent": "la version de l'app, votre système et sa langue (par exemple macOS 15, français), et un nombre au hasard qui change à chaque lancement. C'est tout.",
+  "an.never_k": "Jamais envoyé :",
+  "an.never": "vos fichiers, vos modèles, vos imprimantes, vos conversations IA, votre compte ni aucun identifiant qui vous désigne.",
+  "an.where": "Ça passe par Aptabase, un service open source respectueux de la vie privée. Vous pouvez changer d'avis à tout moment dans Réglages › Application.",
+  "an.switch": "Envoyer le comptage anonyme",
+  "an.ok": "Compris",
+  "an.more": "Qu'est-ce qui est envoyé exactement ?",
+  "settings.analytics": "Comptage anonyme d'utilisation",
+  "settings.analytics.sub": "Un signal anonyme à chaque démarrage, pour compter les utilisateurs de Snap Studio",
+  "settings.analytics.na": "Non disponible dans cette version",
+  "settings.analytics.what": "Ce qui est envoyé"
 }

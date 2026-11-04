@@ -929,6 +929,18 @@
         </span>
         <button id="up-check" class="btn small" data-i18n="settings.update_check">Check</button>
       </div>
+      <label class="grow-row">
+        <span class="k"><span data-i18n="settings.analytics">Anonymous usage count</span>
+          <span class="sub" id="set-analytics-sub"></span>
+        </span>
+        <input type="checkbox" id="set-analytics" class="sw" role="switch" />
+      </label>
+      <details class="grow-row stack an-details">
+        <summary data-i18n="settings.analytics.what">What is sent</summary>
+        <p><b data-i18n="an.sent_k">What is sent:</b> <span data-i18n="an.sent">the app's version, your system and its language (for example macOS 15, French), and a random number that changes at each launch. That's all.</span></p>
+        <p><b data-i18n="an.never_k">Never sent:</b> <span data-i18n="an.never">your files, your models, your printers, your AI conversations, your account or any identifier that points to you.</span></p>
+        <a href="#" data-an-doc data-i18n="an.more">What exactly is sent?</a>
+      </details>
       <div class="grow-row">
         <span class="k"><span data-i18n="menu.help.welcome">Welcome Assistant</span>
           <span class="sub" data-i18n="settings.welcome.sub">Choose a models folder, find a printer on the network</span>
@@ -1538,6 +1550,25 @@
 </div>
 
 <div id="toasts" class="toasts"></div>
+
+<!-- The anonymous usage count, at first launch (analytics.js). -->
+<div id="anmodal" class="modal hidden">
+  <div class="modal-box an-box" role="dialog" aria-labelledby="an-title">
+    <h3 id="an-title" data-i18n="an.title">A small anonymous count</h3>
+    <p class="an-p" data-i18n="an.why">To know how many people use Snap Studio and keep working on it, the app sends one anonymous signal each time it starts.</p>
+    <p class="an-p"><b data-i18n="an.sent_k">What is sent:</b> <span data-i18n="an.sent">the app's version, your system and its language (for example macOS 15, French), and a random number that changes at each launch. That's all.</span></p>
+    <p class="an-p"><b data-i18n="an.never_k">Never sent:</b> <span data-i18n="an.never">your files, your models, your printers, your AI conversations, your account or any identifier that points to you.</span></p>
+    <p class="an-p sub" data-i18n="an.where">It goes through Aptabase, an open-source, privacy-first service. You can change your mind anytime in Settings › Application.</p>
+    <label class="grow-row an-row">
+      <span class="k" data-i18n="an.switch">Send the anonymous count</span>
+      <input type="checkbox" id="an-switch" class="sw" role="switch" checked />
+    </label>
+    <div class="modal-actions">
+      <a href="#" class="btn left link" data-an-doc data-i18n="an.more">What exactly is sent?</a>
+      <button id="an-ok" class="btn primary" data-i18n="an.ok">Got it</button>
+    </div>
+  </div>
+</div>
 
 <div id="iadelmodal" class="modal hidden">
   <div class="modal-box iadel-box" role="alertdialog" aria-labelledby="iadel-title" aria-describedby="iadel-text">
@@ -2295,6 +2326,7 @@
 <script src="update.js"></script>
 <script src="whatsnew-logic.js"></script>
 <script src="whatsnew.js"></script>
+<script src="analytics.js"></script>
 <script src="welcome.js"></script>
 </body>
 </html>
