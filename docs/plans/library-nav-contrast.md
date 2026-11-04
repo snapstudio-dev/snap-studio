@@ -238,9 +238,43 @@ rules (blending, luminance, thresholds, majority) go in a pure function with
 - **Other sites:** it works on every site, including those opened by
   address ("Open a site"). Nothing is specific to one site.
 
-The tooltips' language ("Back", "Forward", "Reload", in English today) stays
-out of scope unless the owner asks for it: it is a small extra (passing the
-language to `overlay.html`).
+#### 4. Translated tooltips (decided: in this PR)
+
+The owner asked for the tooltips to be translated in the same PR. Today
+`overlay.html` hard-codes "Back", "Forward" and "Reload" (`:45-47`), and its
+view does not get the interface's catalog (only the main window does,
+through `i18n::init_script`, `src-tauri/src/lib.rs:1932`).
+
+**Keys**, reusing what exists:
+
+| Button | Key | State |
+|---|---|---|
+| Back | `common.back` | exists in the 9 catalogs ("Retour", "Zurück", "戻る"…) |
+| Reload | `library.reload` | exists in the 9 catalogs (the tab menu's "Reload") |
+| Forward | `library.forward` | **new**, to add to the 9 catalogs |
+
+Proposed values for `library.forward`: en "Forward", fr "Suivant", de
+"Vorwärts", es "Adelante", it "Avanti", pt-BR "Avançar", ja "進む", zh-Hans
+"前进", ko "앞으로". French is written by hand; the other languages follow
+the review process of [languages.md](languages.md).
+
+**Catalogs concerned:** `ui/i18n/en.json`, `fr.json`, `de.json`,
+`es.json`, `it.json`, `pt-BR.json`, `ja.json`, `zh-Hans.json`, `ko.json`
+(all the app's catalogs). Only `library.forward` is added; the two reused
+keys are not touched.
+
+**How the pill gets them:** as the camera view does (`ensure_cam`,
+`src-tauri/src/library.rs:153`). `ensure_nav` adds an
+`initialization_script` with `window.__NAV__ = { lang, back, forward,
+reload }`, filled in Rust with `i18n::lang()` and `i18n::t(…)`.
+`overlay.js` sets `document.documentElement.lang` and each button's `title`
+from it, and `overlay.html` gets the CJK font rules of `camview.html`
+(`:13-16`). On a language change (`language_set`,
+`src-tauri/src/lib.rs:1848`), the pill is made again (`ensure_nav`) if a
+site is shown, or gets the new labels through `eval`. Otherwise it would
+keep the old language until the next tab is opened.
+
+`python3 scripts/check-i18n.py` must be clean.
 
 ## Recommendation
 
@@ -261,6 +295,8 @@ color (its baseline).
   tone; with the site's color unreadable (picture under the corner) it stays
   visible; no request or change of the page from the script (devtools); no
   `__TAURI__` in the sites' pages.
+- Tooltips: in French and in one CJK language, then after switching the
+  language in Settings with a site shown (no restart, no new tab).
 - Pure detection rules tested in `scripts/test-*.js` (blending,
   luminance, thresholds, majority, fallbacks).
 - Screenshots before and after on a dark site.
@@ -270,5 +306,5 @@ color (its baseline).
 ```
 - **Explore**: the Back, Forward and Reload buttons over a site stay
   visible on any site: the pill turns light on dark sites and dark on light
-  ones, and no longer fades out.
+  ones, and no longer fades out. Their tooltips are translated.
 ```
