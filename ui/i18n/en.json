@@ -2485,5 +2485,7 @@
   "supports.badge.why": "{name}: {reason}",
   "supports.badge.title": "Estimated from the shape as placed, with supports off. Slicing checks it for sure.",
   "supports.badge.go": "Turn supports on",
-  "supports.on_toast": "Supports on for the next slice"
+  "supports.on_toast": "Supports on for the next slice",
+  "prepare.overhangs": "Show Overhangs",
+  "prepare.overhangs.title": "Show overhangs: faces that point down more than the profile's support angle, in red"
 }

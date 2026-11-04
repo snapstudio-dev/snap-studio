@@ -158,13 +158,14 @@ const plScaleSplit = (scale, wanted) => !!wanted || !plUniform(scale);
 /* Toolbar of the plate: which buttons show, which act. Only the useful
    ones show; Save, Clear and Slice stay, disabled when they cannot act.
    A button busy (orienting, splitting) or a tool still on stays in view. */
-function plTools({ n = 0, sel = 0, onBed = 0, sliceable = false, tool = null, orienting = false, splitting = false }) {
+function plTools({ n = 0, sel = 0, onBed = 0, sliceable = false, tool = null, orienting = false, splitting = false, overhangs = false }) {
   const t = (show, on) => ({ show: !!show, on: !!(show && on) });
   return {
     "p-rotate": t(sel || tool === "rotate", true),
     "p-face": t(n || tool === "face", true),
     "p-orient": t(sel || onBed || orienting, !orienting),
     "p-arrange": t(onBed, true),
+    "p-overhangs": t(n || overhangs, true),
     "p-dup": t(sel, true),
     "p-split": t(sel || splitting, !splitting && sel),
     "p-del": t(sel, true),

@@ -140,9 +140,10 @@ assert.strictEqual(L.plUniform([0.5, 0.5, 0.5]), true);
 // Toolbar: only the useful buttons; the last three always.
 const vis = (st) => Object.entries(L.plTools(st)).filter(([, v]) => v.show).map(([k]) => k);
 assert.deepStrictEqual(vis({}), ["p-save", "p-clear", "p-slice"], "empty plate");
-assert.deepStrictEqual(vis({ n: 2, onBed: 2, sliceable: true }), ["p-face", "p-orient", "p-arrange", "p-save", "p-clear", "p-slice"], "nothing selected");
-assert.deepStrictEqual(vis({ n: 2, onBed: 0 }), ["p-face", "p-save", "p-clear", "p-slice"], "all beside the plate");
-assert.strictEqual(vis({ n: 2, sel: 1, onBed: 2 }).length, 10, "a selection: all");
+assert.deepStrictEqual(vis({ n: 2, onBed: 2, sliceable: true }), ["p-face", "p-orient", "p-arrange", "p-overhangs", "p-save", "p-clear", "p-slice"], "nothing selected");
+assert.deepStrictEqual(vis({ n: 2, onBed: 0 }), ["p-face", "p-overhangs", "p-save", "p-clear", "p-slice"], "all beside the plate");
+assert.strictEqual(vis({ n: 2, sel: 1, onBed: 2 }).length, 11, "a selection: all");
+assert.ok(vis({ overhangs: true }).includes("p-overhangs"), "the overhang view on stays in view");
 assert.ok(vis({ n: 1, tool: "rotate" }).includes("p-rotate"), "a tool on stays in view");
 const busy = L.plTools({ n: 1, sel: 1, onBed: 1, orienting: true, splitting: true });
 assert.deepStrictEqual([busy["p-orient"], busy["p-split"]], [{ show: true, on: false }, { show: true, on: false }]);
