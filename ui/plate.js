@@ -27,6 +27,10 @@ const PLT = {
   declared: new Map(),
 };
 
+/* The pattern of each plate's tile (style.css .sl-bed-tex): the slice
+   sheet's plate choice and Control's. */
+const PLATE_TEX = { "Textured PEI Plate": "textured", "High Temp Plate": "smooth", "Graphic Effect Plate": "graphic" };
+
 const pltSaveSeen = () => localStorage.setItem("snapstudio.plate.seen", JSON.stringify(PLT.seen));
 
 /* A plate's name in the interface: the machine's label when known. */

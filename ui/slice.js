@@ -222,7 +222,7 @@ function fillBeds(saved, { keep = false } = {}) {
   sel.innerHTML = types.map((t) => `<option value="${esc(t.value)}">${esc(t.label)}</option>`).join("");
   sel.value = types.some((t) => t.value === want) ? want : SL.lists?.bed_type || types[0]?.value || "";
   // Tiles: one per plate, with the temperature it will give.
-  const tex = { "Textured PEI Plate": "textured", "High Temp Plate": "smooth", "Graphic Effect Plate": "graphic" };
+  const tex = PLATE_TEX;
   $("s-beds").innerHTML = types
     .map(
       (t) => `<button class="sl-bed${t.value === sel.value ? " on" : ""}" data-bed="${esc(t.value)}">

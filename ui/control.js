@@ -230,7 +230,7 @@ function ctlHeadPaint(el, pid, h) {
 function ctlBedHtml(cfg, { compact = false } = {}) {
   const max = Math.round(cfg?.bed_max || 100);
   const slider = `<label class="ct-slider"><span>${esc(tr("ctl.target"))}</span><input type="range" min="0" max="${max}" step="5" data-bed aria-label="${esc(tr("ctl.bed"))}" /><b data-v="set">0°</b></label>`;
-  const plate = `<label class="ct-plate"><span>${esc(tr("ctl.plate"))}</span><select data-plate aria-label="${esc(tr("ctl.plate"))}"></select></label>
+  const plate = `<div class="ct-plate"><span>${esc(tr("ctl.plate"))}</span><div class="ct-plates" role="radiogroup" aria-label="${esc(tr("ctl.plate"))}" data-plates></div></div>
     <button type="button" class="ct-suggest hidden" data-bed-suggest></button>`;
   if (compact) {
     return `<div class="ctl-c ctl-c-bed" data-ctl="bed">
@@ -244,10 +244,11 @@ function ctlBedHtml(cfg, { compact = false } = {}) {
       <div class="ct-head-set">${slider}<small class="ct-note">${esc(tr("ctl.max", { t: fmtNum(max) }))}</small>${plate}</div>
     </div>`;
 }
-/* The plate menu: the machine's plates (read once), "Not set" first; the
-   printer's own value kept even before the list is known. */
-function ctlPlatePaint(sel, pid) {
-  if (!sel || document.activeElement === sel) return;
+/* The plate choice: one tile per plate of the machine (read once), with
+   its pattern as in the slice sheet, "Not set" first; the printer's own
+   value kept even before the list is known. */
+function ctlPlatePaint(box, pid) {
+  if (!box) return;
   const plates = typeof headsPlates === "function" ? headsPlates(pid) : [];
   // Read once per printer: a failure (no engine yet) is not retried at
   // every repaint.
@@ -258,12 +259,19 @@ function ctlPlatePaint(sel, pid) {
   const cur = typeof headsPlate === "function" ? headsPlate(pid) : "";
   const list = [{ value: "", label: tr("ctl.plate_unset") }, ...plates];
   if (cur && !plates.some((p) => p.value === cur)) list.push({ value: cur, label: cur });
-  const html = list.map((p) => `<option value="${esc(p.value)}">${esc(p.label)}</option>`).join("");
-  if (sel.dataset.html !== html) {
-    sel.innerHTML = html;
-    sel.dataset.html = html;
-  }
-  sel.value = cur;
+  const tex = (v) => (!v ? "unset" : (typeof PLATE_TEX !== "undefined" && PLATE_TEX[v]) || "plain");
+  // One Tab stop: the plate chosen.
+  const html = list
+    .map((p) => {
+      const on = p.value === cur;
+      return `<button type="button" class="sl-bed ct-bed-tile${on ? " on" : ""}" role="radio" aria-checked="${on}" tabindex="${on ? 0 : -1}" data-plate-pick="${esc(p.value)}" title="${esc(p.label)}"><span class="sl-bed-tex ${tex(p.value)}"></span><b>${esc(p.label)}</b></button>`;
+    })
+    .join("");
+  if (box.dataset.html === html) return;
+  const focused = box.contains(document.activeElement) ? document.activeElement.dataset.platePick : null;
+  box.innerHTML = html;
+  box.dataset.html = html;
+  if (focused != null) box.querySelector(`[data-plate-pick="${CSS.escape(focused)}"]`)?.focus();
 }
 /* The bed temperature the filament profiles give for the printer's plate
    (`textured_plate_temp`, `hot_plate_temp`…): one per head holding a
@@ -310,7 +318,7 @@ function ctlSuggestPaint(b, pid) {
   b.disabled = !!ctlBusy(pid) || !!ctlWhy("bed_temp", ctlState(pid), ctlData(pid).cfg);
 }
 function ctlBedPaint(el, pid) {
-  ctlPlatePaint(el.querySelector("[data-plate]"), pid);
+  ctlPlatePaint(el.querySelector("[data-plates]"), pid);
   ctlSuggestPaint(el.querySelector("[data-bed-suggest]"), pid);
   const bed = ctlState(pid)?.bed;
   el.querySelector('[data-v="temp"]').textContent = ctlDeg(bed?.temp);
@@ -393,6 +401,9 @@ function ctlBind(root) {
       if (i) plateAsk({ plate: headsPlate(xpid), families: [i.family], pid: xpid });
       return;
     }
+    // The plate on the printer: kept here, not sent (Klipper does not know it).
+    const pl = e.target.closest("[data-plate-pick]");
+    if (pl && root.contains(pl)) return headsSetPlate(pidOf(pl), pl.dataset.platePick, "control");
     // The suggested bed temperature, taken.
     const sg = e.target.closest("[data-bed-suggest]");
     if (sg && !sg.disabled && root.contains(sg)) {
@@ -416,6 +427,17 @@ function ctlBind(root) {
     if (n !== undefined) action.n = n;
     ctlRun(pid, action, CTL_DOING[kind] ? tr(CTL_DOING[kind], { n }) : tr("ctl.doing.any"));
   });
+  // The plate tiles: arrows move and choose, as a radio group.
+  root.addEventListener("keydown", (e) => {
+    const t = e.target.closest?.("[data-plate-pick]");
+    if (!t || !root.contains(t)) return;
+    const row = [...t.parentElement.querySelectorAll("[data-plate-pick]")];
+    const j = swMove(row, row.indexOf(t), e.key);
+    if (j < 0) return;
+    e.preventDefault();
+    row[j].focus();
+    row[j].click();
+  });
   root.addEventListener("input", (e) => {
     const r = e.target;
     if (r.type !== "range" || !(r.dataset.temp != null || r.dataset.bed != null)) return;
@@ -434,8 +456,6 @@ function ctlBind(root) {
       return ctlRun(pid, { kind: "bed_temp", temp: +r.value }, tr("ctl.doing.bed", { t: fmtNum(+r.value) }));
     }
     if (r.dataset.light != null) return ctlRun(pid, { kind: "light", on: r.checked }, tr("ctl.doing.light"));
-    // The plate on the printer: kept here, not sent (Klipper does not know it).
-    if (r.dataset.plate != null) return headsSetPlate(pid, r.value, "control");
   });
 }
 

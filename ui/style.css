@@ -4551,8 +4551,13 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .pl-d-t.side { text-anchor: start; font-size: 10px; fill: var(--text-secondary); }
 .pl-hides { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); }
 .pl-hides .hidden { display: none; }
-.ct-plate { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
-.ct-plate select { font-size: 12px; max-width: 190px; }
+/* The plate on the printer: the slice sheet's patterned tiles, smaller. */
+.ct-plate { display: flex; flex-direction: column; gap: 5px; width: 100%; font-size: 12px; color: var(--text-secondary); }
+.ct-plates { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px; }
+.ct-bed-tile { padding: 5px; gap: 2px; min-width: 0; cursor: default; }
+.ct-bed-tile b { font-size: 11px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ct-bed-tile .sl-bed-tex { height: 20px; margin-bottom: 2px; }
+.sl-bed-tex.unset { background: none; border: 1.5px dashed var(--separator); }
 .ctl-c .ct-plate { margin-top: 6px; }
 /* The suggested bed temperature: a chip, set on click only. */
 .ct-suggest { align-self: flex-start; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); cursor: default; }
