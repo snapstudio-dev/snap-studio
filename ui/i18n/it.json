@@ -2570,5 +2570,19 @@
   "plate.mismatch_sub": "La temperatura del piatto e il primo strato sono impostati per l'altro piatto.",
   "plate.glue_applied": "Colla applicata",
   "plate.glue_for": "{mat} sul piatto {plate} richiede uno strato sottile di colla stick.",
-  "plate.hide_short": "Non mostrare più"
+  "plate.hide_short": "Non mostrare più",
+  "an.title": "Un piccolo conteggio anonimo",
+  "an.why": "Per sapere quante persone usano Snap Studio e continuare a migliorarlo, l'app invia un segnale anonimo a ogni avvio.",
+  "an.sent_k": "Cosa viene inviato:",
+  "an.sent": "la versione dell'app, il tuo sistema e la sua lingua (per esempio macOS 15, italiano) e un numero casuale che cambia a ogni avvio. Nient'altro.",
+  "an.never_k": "Mai inviato:",
+  "an.never": "i tuoi file, i tuoi modelli, le tue stampanti, le tue conversazioni IA, il tuo account né alcun identificativo che ti riconduca a te.",
+  "an.where": "Passa da Aptabase, un servizio open source attento alla privacy. Puoi cambiare idea quando vuoi in Impostazioni › Applicazione.",
+  "an.switch": "Invia il conteggio anonimo",
+  "an.ok": "Ho capito",
+  "an.more": "Cosa viene inviato esattamente?",
+  "settings.analytics": "Conteggio d'uso anonimo",
+  "settings.analytics.sub": "Un segnale anonimo a ogni avvio, per contare gli utenti di Snap Studio",
+  "settings.analytics.na": "Non disponibile in questa build",
+  "settings.analytics.what": "Cosa viene inviato"
 }

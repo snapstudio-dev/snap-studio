@@ -2570,5 +2570,19 @@
   "plate.mismatch_sub": "Su temperatura de cama y su primera capa están ajustadas para la otra bandeja.",
   "plate.glue_applied": "Pegamento aplicado",
   "plate.glue_for": "{mat} en la bandeja {plate} necesita una capa fina de pegamento en barra.",
-  "plate.hide_short": "No volver a mostrar"
+  "plate.hide_short": "No volver a mostrar",
+  "an.title": "Un pequeño recuento anónimo",
+  "an.why": "Para saber cuántas personas usan Snap Studio y seguir mejorándolo, la app envía una señal anónima cada vez que se inicia.",
+  "an.sent_k": "Qué se envía:",
+  "an.sent": "la versión de la app, tu sistema y su idioma (por ejemplo macOS 15, español) y un número aleatorio que cambia en cada inicio. Nada más.",
+  "an.never_k": "Nunca se envía:",
+  "an.never": "tus archivos, tus modelos, tus impresoras, tus conversaciones de IA, tu cuenta ni ningún identificador que te señale.",
+  "an.where": "Pasa por Aptabase, un servicio de código abierto que respeta la privacidad. Puedes cambiar de opinión cuando quieras en Ajustes › Aplicación.",
+  "an.switch": "Enviar el recuento anónimo",
+  "an.ok": "Entendido",
+  "an.more": "¿Qué se envía exactamente?",
+  "settings.analytics": "Recuento de uso anónimo",
+  "settings.analytics.sub": "Una señal anónima en cada inicio, para contar los usuarios de Snap Studio",
+  "settings.analytics.na": "No disponible en esta compilación",
+  "settings.analytics.what": "Qué se envía"
 }

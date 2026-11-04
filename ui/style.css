@@ -5425,6 +5425,16 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .sl-token.p-choose, .p-chip.p-choose { border: 1px dashed var(--warning); color: var(--warning-text, var(--warning)); background: none; font-weight: 600; cursor: pointer; }
 .p-obj.on .p-chip.p-choose { color: var(--accent-text); border-color: var(--accent-text); }
 
+/* The anonymous usage count's notice (analytics.js). */
+.an-box { width: min(460px, calc(100vw - 48px)); }
+.an-p { margin: 0 0 10px; font-size: 13px; line-height: 1.45; }
+.an-p.sub { color: var(--text-secondary); font-size: 12.5px; }
+.an-row { margin: 4px 0 2px; padding: 8px 10px; border-radius: 10px; background: var(--control-bg); }
+.an-details summary { cursor: default; font-size: 12.5px; color: var(--text-secondary); }
+.an-details p { margin: 6px 0 0; font-size: 12px; color: var(--text-secondary); line-height: 1.45; }
+.an-details a { display: inline-block; margin-top: 6px; font-size: 12px; }
+.modal-actions .btn.link { background: none; border-color: transparent; box-shadow: none; color: var(--accent); }
+
 /* ======================================================================
    macOS theme (macOS 26 Tahoe, Liquid Glass). Structure, not only colors:
    every rule below is scoped to :root[data-theme="macos"] (or to its

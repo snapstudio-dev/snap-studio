@@ -596,10 +596,18 @@ aussi.
 fonctionnent avec toute imprimante Klipper (Moonraker) ; le plateau, les
 profils et les têtes sont ceux de la U1.
 
-**Qu'est-ce qui sort de mon ordinateur ?** Aucune télémétrie. Snap Studio
-échange avec GitHub (vérifier les mises à jour, télécharger le moteur), vos
-imprimantes sur le réseau local, les sites ouverts dans Explorer et,
-si vous utilisez l'IA, Anthropic par Claude Code.
+**Qu'est-ce qui sort de mon ordinateur ?** Snap Studio échange avec GitHub
+(vérifier les mises à jour, télécharger le moteur), vos imprimantes sur le
+réseau local, les sites ouverts dans Explorer et, si vous utilisez l'IA,
+Anthropic par Claude Code. Il envoie aussi un signal anonyme au démarrage
+(voir Vie privée ci-dessous).
+
+**Vie privée.** Snap Studio envoie un signal anonyme au démarrage (version,
+système, langue) pour compter ses utilisateurs. Rien d'autre : ni fichiers,
+ni modèles, ni imprimantes, ni conversations, ni identifiant. Une fenêtre le
+dit au premier lancement, avec un interrupteur pour le désactiver ; il est
+aussi dans Réglages › Application. Détails :
+[docs/privacy.md](docs/privacy.md) (en anglais).
 
 **Pourquoi macOS m'avertit-il au premier lancement ?** L'app n'est pas
 encore signée avec un certificat de développeur Apple ; les commandes

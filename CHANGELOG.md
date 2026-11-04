@@ -12,6 +12,10 @@ with its packages for macOS, Windows and Linux. What comes next:
 ## [Unreleased]
 
 ### Added
+- **Anonymous usage count**: Snap Studio sends one anonymous signal at
+  start (version, system, language) to count its users, through Aptabase;
+  nothing else. A sheet says so at first launch, with a switch to turn it
+  off, also in Settings › Application ([privacy](docs/privacy.md), #90).
 - **Supports hint**: in Prepare, a badge in the corner of the 3D view says
   when an object probably needs supports (parts starting in the air, a
   long overhang), with a button to turn supports on, and a "Show overhangs"

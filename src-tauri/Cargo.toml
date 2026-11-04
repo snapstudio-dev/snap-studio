@@ -68,6 +68,7 @@ qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "json", "query", "multipart"], optional = true }
 hyper = { version = "1", features = ["server", "http1"], optional = true }
 hyper-util = { version = "0.1", features = ["tokio", "service"], optional = true }
+tauri-plugin-aptabase = "1.3"
 
 # Library tabs on Linux: their views are placed over the main view in GTK
 # directly (`library::gtk_layer`). Same versions as Tauri's.

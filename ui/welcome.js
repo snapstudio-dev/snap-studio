@@ -86,6 +86,8 @@ function welcomeClose() {
   const el = $("welcome");
   el.classList.add("closing");
   setTimeout(() => el.classList.add("hidden"), 260);
+  // The anonymous count's notice, once the assistant is out of the way.
+  setTimeout(() => typeof analyticsNotice === "function" && analyticsNotice(), 400);
 }
 
 /* "Get Started": the app opens on what was just set up. */
@@ -462,10 +464,12 @@ document.addEventListener("keydown", (e) => {
 /* First launch: nothing is set up yet. An existing user (or one carried
    over from 3MF Studio) already has a folder or a printer. */
 (async () => {
-  if (localStorage.getItem(W_KEY)) return;
+  // No assistant: the anonymous count's notice, if never answered.
+  if (localStorage.getItem(W_KEY)) return typeof analyticsNotice === "function" && analyticsNotice();
   const printers = await invoke("printers_list").catch(() => []);
   if (state.dir || state.recents.length || printers.length) {
     localStorage.setItem(W_KEY, JSON.stringify({ done: true, existing: true }));
+    if (typeof analyticsNotice === "function") analyticsNotice();
     return;
   }
   welcomeOpen();

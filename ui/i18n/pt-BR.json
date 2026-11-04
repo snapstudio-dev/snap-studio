@@ -2570,5 +2570,19 @@
   "plate.mismatch_sub": "A temperatura da mesa e a primeira camada foram definidas para a outra placa.",
   "plate.glue_applied": "Cola aplicada",
   "plate.glue_for": "{mat} na placa {plate} precisa de uma camada fina de cola bastão.",
-  "plate.hide_short": "Não mostrar mais"
+  "plate.hide_short": "Não mostrar mais",
+  "an.title": "Uma pequena contagem anônima",
+  "an.why": "Para saber quantas pessoas usam o Snap Studio e continuar a desenvolvê-lo, o app envia um sinal anônimo a cada inicialização.",
+  "an.sent_k": "O que é enviado:",
+  "an.sent": "a versão do app, seu sistema e o idioma dele (por exemplo macOS 15, português) e um número aleatório que muda a cada inicialização. Só isso.",
+  "an.never_k": "Nunca é enviado:",
+  "an.never": "seus arquivos, seus modelos, suas impressoras, suas conversas com IA, sua conta ou qualquer identificador que aponte para você.",
+  "an.where": "Passa pelo Aptabase, um serviço de código aberto que respeita a privacidade. Você pode mudar de ideia quando quiser em Configurações › Aplicativo.",
+  "an.switch": "Enviar a contagem anônima",
+  "an.ok": "Entendi",
+  "an.more": "O que é enviado exatamente?",
+  "settings.analytics": "Contagem de uso anônima",
+  "settings.analytics.sub": "Um sinal anônimo a cada inicialização, para contar os usuários do Snap Studio",
+  "settings.analytics.na": "Indisponível nesta versão",
+  "settings.analytics.what": "O que é enviado"
 }
