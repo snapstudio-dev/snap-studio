@@ -97,13 +97,14 @@
 </aside>
 <main id="content" class="content">
 <!-- Snappy, the workshop assistant (snappy.js): a nameless icon at the
-     content's bottom-left, shown on hover, and its drawer over the view. -->
+     content's bottom-left, always there (faded when something else sits
+     there), and its drawer over the view. -->
 <button id="snappy-fab" class="snappy-fab hidden" type="button" title="Ask Snappy" data-i18n-title="snappy.open" aria-label="Ask Snappy" data-i18n-aria="snappy.open">
-  <img src="assets/snappy.png" alt="" draggable="false" />
+  <span class="snappy-av" id="snappy-fab-av"></span>
 </button>
 <section id="snappy" class="snappy-drawer hidden" aria-label="Snappy">
   <div class="snappy-head">
-    <img src="assets/snappy.png" alt="" class="snappy-avatar" draggable="false" />
+    <span class="snappy-avatar snappy-av" id="snappy-head-av"></span>
     <div class="snappy-title"><b>Snappy</b><span data-i18n="snappy.subtitle">One ongoing conversation</span></div>
     <button id="snappy-close" class="snappy-x" type="button" title="Close" data-i18n-title="common.close">
       <svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg>
@@ -2356,6 +2357,7 @@
 <script src="ia-trace.js"></script>
 <script src="auth.js"></script>
 <script src="snappy-logic.js"></script>
+<script src="snappy-avatar.js"></script>
 <script src="snappy.js"></script>
 <script src="settings.js"></script>
 <script src="window-controls.js"></script>

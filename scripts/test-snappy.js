@@ -59,4 +59,11 @@ assert.ok(S.snappyLocalFile([...files, { name: "f1.stl", path: "/y/f1.stl" }], "
 assert.deepStrictEqual(S.snappySimpleWith({ infill: 15, walls: 2 }, "infill", 40), { infill: 40, walls: 2 });
 assert.throws(() => S.snappySimpleWith({}, "speed", 3));
 
+// The avatar's eyes follow the pointer, capped, softer up close.
+const A = require("../ui/snappy-avatar.js");
+assert.deepStrictEqual(A.snappyGaze(0, 0), { x: 0, y: 0 });
+assert.ok(Math.abs(A.snappyGaze(1000, 0).x - 4.5) < 1e-9, "capped far away");
+const near = A.snappyGaze(30, 40);
+assert.ok(Math.hypot(near.x, near.y) < 1 && near.y > near.x, "a little, towards the pointer");
+
 console.log("snappy: ok");

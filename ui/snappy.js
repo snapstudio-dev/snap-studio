@@ -2,9 +2,11 @@
 /* Snappy, the workshop assistant (src-tauri/src/snappy.rs).
 
    A nameless icon at the bottom-left of the content, beside the sidebar,
-   shown while the content is hovered; a click fades it out and opens the
-   conversation's drawer over the current view, which stays where it is.
-   Closing the drawer brings the icon back on hover.
+   always there — faded while something else sits at its place, whole
+   again under the pointer; its avatar is alive (snappy-avatar.js). A click
+   fades it out and opens the conversation's drawer over the current view,
+   which stays where it is; a click outside the drawer closes it, and the
+   icon comes back.
 
    One conversation, kept by the app: its past from the log, its events as
    the "snappy-chat" event. Actions that cannot be undone come as cards at
@@ -30,11 +32,57 @@ const snappyAvailable = () => typeof aiChoice !== "function" || aiChoice() !== "
 
 /* ------------------------------------------------------------ the icon */
 
-$("content").addEventListener("mouseenter", () => {
-  $("snappy-fab").classList.toggle("hidden", SNAP.open || !snappyAvailable());
-});
+const SNAP_AV = [snappyAvatar($("snappy-fab-av")), snappyAvatar($("snappy-head-av"))];
+const snappyMood = (mood) => SNAP_AV.forEach((a) => a.setMood(mood));
+
+/* Whether something else sits at the icon's place: over it (a sheet, a
+   menu), or under it — anything smaller than half the content (a list, a
+   card, a button); the view's own background (a page, the 3D view) does
+   not count. */
+function snappyCovered(fab) {
+  const r = fab.getBoundingClientRect();
+  if (!r.width) return false;
+  const c = $("content").getBoundingClientRect();
+  const big = c.width * c.height * 0.5;
+  for (const [fx, fy] of [[0.5, 0.5], [0.15, 0.15], [0.85, 0.15], [0.15, 0.85], [0.85, 0.85]]) {
+    const list = document.elementsFromPoint(r.left + r.width * fx, r.top + r.height * fy);
+    const at = list.findIndex((el) => fab.contains(el));
+    if (at !== 0) return true;
+    for (const el of list.slice(1)) {
+      if (fab.contains(el)) continue;
+      if (el === document.body || el === document.documentElement) break;
+      if (getComputedStyle(el).opacity === "0") continue;
+      const b = el.getBoundingClientRect();
+      if (b.width * b.height < big) return true;
+    }
+  }
+  return false;
+}
+
+/* Shown unless the drawer is open or the AI is off; faded when covered. */
+function snappyFabState() {
+  const fab = $("snappy-fab");
+  const hide = SNAP.open || !snappyAvailable();
+  if (fab.classList.contains("leaving")) return;
+  fab.classList.toggle("hidden", hide);
+  if (!hide) fab.classList.toggle("dim", snappyCovered(fab));
+}
+setInterval(snappyFabState, 500);
+window.addEventListener("resize", snappyFabState);
+snappyFabState();
 
 $("snappy-fab").addEventListener("click", snappyOpen);
+
+/* A click outside the drawer closes it — but not one in a sheet or a
+   dialog of the app shown over it (the spool check of a send). */
+document.addEventListener(
+  "pointerdown",
+  (e) => {
+    if (!SNAP.open || e.target.closest?.("#snappy, #snappy-fab, .modal, .menu, [role='dialog']")) return;
+    snappyClose();
+  },
+  true
+);
 
 /* ------------------------------------------------------------ the drawer */
 
@@ -66,8 +114,7 @@ function snappyClose() {
   // Closed, whatever waited for a yes is refused (snappy_tools.rs).
   invoke("snappy_drawer", { open: false }).catch(() => {});
   for (const id of [...SNAP.cards.keys()]) snappyCardDone(id, false);
-  // Back on hover; the pointer may already be over the content.
-  if ($("content").matches(":hover") && snappyAvailable()) $("snappy-fab").classList.remove("hidden");
+  setTimeout(snappyFabState, 170);
 }
 
 $("snappy-close").addEventListener("click", snappyClose);
@@ -139,7 +186,11 @@ function snappyShow(item, live) {
     case "end":
       if (item.stopped) snappyAdd(snappyDiv("snappy-note", tr("snappy.stopped")));
       else if (item.error) snappyAdd(snappyDiv("snappy-note error", item.error));
-      if (live) snappySetBusy(false);
+      if (live) {
+        snappySetBusy(false);
+        // No hop for an answer that did not come.
+        if (item.stopped || item.error) snappyMood("idle");
+      }
       break;
     case "exited":
       if (live) snappySetBusy(false);
@@ -159,6 +210,10 @@ function snappyShow(item, live) {
 }
 
 function snappySetBusy(on) {
+  // Thinking while it answers; a happy hop when an answer lands.
+  if (on) snappyMood("thinking");
+  else if (SNAP.busy) snappyMood("happy");
+  else snappyMood("idle");
   SNAP.busy = !!on;
   $("snappy-send").classList.toggle("hidden", SNAP.busy);
   $("snappy-stop").classList.toggle("hidden", !SNAP.busy);
