@@ -309,11 +309,32 @@ function snappyApply({ setting, value }) {
   return { applied: true, setting, value };
 }
 
-listen("snappy-ui", (e) => {
+/* The slice of Prepare sent with Snappy's choices (confirmed on its card):
+   the send sheet opens with them, checks the printer, then sends as by
+   hand — its spool check and progress included. */
+async function snappySendSlice({ printer, queue, options }) {
+  if (!SL.preview) return { error: "There is no slice to send: slice in Prepare first." };
+  await openSend();
+  if ($("sendmodal").classList.contains("hidden")) return { error: "The send sheet could not open." };
+  if (!SL.printers.some((p) => p.id === printer)) return { error: "Unknown printer." };
+  SL.sendPid = printer;
+  renderSendPrinters();
+  await checkSendPrinter();
+  $("snd-level").checked = !!options?.bed_leveling;
+  $("snd-flow").checked = !!options?.flow_calibration;
+  $("snd-timelapse").checked = !!options?.timelapse;
+  const asQueue = !!queue || SL.sendMode === "queue";
+  if (!asQueue && $("snd-go").disabled) return { error: $("snd-state").textContent || "The printer cannot start this print." };
+  sendPrint(asQueue);
+  return { started: true, queued: asQueue, note: asQueue && !queue ? "The printer is busy or silent: the print was added to its queue." : undefined };
+}
+
+listen("snappy-ui", async (e) => {
   const { id, method, args } = e.payload;
   let result;
   try {
-    if (method === "slice_summary") result = snappyPrepare();
+    if (method === "send_slice") result = await snappySendSlice(args || {});
+    else if (method === "slice_summary") result = snappyPrepare();
     else if (method === "local_files") result = snappyLocalFiles(state.view_files);
     else if (method === "local_file") result = snappyLocalFile(state.view_files, args?.name);
     else if (method === "apply_setting") result = snappyApply(args || {});

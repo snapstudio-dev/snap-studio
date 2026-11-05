@@ -17,8 +17,8 @@ with its packages for macOS, Windows and Linux. What comes next:
   current view. Snappy answers about your printers, their files, the print
   queue and what Prepare holds, remembers what matters between
   conversations, and asks your confirmation before each tool it uses,
-  reads included (changing a slice setting, starting a print, deleting a
-  file on a printer or moving one of yours to the Trash). Its model is
+  reads included (changing a slice setting, sending the slice with the options
+  you pick, starting a print, deleting a file on a printer or moving one of yours to the Trash). Its model is
   set in Settings › AI. It uses the Claude already set up for the AI,
   with none of Claude's own tools, and never sends serial numbers,
   addresses, hostnames or file paths (#95).

@@ -151,6 +151,14 @@ pub static TOOLS: &[Tool] = &[
         run: delete_file,
     },
     Tool {
+        name: "send_slice",
+        description: "Sends the slice just made in Prepare to a printer, to start now or to add to its queue. Before calling it, ask the user for each choice — the printer, start now or queue, bed leveling, flow calibration, timelapse — and never pick them yourself. The app's send sheet then shows the progress and checks the loaded spools. The user confirms it.",
+        params: send_params,
+        reads: false,
+        ask: ask_send,
+        run: send_slice,
+    },
+    Tool {
         name: "delete_local_file",
         description: "Moves a file of this computer to the Trash, by its name as local_files lists it (the Files view). For a file stored on a printer, use delete_printer_file. The user confirms it.",
         params: local_file_param,
@@ -259,11 +267,15 @@ fn ui_calls() -> &'static Mutex<HashMap<String, Sender<Value>>> {
 
 /// Asks the UI about what only it holds (Prepare's state, the Files view).
 fn ui_call(method: &str, args: Value) -> Result<Value> {
+    ui_call_within(method, args, UI_TIMEOUT)
+}
+
+fn ui_call_within(method: &str, args: Value, timeout: Duration) -> Result<Value> {
     let id = uuid::Uuid::new_v4().simple().to_string();
     let (tx, rx) = channel();
     ui_calls().lock().unwrap().insert(id.clone(), tx);
     emit("snappy-ui", json!({ "id": id, "method": method, "args": args }));
-    let got = rx.recv_timeout(UI_TIMEOUT);
+    let got = rx.recv_timeout(timeout);
     ui_calls().lock().unwrap().remove(&id);
     let v = got.map_err(|_| anyhow!("Snap Studio did not answer"))?;
     match v.get("error").and_then(|e| e.as_str()) {
@@ -667,6 +679,53 @@ fn ask_task_cancel(args: &Value) -> Result<String> {
     Ok(crate::t!("snappy.ask.task_cancel", what = what))
 }
 
+// ------------------------------------------------------------ sending a slice
+
+fn send_params() -> Value {
+    let flag = |d: &str| json!({ "type": "boolean", "description": d });
+    json!({
+        "type": "object",
+        "properties": {
+            "printer": { "type": "string", "description": "The printer's display name, as the user chose it." },
+            "queue": flag("true: add to the printer's queue; false: start now (the bed must be clear)."),
+            "bed_leveling": flag("Automatic bed leveling before the print, as the user chose."),
+            "flow_calibration": flag("Extrusion flow calibration before the print, as the user chose."),
+            "timelapse": flag("Timelapse camera, as the user chose."),
+        },
+        "required": ["printer", "queue", "bed_leveling", "flow_calibration", "timelapse"],
+    })
+}
+
+/// The choices of a send, all required: Snappy asks the user, never guesses.
+fn send_choices(args: &Value) -> Result<(crate::printers::Printer, bool, crate::printers::StartOptions)> {
+    let p = printer_named(str_arg(args, "printer")?)?;
+    let flag = |k: &str| args[k].as_bool().ok_or_else(|| anyhow!("missing `{k}`: ask the user"));
+    let options = crate::printers::StartOptions {
+        bed_leveling: flag("bed_leveling")?,
+        flow_calibration: flag("flow_calibration")?,
+        timelapse: flag("timelapse")?,
+    };
+    Ok((p, flag("queue")?, options))
+}
+
+fn ask_send(args: &Value) -> Result<String> {
+    let (p, queue, o) = send_choices(args)?;
+    let yn = |b: bool| crate::t!(if b { "snappy.ask.on" } else { "snappy.ask.off" });
+    Ok(crate::t!(
+        if queue { "snappy.ask.send_queue" } else { "snappy.ask.send_now" },
+        printer = p.name,
+        level = yn(o.bed_leveling),
+        flow = yn(o.flow_calibration),
+        timelapse = yn(o.timelapse)
+    ))
+}
+
+fn send_slice(args: &Value) -> Result<Value> {
+    let (p, queue, o) = send_choices(args)?;
+    // The send sheet does it, as by hand: printer check, spool check, upload.
+    ui_call_within("send_slice", json!({ "printer": p.id, "queue": queue, "options": serde_json::to_value(o)? }), Duration::from_secs(60))
+}
+
 // ------------------------------------------------------------ local files
 
 fn local_file_param() -> Value {
@@ -720,7 +779,10 @@ mod tests {
     #[test]
     fn only_actions_are_marked_destructive() {
         let acts: Vec<&str> = TOOLS.iter().filter(|t| !t.reads).map(|t| t.name).collect();
-        assert_eq!(acts, ["apply_slice_setting", "start_queued_print", "print_printer_file", "delete_printer_file", "delete_local_file"]);
+        assert_eq!(
+            acts,
+            ["apply_slice_setting", "start_queued_print", "print_printer_file", "delete_printer_file", "send_slice", "delete_local_file"]
+        );
     }
 
     /// Every call, reads included, waits for a yes: with the drawer
@@ -775,6 +837,21 @@ mod tests {
         // Bad arguments are refused before anyone is asked.
         assert!(call("apply_slice_setting", &json!({ "setting": "infill", "value": 300 })).unwrap_err().to_string().contains("invalid"));
         assert!(call("apply_slice_setting", &json!({ "setting": "speed", "value": 3 })).is_err());
+    }
+
+    #[test]
+    fn a_send_needs_every_choice() {
+        let _turn = DRAWER.lock().unwrap_or_else(|e| e.into_inner());
+        set_drawer(false);
+        // No printer of that name here: refused before anyone is asked.
+        let e = call(
+            "send_slice",
+            &json!({ "printer": "Nope", "queue": false, "bed_leveling": true, "flow_calibration": false, "timelapse": false }),
+        )
+        .unwrap_err();
+        assert!(e.to_string().contains("no printer named"), "{e}");
+        let schema = send_params();
+        assert_eq!(schema["required"].as_array().unwrap().len(), 5, "every option is asked");
     }
 
     #[test]
