@@ -27,6 +27,8 @@ mod plate;
 mod presets;
 mod printer_files;
 mod printers;
+#[allow(dead_code)] // Used by Snappy (next commit).
+mod privacy;
 mod pty;
 mod render;
 mod scan;
