@@ -59,11 +59,36 @@ assert.ok(S.snappyLocalFile([...files, { name: "f1.stl", path: "/y/f1.stl" }], "
 assert.deepStrictEqual(S.snappySimpleWith({ infill: 15, walls: 2 }, "infill", 40), { infill: 40, walls: 2 });
 assert.throws(() => S.snappySimpleWith({}, "speed", 3));
 
-// The avatar's eyes follow the pointer, capped, softer up close.
+// The avatar (ui/snappy-avatar.js): open-bot-avatar's pose model.
 const A = require("../ui/snappy-avatar.js");
-assert.deepStrictEqual(A.snappyGaze(0, 0), { x: 0, y: 0 });
-assert.ok(Math.abs(A.snappyGaze(1000, 0).x - 4.5) < 1e-9, "capped far away");
-const near = A.snappyGaze(30, 40);
-assert.ok(Math.hypot(near.x, near.y) < 1 && near.y > near.x, "a little, towards the pointer");
+const pose = (mood, extra = {}) => A.snvMoodPose({ seed: 7, t: 3, mood, gaze: null, reduced: false, ...extra });
+// The eyes face you: centered, upright pills, side by side.
+const still = pose("idle", { reduced: true });
+const eyes = A.snvEyesSvg(still);
+const xs = [...eyes.matchAll(/x="([\d.]+)" y="[\d.]+" width="([\d.]+)"/g)].map((m) => +m[1] + +m[2] / 2);
+assert.strictEqual(xs.length, 2);
+assert.ok(Math.abs((xs[0] + xs[1]) / 2 - 50) < 1e-6, "centered: " + xs);
+assert.ok(!eyes.includes("rotate"), "upright");
+// Thinking: a full turn about the vertical axis, then a pause; the pointer does not turn it.
+assert.strictEqual(A.snvSpin(0), 0);
+assert.ok(Math.abs(A.snvSpin(0.75) - Math.PI) < 1e-9, "half way");
+assert.ok(Math.abs(A.snvSpin(2.5) - 2 * Math.PI) < 1e-9, "a whole turn, then still");
+const thinking = pose("thinking", { t: 0.75 });
+const pointed = pose("thinking", { t: 0.75, gaze: { x: 1, y: 0, weight: 1 } });
+assert.strictEqual(thinking.yaw, pointed.yaw, "the pointer does not turn a thinking avatar");
+assert.ok(thinking.gazeY < 0, "eyes up");
+// Idle follows the pointer with the whole body.
+assert.ok(pose("idle", { gaze: { x: 1, y: 0, weight: 1 } }).yaw > pose("idle").yaw);
+// Happy: hops, eyes as arcs.
+assert.ok(A.snvEyesSvg(pose("happy")).includes("<path"));
+// Leaving a turn takes the short way round.
+const b = A.snvBlend({ ...still, yaw: 2 * Math.PI - 0.1 }, { ...still, yaw: 0.1 }, 0.5);
+assert.ok(Math.abs(Math.sin(b.yaw)) < 1e-9 && Math.cos(b.yaw) > 0, "through 0, not back through π");
+// Reduced motion: no turn, no lift.
+const r = pose("thinking", { reduced: true });
+assert.ok(Math.abs(r.yaw) < 0.2 && r.lift === 0);
+// The pointer is looked at softly, from the eyes.
+const g = A.snvPointerGaze({ x: 1000, y: 0 }, { left: 0, top: 0, width: 42, height: 42 });
+assert.ok(g.x > 0.99 && g.x <= 1);
 
 console.log("snappy: ok");

@@ -5459,35 +5459,25 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .snappy-fab:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 12px; }
 .snappy-fab.leaving { opacity: 0; transform: scale(0.85); pointer-events: none; }
 
-/* The avatar (snappy-avatar.js): a rainbow ring, the white face, the eyes. */
+/* The avatar (snappy-avatar.js), in CSS 3D: 1 em is one unit of its
+   100-unit box. The ring is stacked in slices for its volume; the front
+   carries the white face and the eyes, the back a plain face. */
 .snappy-av { display: block; width: 100%; height: 100%; }
-.snv { position: relative; display: block; width: 100%; height: 100%; transform-origin: 50% 90%; }
-.snv-ring {
+.snv { position: relative; display: block; width: 100%; height: 100%; perspective: 450em; }
+.snv-body { position: absolute; inset: 0; transform-style: preserve-3d; transform-origin: 50% 60%; will-change: transform; }
+.snv-slice, .snv-front, .snv-back, .snv-eyes { position: absolute; inset: 0; }
+.snv-front, .snv-back, .snv-eyes { backface-visibility: hidden; }
+.snv-ring, .snv-slice {
   position: absolute;
   inset: 1.5%;
   border-radius: 31%;
   background: conic-gradient(from -20deg, #ff3b30, #af52de 45deg, #0a84ff 80deg, #30d158 135deg, #30d158 150deg, #0a84ff 190deg, #af52de 215deg, #ff3b30 245deg, #ffcc00 290deg, #ffcc00 305deg, #ff3b30);
 }
-.snv-face { position: absolute; inset: 6.3%; border-radius: 27%; background: #fff; }
-.snv-eyes { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.snv-gaze { transition: transform 120ms ease-out; }
-.snv-eye { fill: #000; transform-box: fill-box; transform-origin: center; transition: transform 90ms ease; }
-.snv.blink .snv-eye { transform: scaleY(0.12); }
-@media (prefers-reduced-motion: no-preference) {
-  .snv[data-mood="idle"] { animation: snv-breath 4.2s ease-in-out infinite; }
-  .snv[data-mood="thinking"] .snv-gaze { animation: snv-ponder 2.4s ease-in-out infinite; }
-  .snv[data-mood="thinking"] { animation: snv-tilt 2.4s ease-in-out infinite; }
-  .snv[data-mood="happy"] { animation: snv-hop 0.7s cubic-bezier(0.3, 1.6, 0.5, 1) 2; }
-}
-.snv[data-mood="happy"] .snv-eye { transform: scaleY(0.5); }
-@keyframes snv-breath { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.025); } }
-@keyframes snv-ponder {
-  0%, 100% { transform: translate(-3px, -3.5px); }
-  35% { transform: translate(3.5px, -4px); }
-  65% { transform: translate(0.5px, -2px); }
-}
-@keyframes snv-tilt { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg); } }
-@keyframes snv-hop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-9%); } }
+/* The sides: the ring's colors, shaded. */
+.snv-slice { filter: brightness(0.78) saturate(1.1); }
+.snv-face { position: absolute; inset: 6.3%; border-radius: 27%; background: #fff; transform: translateZ(0.3em); }
+.snv-back .snv-face { background: #f2f2f4; }
+.snv-eyes { width: 100%; height: 100%; overflow: visible; transform: translateZ(0.8em); }
 
 /* The drawer, over the view, against the sidebar. */
 .snappy-drawer {
