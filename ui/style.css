@@ -5435,6 +5435,102 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .an-details a { display: inline-block; margin-top: 6px; font-size: 12px; }
 .modal-actions .btn.link { background: none; border-color: transparent; box-shadow: none; color: var(--accent); }
 
+/* ---------- Snappy (snappy.js) ---------- */
+/* The icon: only the avatar, no plate, at the content's bottom-left (just
+   right of the sidebar), shown while the content is hovered. */
+.snappy-fab {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 70;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 160ms ease, transform 160ms ease;
+  pointer-events: none;
+}
+.snappy-fab img { width: 100%; height: 100%; display: block; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.28)); }
+.content:hover > .snappy-fab { opacity: 1; transform: none; pointer-events: auto; }
+.content:hover > .snappy-fab:hover { transform: scale(1.06); }
+.content:hover > .snappy-fab:active { transform: scale(0.97); }
+.snappy-fab:focus-visible { opacity: 1; pointer-events: auto; outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 12px; }
+.content > .snappy-fab.leaving { opacity: 0; transform: scale(0.85); pointer-events: none; }
+
+/* The drawer, over the view, against the sidebar. */
+.snappy-drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 72;
+  width: min(380px, 100%);
+  display: flex;
+  flex-direction: column;
+  background: var(--content-bg);
+  border-right: 1px solid var(--separator);
+  box-shadow: 8px 0 28px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  transform: translateX(-14px);
+  transition: opacity 160ms ease, transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.snappy-drawer.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .snappy-fab, .snappy-drawer { transition: none; }
+}
+.snappy-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 14px; border-bottom: 1px solid var(--separator); }
+.snappy-avatar { width: 30px; height: 30px; flex: none; }
+.snappy-title { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.snappy-title span { font-size: 11px; color: var(--text-secondary); }
+.snappy-x { width: 26px; height: 26px; border: 0; border-radius: 6px; background: none; color: var(--text-secondary); display: grid; place-items: center; cursor: pointer; }
+.snappy-x:hover { background: var(--card-bg); color: var(--text); }
+.snappy-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.snappy-empty { margin: auto 10px; text-align: center; color: var(--text-secondary); font-size: 12.5px; }
+.snappy-msg { max-width: 88%; padding: 8px 12px; border-radius: 14px; overflow-wrap: anywhere; line-height: 1.4; }
+.snappy-msg.user { align-self: flex-end; border-bottom-right-radius: 4px; background: var(--accent); color: var(--accent-text, #fff); white-space: pre-wrap; }
+.snappy-msg.assistant { align-self: flex-start; border-bottom-left-radius: 4px; background: var(--card-bg); }
+.snappy-msg.assistant > :first-child { margin-top: 0; }
+.snappy-msg.assistant > :last-child { margin-bottom: 0; }
+.snappy-msg.assistant p { margin: 0 0 6px; }
+.snappy-msg.assistant ul, .snappy-msg.assistant ol { margin: 0 0 6px; padding-left: 20px; }
+.snappy-msg.assistant code { font-family: var(--font-mono); font-size: 12px; }
+.snappy-msg.assistant a { color: var(--accent); }
+.snappy-tool { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--text-secondary); }
+.snappy-tool .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary); }
+.snappy-tool.done .dot { background: var(--success); }
+.snappy-tool.error .dot { background: var(--danger); }
+.snappy-note { font-size: 12px; color: var(--text-secondary); text-align: center; }
+.snappy-note.error { color: var(--danger); text-align: left; white-space: pre-wrap; }
+.snappy-note .btn { margin-left: 8px; }
+.snappy-cards { display: flex; flex-direction: column; gap: 8px; padding: 0 14px; }
+.snappy-cards:not(:empty) { padding-bottom: 10px; }
+.snappy-card { padding: 10px 12px; border: 1px solid var(--card-border); border-radius: 12px; background: var(--card-bg); box-shadow: var(--card-shadow); }
+.snappy-card .title { font-weight: 600; }
+.snappy-card .what { margin: 4px 0 8px; color: var(--text-secondary); overflow-wrap: anywhere; }
+.snappy-card .row { display: flex; gap: 6px; }
+.snappy-foot { display: flex; align-items: flex-end; gap: 8px; padding: 10px 14px 12px; border-top: 1px solid var(--separator); }
+.snappy-foot textarea {
+  flex: 1;
+  min-height: 34px;
+  max-height: 160px;
+  padding: 8px 14px;
+  border: 1px solid var(--card-border);
+  border-radius: 17px;
+  background: var(--card-bg);
+  color: var(--text);
+  font: inherit;
+  resize: none;
+  outline: none;
+}
+.snappy-foot textarea:focus { border-color: var(--accent); }
+.snappy-send { width: 34px; height: 34px; flex: none; border: 0; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--accent-text, #fff); cursor: pointer; }
+.snappy-send:disabled { opacity: 0.35; cursor: default; }
+.snappy-send.stop { background: var(--text); color: var(--content-bg); }
+
 /* ======================================================================
    macOS theme (macOS 26 Tahoe, Liquid Glass). Structure, not only colors:
    every rule below is scoped to :root[data-theme="macos"] (or to its
@@ -5625,3 +5721,4 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 
 :root[data-theme="macos"] .p3d-views, :root[data-theme="macos"] .p3d-quick { border-radius: 999px; background: var(--mt-glass-strong); -webkit-backdrop-filter: var(--mt-blur); backdrop-filter: var(--mt-blur); box-shadow: var(--mt-edge), var(--mt-shadow); }
 :root[data-theme="macos"] .p3d { border-radius: var(--mt-radius); }
+

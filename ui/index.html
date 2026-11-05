@@ -96,6 +96,31 @@
   </div>
 </aside>
 <main id="content" class="content">
+<!-- Snappy, the workshop assistant (snappy.js): a nameless icon at the
+     content's bottom-left, shown on hover, and its drawer over the view. -->
+<button id="snappy-fab" class="snappy-fab hidden" type="button" title="Ask Snappy" data-i18n-title="snappy.open" aria-label="Ask Snappy" data-i18n-aria="snappy.open">
+  <img src="assets/snappy.png" alt="" draggable="false" />
+</button>
+<section id="snappy" class="snappy-drawer hidden" aria-label="Snappy">
+  <div class="snappy-head">
+    <img src="assets/snappy.png" alt="" class="snappy-avatar" draggable="false" />
+    <div class="snappy-title"><b>Snappy</b><span data-i18n="snappy.subtitle">One ongoing conversation</span></div>
+    <button id="snappy-close" class="snappy-x" type="button" title="Close" data-i18n-title="common.close">
+      <svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg>
+    </button>
+  </div>
+  <div id="snappy-list" class="snappy-list"></div>
+  <div id="snappy-cards" class="snappy-cards"></div>
+  <div class="snappy-foot">
+    <textarea id="snappy-input" rows="1" placeholder="Write to Snappy…" data-i18n-placeholder="snappy.placeholder"></textarea>
+    <button id="snappy-send" class="snappy-send" type="button" title="Send (⏎)" data-i18n-title="chat.send" disabled>
+      <svg viewBox="0 0 24 24"><path d="M12 4 5 11l1.4 1.4L11 7.8V20h2V7.8l4.6 4.6L19 11z"/></svg>
+    </button>
+    <button id="snappy-stop" class="snappy-send stop hidden" type="button" title="Stop Snappy's answer (Esc)" data-i18n-title="snappy.stop">
+      <svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg>
+    </button>
+  </div>
+</section>
 <!-- The printer camera at full size, over the content area, and where its box
      waits when nothing shows it (camera.js camPlace). -->
 <div id="cam-full" class="cam-full hidden"></div>
@@ -2321,6 +2346,8 @@
 <script src="ia-chat.js"></script>
 <script src="ia-trace.js"></script>
 <script src="auth.js"></script>
+<script src="snappy-logic.js"></script>
+<script src="snappy.js"></script>
 <script src="settings.js"></script>
 <script src="window-controls.js"></script>
 <script src="update.js"></script>
