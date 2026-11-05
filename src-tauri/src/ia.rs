@@ -242,7 +242,12 @@ fn project_slug(ws: &Path) -> String {
 /// Where Claude Code stores the session of a working folder: in the first
 /// configuration folder that has it, otherwise where a new one would go.
 pub fn session_file(id: &str) -> PathBuf {
-    let rel = Path::new("projects").join(project_slug(&workspace(id))).join(format!("{id}.jsonl"));
+    session_file_in(&workspace(id), id)
+}
+
+/// Where Claude Code stores session `id` of a working folder.
+pub fn session_file_in(dir: &Path, id: &str) -> PathBuf {
+    let rel = Path::new("projects").join(project_slug(dir)).join(format!("{id}.jsonl"));
     let roots = claude_roots();
     roots.iter().map(|r| r.join(&rel)).find(|p| p.is_file()).unwrap_or_else(|| roots[0].join(&rel))
 }
@@ -410,7 +415,7 @@ pub fn duplicate(id: &str) -> Result<Conversation> {
     let c = get(id)?;
     let new_id = uuid::Uuid::new_v4().to_string();
     let (from, to) = (workspace(id), workspace(&new_id));
-    let skip = [crate::chat::log_path(&from), crate::chat::attachments_dir(&from)];
+    let skip = [crate::chat::log_path(&from), crate::chat::attachments_dir(&from), crate::chat::run_dir(&from)];
     if let Err(e) = copy_plain(&from, &to, &skip) {
         let _ = std::fs::remove_dir_all(dir(&new_id));
         return Err(e.into());

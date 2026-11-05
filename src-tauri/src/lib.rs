@@ -1560,10 +1560,24 @@ fn ia_chat_answer(id: String, request_id: String, allow: bool, always: bool, inp
     chat::answer(&id, &request_id, allow, always, input).map_err(ui_err)
 }
 
-/// Claude model of the conversation; none: the account's default.
+/// Claude model of the conversation; none: the account's default. An idle
+/// Claude closes to resume with it: off the main thread.
 #[tauri::command]
-fn ia_chat_model(id: String, model: Option<String>) -> Result<(), String> {
-    chat::set_model(&id, model.as_deref()).map_err(ui_err)
+async fn ia_chat_model(id: String, model: Option<String>) -> Result<(), String> {
+    off_main(move || chat::set_model(&id, model.as_deref()).map_err(ui_err)).await
+}
+
+/// What the conversation's terminal showed so far (base64), for its
+/// Terminal tab; the rest arrives as `ia-screen` events.
+#[tauri::command]
+fn ia_term_screen(id: String) -> String {
+    chat::screen(&id)
+}
+
+/// The Terminal tab's size, for the conversation's terminal.
+#[tauri::command]
+fn ia_term_resize(id: String, cols: u16, rows: u16) -> Result<(), String> {
+    chat::resize(&id, cols, rows).map_err(ui_err)
 }
 
 /// True while Claude runs for this conversation in chat mode.
@@ -2146,6 +2160,8 @@ pub fn run() {
             ia_chat_model,
             ia_chat_running,
             ia_chat_close,
+            ia_term_screen,
+            ia_term_resize,
             auth_status,
             auth_verify,
             auth_sandbox_present,

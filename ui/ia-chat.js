@@ -1,10 +1,11 @@
 "use strict";
 /* AI tab: the conversation view.
 
-   Claude Code runs in its structured mode (src-tauri/src/chat.rs): its events
-   arrive as the "ia-chat" event, already slimmed; the past comes from the
-   conversation's own log (workspace/chat.jsonl) or, for older conversations,
-   from Claude's transcript. This view renders both the same way.
+   Claude Code runs interactively, read from its transcript
+   (src-tauri/src/claude_pty.rs, chat.rs): its events arrive as the
+   "ia-chat" event, already slimmed; the past comes from the conversation's
+   own log (workspace/chat.jsonl) or, for older conversations, from Claude's
+   transcript. This view renders both the same way.
 
    Adapted from claude-chat-panel's page (web/chat.js,
    https://github.com/simscorpbs/claude-chat-panel, MIT License,

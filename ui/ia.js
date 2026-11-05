@@ -1092,14 +1092,10 @@ async function iaHint(c) {
     el.classList.remove("hidden");
     return;
   }
+  // A new conversation has nothing to resume. Its folder is trusted by the
+  // app (claude_pty.rs): no prompt to warn about.
   if (!c.started) {
-    // Only the terminal asks whether to trust the folder; the chat never does.
-    if (IA.view === "term") {
-      el.innerHTML = tr("ia.hint.first");
-      el.classList.remove("hidden");
-    } else {
-      el.classList.add("hidden");
-    }
+    el.classList.add("hidden");
     return;
   }
   let resumable = true;
@@ -1580,7 +1576,7 @@ listen("ia-mesh", async (e) => {
 });
 
 /* Chat or terminal: two views of the same session. Nothing is closed or
-   started; the terminal reads what the chat's Claude does. */
+   started; the terminal shows the chat's Claude. */
 function iaSwitchView(view) {
   if (view === IA.view) return;
   IA.view = view;
