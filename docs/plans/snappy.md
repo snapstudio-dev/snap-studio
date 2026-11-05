@@ -1,6 +1,6 @@
 # Snappy — in-app workshop assistant
 
-Status: UX and technical approach decided (2026-11-05). Not yet implemented.
+Status: UX and technical approach decided (2026-11-05). Implemented in draft PR #95 (see [Implementation notes](#implementation-notes)).
 
 ## What it is
 
@@ -166,6 +166,14 @@ Intended first wave, to be refined:
 
 Browser, rooms, delegation between bots, routines, per-conversation tokens, bots / threads / routines collections, `open-bot-avatar` (the avatar is chosen), git-style autonomy levels, a dedicated bots container.
 
-## Out of scope for this PR
+## Implementation notes
 
-Implementation: this PR only holds the plan and its mockups.
+Where the code settles what the plan left open:
+
+- **Engine** (`src-tauri/src/claude_pty.rs`): hook files live in one folder per run, in the system's temporary folder for local and built-in sandbox runs (`snapstudio-claude-<run>/start.json`, `done.json`; pid in `claude-turn-<run>.pid`), and in the mounted workspace (`.snapstudio-run/`) for the container, whose `/tmp` is its own. An interrupt (Esc) fires no Stop hook: Claude's `[Request interrupted by user` record ends the turn as stopped (or a 4-second grace after Stop). An API error record ends it as failed.
+- **Container collection**: yolobox bind-mounts the workspace and `~/.claude/projects` at their host paths, so the transcript and the hook files are read directly on the host; the `docker exec` pass with `---SS-` markers is not needed and was not built.
+- **Permission cards and questions**: a `PermissionRequest` hook (allow/deny, "always" as Claude's suggested rules) and a `PreToolUse` hook on `AskUserQuestion` (answered by its refusal's reason) hand the request to the app through request/answer files; unanswered after 15 minutes, refused. Checked against Claude Code 2.1.286.
+- **Trust**: pre-trusting writes `hasTrustDialogAccepted` in Claude's `.claude.json` (an already trusted ancestor counts); if the prompt still shows (a container's own settings), the engine answers it, since every folder it launches in is the app's.
+- **The sign-in check** (`auth_verify`) runs through the engine too: nothing in the app runs `claude -p` any more.
+- **Snappy's Claude** is the host's, whatever the AI mode (it needs no sandbox: `--tools ""`, Bash/Write/Edit/Read/Web denied, `--strict-mcp-config`); hidden when the AI is off. Its first message waits for Claude's `tools/list`, since MCP servers connect after the CLI starts.
+- **First wave of tools**: `printers`, `printer_files`, `local_files` (the Files view), `slice_summary`, `print_queue`, `memory_read`, `memory_write`, `task_status`, `task_cancel`; with approval: `apply_slice_setting` (infill, walls, supports, brim), `start_queued_print`, `print_printer_file`, `delete_printer_file`. Starting prints answers with a task id.
