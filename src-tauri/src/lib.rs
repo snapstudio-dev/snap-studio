@@ -27,7 +27,6 @@ mod plate;
 mod presets;
 mod printer_files;
 mod printers;
-#[allow(dead_code)] // Used by Snappy (next commit).
 mod privacy;
 mod pty;
 mod render;
@@ -39,6 +38,9 @@ mod share;
 pub mod sim;
 mod slice;
 mod slicers;
+mod snappy;
+mod snappy_mcp;
+mod snappy_tools;
 mod stl;
 mod support_hint;
 mod thumbs;
@@ -1593,6 +1595,51 @@ async fn ia_chat_close(id: String) {
     let _ = tauri::async_runtime::spawn_blocking(move || chat::close(&id)).await;
 }
 
+// ---------------------------------------------------------------- Snappy
+
+/// Snappy's conversation so far.
+#[tauri::command]
+fn snappy_history() -> Vec<serde_json::Value> {
+    snappy::history()
+}
+
+/// Sends a message to Snappy with the app's current context (view,
+/// printer, Prepare); starts its Claude when needed.
+#[tauri::command]
+async fn snappy_send(text: String, context: serde_json::Value) -> Result<(), String> {
+    off_main(move || snappy::send(&text, &context).map_err(ui_err)).await
+}
+
+#[tauri::command]
+fn snappy_stop() -> Result<(), String> {
+    snappy::stop().map_err(ui_err)
+}
+
+/// True while Snappy answers.
+#[tauri::command]
+fn snappy_busy() -> bool {
+    snappy::is_busy()
+}
+
+/// The drawer opened or closed: closed, what waits for approval is refused.
+#[tauri::command]
+fn snappy_drawer(open: bool) {
+    snappy_tools::set_drawer(open);
+}
+
+/// The user's answer to an approval card.
+#[tauri::command]
+fn snappy_approve(id: String, yes: bool) {
+    snappy_tools::answer(&id, yes);
+}
+
+/// The UI's answer to a question from a tool (Prepare's state, the Files
+/// view).
+#[tauri::command]
+fn snappy_ui_reply(id: String, result: serde_json::Value) {
+    snappy_tools::ui_reply(&id, result);
+}
+
 // ---------------------------------------------------------------- Claude sign-in
 
 /// Claude's sign-in on this Mac ("local") or in the sandbox ("container"),
@@ -1999,6 +2046,8 @@ pub fn run() {
         .setup(|app| {
             // This launch's count, if the notice was answered with it on.
             analytics::start(app.handle());
+            // Snappy's events and tools reach the window through it.
+            snappy::init(app.handle());
             use tauri::Manager;
             // Background tracking of prints: end of print, queue.
             jobs::start(app.handle().clone());
@@ -2164,6 +2213,13 @@ pub fn run() {
             ia_chat_close,
             ia_term_screen,
             ia_term_resize,
+            snappy_history,
+            snappy_send,
+            snappy_stop,
+            snappy_busy,
+            snappy_drawer,
+            snappy_approve,
+            snappy_ui_reply,
             auth_status,
             auth_verify,
             auth_sandbox_present,
