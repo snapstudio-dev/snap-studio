@@ -73,6 +73,14 @@ function snappyLocalFiles(files, max = 200) {
   return { files: names.slice(0, max), total: names.length };
 }
 
+/* A file of the Files view by its name, for the app only (its path never
+   goes to Snappy): none or several of that name, an error. */
+function snappyLocalFile(files, name) {
+  const found = (files || []).filter((f) => f.name === name);
+  if (found.length === 1) return { name, path: found[0].path };
+  return { error: found.length ? `several files are named “${name}” in the Files view` : `no file named “${name}” in the Files view` };
+}
+
 /* A quick setting applied as the slice sheet would keep it: the machine's
    remembered adjustments, with the setting touched by hand. */
 function snappySimpleWith(simple, setting, value) {
@@ -80,4 +88,4 @@ function snappySimpleWith(simple, setting, value) {
   return { ...(simple || {}), [setting]: value };
 }
 
-if (typeof module !== "undefined") module.exports = { snappyToolName, snappyItems, snappySliceSummary, snappyLocalFiles, snappySimpleWith };
+if (typeof module !== "undefined") module.exports = { snappyToolName, snappyItems, snappySliceSummary, snappyLocalFiles, snappyLocalFile, snappySimpleWith };

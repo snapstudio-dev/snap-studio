@@ -1,12 +1,12 @@
 //! Snappy's tools: a static table, each with its declaration (name,
-//! description, parameters), whether it needs the user's approval, and its
+//! description, parameters), what its confirmation card says, and its
 //! handler in Rust. Served by `snappy_mcp.rs`.
 //!
-//! Approval is a barrier on this side, not Claude's permission prompt: a
-//! call to a tool marked so is held, a confirmation card shows at the
-//! bottom of Snappy's drawer, and anything that is not an explicit yes is a
-//! no — refused, the drawer closed (or not open), or no answer within 15
-//! minutes.
+//! Every call, reads included, waits for the user's confirmation. It is a
+//! barrier on this side, not Claude's permission prompt: the call is held,
+//! a card shows at the bottom of Snappy's drawer, and anything that is not
+//! an explicit yes is a no — refused, the drawer closed (or not open), or
+//! no answer within 15 minutes.
 //!
 //! Every result goes through the privacy filter. Long operations (starting
 //! a print, which uploads it first) answer at once with a task id, which
@@ -32,8 +32,9 @@ pub struct Tool {
     pub description: &'static str,
     /// The parameters' JSON schema (`inputSchema`).
     pub params: fn() -> Value,
-    /// Held for the user's explicit yes.
-    pub approval: bool,
+    /// Only reads (for the MCP annotations); every call is confirmed all
+    /// the same.
+    pub reads: bool,
     /// What the confirmation card says, the names resolved: also where the
     /// arguments are checked, before anyone is asked.
     pub ask: fn(&Value) -> Result<String>,
@@ -44,88 +45,84 @@ fn no_params() -> Value {
     json!({ "type": "object", "properties": {} })
 }
 
-fn no_ask(_: &Value) -> Result<String> {
-    Ok(String::new())
-}
-
 pub static TOOLS: &[Tool] = &[
     Tool {
         name: "printers",
         description: "The user's printers by display name: model, whether online, state (standby, printing, paused…), the current print's progress and time left, temperatures, loaded filaments.",
         params: no_params,
-        approval: false,
-        ask: no_ask,
+        reads: true,
+        ask: ask_printers,
         run: printers,
     },
     Tool {
         name: "printer_files",
         description: "Print files stored on one printer, newest first: name, size, date, estimated time, filament.",
         params: printer_param,
-        approval: false,
-        ask: no_ask,
+        reads: true,
+        ask: ask_printer_files,
         run: printer_files,
     },
     Tool {
         name: "local_files",
         description: "Files shown in Snap Studio's Files view (the folder the user browses), by name.",
         params: no_params,
-        approval: false,
-        ask: no_ask,
+        reads: true,
+        ask: ask_local_files,
         run: local_files,
     },
     Tool {
         name: "slice_summary",
         description: "What Prepare holds now: the printer and presets chosen, the quick settings (layer height, infill, walls, supports, brim), and the last slice's estimates when there is one.",
         params: no_params,
-        approval: false,
-        ask: no_ask,
+        reads: true,
+        ask: ask_slice_summary,
         run: slice_summary,
     },
     Tool {
         name: "print_queue",
         description: "Known prints: queued, printing and past ones, with their printer, state and estimates. A queued print's id starts it with start_queued_print.",
         params: no_params,
-        approval: false,
-        ask: no_ask,
+        reads: true,
+        ask: ask_print_queue,
         run: print_queue,
     },
     Tool {
         name: "memory_read",
         description: "Your memory (MEMORY.md), as saved.",
         params: no_params,
-        approval: false,
-        ask: no_ask,
+        reads: true,
+        ask: ask_memory_read,
         run: memory_read,
     },
     Tool {
         name: "memory_write",
         description: "Replaces your memory (MEMORY.md) with `content`, Markdown, at most about 200 lines / 24 KB. Never serial numbers, addresses, hostnames or file paths.",
         params: memory_params,
-        approval: false,
-        ask: no_ask,
+        reads: true,
+        ask: ask_memory_write,
         run: memory_write,
     },
     Tool {
         name: "task_status",
         description: "State of a long operation started by another tool: running, done (with its result), failed (with why) or cancelled.",
         params: task_param,
-        approval: false,
-        ask: no_ask,
+        reads: true,
+        ask: ask_task_status,
         run: task_status,
     },
     Tool {
         name: "task_cancel",
         description: "Cancels a long operation that is still running.",
         params: task_param,
-        approval: false,
-        ask: no_ask,
+        reads: true,
+        ask: ask_task_cancel,
         run: task_cancel,
     },
     Tool {
         name: "apply_slice_setting",
         description: "Changes one of Prepare's quick settings for the next slices: infill (percent, 0-100), walls (count, 1-10), supports (true/false) or brim (true/false). The user confirms it.",
         params: setting_params,
-        approval: true,
+        reads: false,
         ask: ask_setting,
         run: apply_setting,
     },
@@ -133,7 +130,7 @@ pub static TOOLS: &[Tool] = &[
         name: "start_queued_print",
         description: "Starts a queued print (by its id from print_queue) on its printer; the bed must be clear. The user confirms it. Answers with a task id.",
         params: job_param,
-        approval: true,
+        reads: false,
         ask: ask_start_job,
         run: start_job,
     },
@@ -141,17 +138,25 @@ pub static TOOLS: &[Tool] = &[
         name: "print_printer_file",
         description: "Starts printing a file already stored on a printer (names from printer_files). The user confirms it. Answers with a task id.",
         params: printer_file_params,
-        approval: true,
+        reads: false,
         ask: ask_print_file,
         run: print_file,
     },
     Tool {
         name: "delete_printer_file",
-        description: "Deletes a print file stored on a printer (names from printer_files). The user confirms it.",
+        description: "Deletes a print file stored on a printer (names from printer_files). For a file on this computer, use delete_local_file. The user confirms it.",
         params: printer_file_params,
-        approval: true,
+        reads: false,
         ask: ask_delete_file,
         run: delete_file,
+    },
+    Tool {
+        name: "delete_local_file",
+        description: "Moves a file of this computer to the Trash, by its name as local_files lists it (the Files view). For a file stored on a printer, use delete_printer_file. The user confirms it.",
+        params: local_file_param,
+        reads: false,
+        ask: ask_delete_local,
+        run: delete_local,
     },
 ];
 
@@ -168,7 +173,7 @@ pub fn list() -> Vec<Value> {
                 "name": t.name,
                 "description": t.description,
                 "inputSchema": (t.params)(),
-                "annotations": { "readOnlyHint": !t.approval, "destructiveHint": t.approval },
+                "annotations": { "readOnlyHint": t.reads, "destructiveHint": !t.reads },
             })
         })
         .collect()
@@ -178,7 +183,7 @@ pub fn list() -> Vec<Value> {
 pub fn call(name: &str, args: &Value) -> Result<Value> {
     let tool = find(name).ok_or_else(|| anyhow!("unknown tool: {name}"))?;
     let card = (tool.ask)(args)?;
-    if tool.approval && !approve(tool.name, &card) {
+    if !approve(tool.name, &card) {
         return Err(anyhow!("The user did not approve this action ({card}). Nothing was done."));
     }
     let out = (tool.run)(args)?;
@@ -222,6 +227,12 @@ fn approve(tool: &str, card: &str) -> bool {
     approvals().lock().unwrap().remove(&id);
     emit("snappy-approval-done", json!({ "id": id, "approved": yes }));
     yes
+}
+
+/// The cards waiting for an answer.
+#[cfg(test)]
+pub(crate) fn waiting() -> Vec<String> {
+    approvals().lock().unwrap().keys().cloned().collect()
 }
 
 /// The user's answer to a card.
@@ -612,6 +623,78 @@ fn delete_file(args: &Value) -> Result<Value> {
     }
 }
 
+// ------------------------------------------------------------ cards of the reads
+
+fn ask_printers(_: &Value) -> Result<String> {
+    Ok(crate::t!("snappy.ask.printers"))
+}
+
+fn ask_printer_files(args: &Value) -> Result<String> {
+    let p = printer_named(str_arg(args, "printer")?)?;
+    Ok(crate::t!("snappy.ask.printer_files", printer = p.name))
+}
+
+fn ask_local_files(_: &Value) -> Result<String> {
+    Ok(crate::t!("snappy.ask.local_files"))
+}
+
+fn ask_slice_summary(_: &Value) -> Result<String> {
+    Ok(crate::t!("snappy.ask.slice_summary"))
+}
+
+fn ask_print_queue(_: &Value) -> Result<String> {
+    Ok(crate::t!("snappy.ask.print_queue"))
+}
+
+fn ask_memory_read(_: &Value) -> Result<String> {
+    Ok(crate::t!("snappy.ask.memory_read"))
+}
+
+fn ask_memory_write(args: &Value) -> Result<String> {
+    args["content"].as_str().ok_or_else(|| anyhow!("missing `content`"))?;
+    Ok(crate::t!("snappy.ask.memory_write"))
+}
+
+fn ask_task_status(args: &Value) -> Result<String> {
+    let id = str_arg(args, "task")?;
+    let what = tasks().lock().unwrap().get(id).map(|t| t.label.clone()).ok_or_else(|| anyhow!("unknown task: {id}"))?;
+    Ok(crate::t!("snappy.ask.task_status", what = what))
+}
+
+fn ask_task_cancel(args: &Value) -> Result<String> {
+    let id = str_arg(args, "task")?;
+    let what = tasks().lock().unwrap().get(id).map(|t| t.label.clone()).ok_or_else(|| anyhow!("unknown task: {id}"))?;
+    Ok(crate::t!("snappy.ask.task_cancel", what = what))
+}
+
+// ------------------------------------------------------------ local files
+
+fn local_file_param() -> Value {
+    json!({ "type": "object", "properties": { "file": { "type": "string", "description": "The file's name, as local_files lists it." } }, "required": ["file"] })
+}
+
+/// A file of the Files view, by its name: its path stays on this side.
+fn local_file(args: &Value) -> Result<(String, std::path::PathBuf)> {
+    let name = str_arg(args, "file")?;
+    let v = ui_call("local_file", json!({ "name": name }))?;
+    let path = v["path"].as_str().filter(|p| !p.is_empty()).ok_or_else(|| anyhow!("no file named “{name}” in the Files view"))?;
+    Ok((name.to_string(), std::path::PathBuf::from(path)))
+}
+
+fn ask_delete_local(args: &Value) -> Result<String> {
+    let (name, _) = local_file(args)?;
+    Ok(crate::t!("snappy.ask.delete_local_file", file = name))
+}
+
+fn delete_local(args: &Value) -> Result<Value> {
+    let (name, path) = local_file(args)?;
+    if !path.is_file() {
+        return Err(anyhow!("“{name}” is no longer there"));
+    }
+    trash::delete(&path)?;
+    Ok(json!({ "trashed": name }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -635,26 +718,20 @@ mod tests {
     }
 
     #[test]
-    fn what_cannot_be_undone_needs_approval() {
-        let approved: Vec<&str> = TOOLS.iter().filter(|t| t.approval).map(|t| t.name).collect();
-        assert_eq!(approved, ["apply_slice_setting", "start_queued_print", "print_printer_file", "delete_printer_file"]);
-        for t in TOOLS.iter().filter(|t| !t.approval) {
-            assert!(
-                [
-                    "printers",
-                    "printer_files",
-                    "local_files",
-                    "slice_summary",
-                    "print_queue",
-                    "memory_read",
-                    "memory_write",
-                    "task_status",
-                    "task_cancel"
-                ]
-                .contains(&t.name),
-                "{} acts without approval",
-                t.name
-            );
+    fn only_actions_are_marked_destructive() {
+        let acts: Vec<&str> = TOOLS.iter().filter(|t| !t.reads).map(|t| t.name).collect();
+        assert_eq!(acts, ["apply_slice_setting", "start_queued_print", "print_printer_file", "delete_printer_file", "delete_local_file"]);
+    }
+
+    /// Every call, reads included, waits for a yes: with the drawer
+    /// closed, nothing runs.
+    #[test]
+    fn every_tool_asks_first() {
+        let _turn = DRAWER.lock().unwrap_or_else(|e| e.into_inner());
+        set_drawer(false);
+        for (name, args) in [("print_queue", json!({})), ("memory_read", json!({})), ("printers", json!({}))] {
+            let e = call(name, &args).unwrap_err();
+            assert!(e.to_string().contains("did not approve"), "{name}: {e}");
         }
     }
 

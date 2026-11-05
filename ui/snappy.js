@@ -315,6 +315,7 @@ listen("snappy-ui", (e) => {
   try {
     if (method === "slice_summary") result = snappyPrepare();
     else if (method === "local_files") result = snappyLocalFiles(state.view_files);
+    else if (method === "local_file") result = snappyLocalFile(state.view_files, args?.name);
     else if (method === "apply_setting") result = snappyApply(args || {});
     else result = { error: "unknown request: " + method };
   } catch (err) {
@@ -322,3 +323,24 @@ listen("snappy-ui", (e) => {
   }
   invoke("snappy_ui_reply", { id, result }).catch(() => {});
 });
+
+/* ------------------------------------------------------------ Settings › AI */
+
+/* Snappy's model: the account's default, or one of the chat's models
+   (ia-chat.js CHAT_MODELS). */
+async function snappyModelFill() {
+  const sel = $("set-snappy-model");
+  const current = await invoke("snappy_model").catch(() => null);
+  sel.innerHTML = [["", tr("chat.model.default")], ...CHAT_MODELS].map(([v, n]) => `<option value="${v}">${esc(n)}</option>`).join("");
+  sel.value = CHAT_MODELS.some(([m]) => m === current) ? current : "";
+}
+
+$("set-snappy-model").addEventListener("change", (e) => {
+  const model = e.target.value || null;
+  invoke("snappy_set_model", { model })
+    .then(() => toast(tr("chat.model.changed", { model: model ? chatModelName(model) : tr("chat.model.default") })))
+    .catch((err) => toast(String(err), true));
+});
+
+snappyModelFill();
+window.addEventListener("langchange", snappyModelFill);

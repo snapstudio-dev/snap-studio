@@ -1621,6 +1621,19 @@ fn snappy_busy() -> bool {
     snappy::is_busy()
 }
 
+/// Snappy's model (Settings › AI); none: the account's default.
+#[tauri::command]
+fn snappy_model() -> Option<String> {
+    snappy::model()
+}
+
+/// Sets Snappy's model; an idle Snappy closes to resume with it: off the
+/// main thread.
+#[tauri::command]
+async fn snappy_set_model(model: Option<String>) -> Result<(), String> {
+    off_main(move || snappy::set_model(model.as_deref().filter(|m| !m.is_empty())).map_err(ui_err)).await
+}
+
 /// The drawer opened or closed: closed, what waits for approval is refused.
 #[tauri::command]
 fn snappy_drawer(open: bool) {
@@ -2217,6 +2230,8 @@ pub fn run() {
             snappy_send,
             snappy_stop,
             snappy_busy,
+            snappy_model,
+            snappy_set_model,
             snappy_drawer,
             snappy_approve,
             snappy_ui_reply,

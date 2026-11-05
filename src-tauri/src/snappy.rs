@@ -74,8 +74,9 @@ printers (preparing, slicing, sending and following prints).\n\
 - Answer in the user's language ({lang} unless they write in another one). In French, address the user as « vous ».\n\
 - Be brief and concrete. You act on the workshop only through the snap-studio tools; describe what you will do \
 before an action.\n\
-- Actions that cannot be undone (starting or sending a print, deleting a file, changing slice settings) ask the user \
-for confirmation in the app. A refusal, a closed panel or no answer means no: say so, and do not retry unless asked.\n\
+- Every tool you use asks the user for confirmation in the app first, reads included. A refusal, a closed panel or \
+no answer means no: say so, and do not retry unless asked. Use only the tools the request needs.\n\
+- Files stored on a printer and files on this computer are different things: when a request does not say which, ask.\n\
 - Long operations return a task id: follow it with the task tools, or cancel it.\n\
 - Printers and files are named by their display names. Never ask for, repeat or store serial numbers, IP \
 addresses, hostnames or file paths.\n\
@@ -159,14 +160,56 @@ pub fn history() -> Vec<Value> {
 
 /// Snappy's Claude session id, kept across launches.
 fn session_id() -> String {
-    let saved = std::fs::read(state_path()).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok());
-    if let Some(id) = saved.as_ref().and_then(|v| v["session_id"].as_str()).filter(|s| uuid::Uuid::parse_str(s).is_ok()) {
+    let mut st = state();
+    if let Some(id) = st["session_id"].as_str().filter(|s| uuid::Uuid::parse_str(s).is_ok()) {
         return id.to_string();
     }
     let id = uuid::Uuid::new_v4().to_string();
-    let _ = crate::util::write_atomic(&state_path(), json!({ "session_id": id }).to_string().as_bytes());
+    st["session_id"] = json!(id);
+    save_state(&st);
     id
 }
+
+/// What Snappy keeps besides its conversation: its session id, its model.
+fn state() -> Value {
+    std::fs::read(state_path())
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+        .filter(Value::is_object)
+        .unwrap_or_else(|| json!({}))
+}
+
+fn save_state(st: &Value) {
+    let _ = crate::util::write_atomic(&state_path(), st.to_string().as_bytes());
+}
+
+/// Snappy's model (Settings › AI); none: the account's default.
+pub fn model() -> Option<String> {
+    state()["model"].as_str().filter(|m| crate::chat::MODELS.contains(m)).map(String::from)
+}
+
+/// Sets Snappy's model. A running Snappy closes so its next message
+/// resumes with it — at once when idle, once its answer ends otherwise.
+pub fn set_model(model: Option<&str>) -> Result<()> {
+    if let Some(m) = model {
+        if !crate::chat::MODELS.contains(&m) {
+            return Err(anyhow!("unknown model: {m}"));
+        }
+    }
+    let mut st = state();
+    st["model"] = model.map(|m| json!(m)).unwrap_or(Value::Null);
+    save_state(&st);
+    if claude_pty::is_busy(KEY) {
+        RESTART.store(true, std::sync::atomic::Ordering::SeqCst);
+    } else if claude_pty::is_open(KEY) {
+        crate::snappy_tools::refuse_all();
+        claude_pty::close(KEY);
+    }
+    Ok(())
+}
+
+/// Close once the answer ends (the model changed meanwhile).
+static RESTART: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// The app's handle, for the events and the tools.
 static APP: OnceLock<AppHandle> = OnceLock::new();
@@ -199,6 +242,9 @@ fn listener() -> claude_pty::Listener {
         if event["type"] == "exited" {
             crate::snappy_tools::refuse_all();
         }
+        if event["type"] == "result" && RESTART.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            std::thread::spawn(|| claude_pty::close(KEY));
+        }
         if !matches!(event["type"].as_str(), Some("exited" | "auth_failed")) {
             log_append(std::slice::from_ref(&event));
         }
@@ -209,9 +255,9 @@ fn listener() -> claude_pty::Listener {
 /// How Snappy's Claude starts: host Claude in Snappy's folder, none of its
 /// own tools, the app's MCP server only (its config in a `0600` file),
 /// whose tools need no prompt — the approvals are the server's.
-pub fn launch(claude: &Path, mcp_config: &Path, session_id: &str, resume: bool, prompt: String, lang: &str) -> Launch {
+pub fn launch(claude: &Path, mcp_config: &Path, session_id: &str, resume: bool, prompt: String, lang: &str, model: Option<&str>) -> Launch {
     let dir = root();
-    let args: Vec<String> = vec![
+    let mut args: Vec<String> = vec![
         "--tools".into(),
         String::new(),
         "--disallowedTools".into(),
@@ -226,6 +272,10 @@ pub fn launch(claude: &Path, mcp_config: &Path, session_id: &str, resume: bool, 
         "--append-system-prompt".into(),
         identity(lang),
     ];
+    if let Some(m) = model.filter(|m| crate::chat::MODELS.contains(m)) {
+        args.push("--model".into());
+        args.push(m.to_string());
+    }
     Launch {
         key: KEY.into(),
         program: vec![claude.to_string_lossy().to_string()],
@@ -274,7 +324,7 @@ pub fn send(text: &str, context: &Value) -> Result<()> {
         // waits for the tools, then is typed in, rather than leave as the
         // launch prompt without them.
         crate::snappy_mcp::reset_listed();
-        claude_pty::start(launch(&claude, &mcp, &id, resume, String::new(), &lang), listener(), None)?;
+        claude_pty::start(launch(&claude, &mcp, &id, resume, String::new(), &lang, model().as_deref()), listener(), None)?;
         if !crate::snappy_mcp::wait_listed(MCP_WAIT) {
             eprintln!("[snappy] the tools were not listed in time");
         }
@@ -315,9 +365,23 @@ mod tests {
                 std::thread::sleep(std::time::Duration::from_millis(300));
             }
         };
+        // Every tool asks first: the user says yes to the read.
+        crate::snappy_tools::set_drawer(true);
+        let yes = std::thread::spawn(|| {
+            let end = std::time::Instant::now() + std::time::Duration::from_secs(150);
+            while std::time::Instant::now() < end {
+                if let Some(id) = crate::snappy_tools::waiting().pop() {
+                    crate::snappy_tools::answer(&id, true);
+                    return true;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            false
+        });
         send("Use your memory_read tool, then tell me in one sentence which material I print most.", &json!({ "view": "prepare" }))
             .unwrap();
         wait(1);
+        assert!(yes.join().unwrap(), "the read asked first");
         let h = history();
         let tools: Vec<String> = h
             .iter()
@@ -359,6 +423,7 @@ mod tests {
             false,
             "hi".into(),
             "fr",
+            None,
         );
         let at = l.args.iter().position(|a| a == "--tools").unwrap();
         assert_eq!(l.args[at + 1], "", "no built-in tool");
@@ -375,6 +440,27 @@ mod tests {
         assert!(!argv.iter().any(|a| a.contains("Bearer")));
         assert!(!argv.iter().any(|a| a == "-p" || a == "--print"));
         assert!(l.cwd.ends_with("snap-studio/snappy"));
+        assert!(!l.args.contains(&"--model".to_string()), "the account's default");
+        let m = launch(
+            Path::new("/c"),
+            Path::new("/m"),
+            "11111111-2222-3333-4444-555555555555",
+            false,
+            String::new(),
+            "fr",
+            Some("claude-haiku-4-5-20251001"),
+        );
+        assert!(m.args.windows(2).any(|w| w == ["--model", "claude-haiku-4-5-20251001"]));
+        let bad = launch(
+            Path::new("/c"),
+            Path::new("/m"),
+            "11111111-2222-3333-4444-555555555555",
+            false,
+            String::new(),
+            "fr",
+            Some("--dangerously-skip-permissions"),
+        );
+        assert!(!bad.args.contains(&"--model".to_string()), "only known models");
     }
 
     #[test]

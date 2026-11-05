@@ -16,11 +16,12 @@ with its packages for macOS, Windows and Linux. What comes next:
   appears at the bottom-left; it opens a conversation drawer over the
   current view. Snappy answers about your printers, their files, the print
   queue and what Prepare holds, remembers what matters between
-  conversations, and asks you before anything that cannot be undone
-  (changing a slice setting, starting a print, deleting a file). It uses
-  the Claude already set up for the AI, with none of Claude's own tools,
-  and never sends serial numbers, addresses, hostnames or file paths
-  (#95).
+  conversations, and asks your confirmation before each tool it uses,
+  reads included (changing a slice setting, starting a print, deleting a
+  file on a printer or moving one of yours to the Trash). Its model is
+  set in Settings › AI. It uses the Claude already set up for the AI,
+  with none of Claude's own tools, and never sends serial numbers,
+  addresses, hostnames or file paths (#95).
 - **Anonymous usage count**: Snap Studio sends one anonymous signal at
   start (version, system, language) to count its users, through Aptabase;
   nothing else. A sheet says so at first launch, with a switch to turn it

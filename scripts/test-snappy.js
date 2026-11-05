@@ -50,6 +50,11 @@ assert.strictEqual(S.snappySliceSummary({}).last_slice, undefined);
 const files = Array.from({ length: 5 }, (_, i) => ({ name: `f${i}.stl`, path: `/x/f${i}.stl` }));
 assert.deepStrictEqual(S.snappyLocalFiles(files, 3), { files: ["f0.stl", "f1.stl", "f2.stl"], total: 5 });
 
+// A local file by name: its path for the app, an error when unknown or ambiguous.
+assert.deepStrictEqual(S.snappyLocalFile(files, "f1.stl"), { name: "f1.stl", path: "/x/f1.stl" });
+assert.ok(S.snappyLocalFile(files, "nope.stl").error);
+assert.ok(S.snappyLocalFile([...files, { name: "f1.stl", path: "/y/f1.stl" }], "f1.stl").error.includes("several"));
+
 // A setting applied over the remembered ones; unknown ones refused.
 assert.deepStrictEqual(S.snappySimpleWith({ infill: 15, walls: 2 }, "infill", 40), { infill: 40, walls: 2 });
 assert.throws(() => S.snappySimpleWith({}, "speed", 3));
