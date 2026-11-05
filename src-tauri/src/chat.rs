@@ -320,7 +320,7 @@ fn slim_tool_result(content: &Value) -> Value {
 
 /// Message content without what the view never shows: thinking signatures,
 /// image data, tool results beyond the cap.
-fn slim_content(content: &Value) -> Value {
+pub(crate) fn slim_content(content: &Value) -> Value {
     match content {
         Value::Array(blocks) => Value::Array(
             blocks

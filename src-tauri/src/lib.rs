@@ -3,6 +3,7 @@ mod analytics;
 mod auth;
 mod bedmesh;
 mod chat;
+mod claude_pty;
 mod control;
 mod discover;
 mod engine;
