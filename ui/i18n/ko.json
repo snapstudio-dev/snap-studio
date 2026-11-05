@@ -1074,7 +1074,7 @@
   "settings.snappy.model": "Snappy 모델",
   "settings.snappy.model.sub": "작업장 도우미의 Claude 모델",
   "settings.snappy.context": "대화",
-  "settings.snappy.context.sub": "Snappy의 컨텍스트 사용량. 새 대화는 메모리를 제외한 모든 것을 잊습니다.",
+  "settings.snappy.context.sub": "Snappy의 컨텍스트 사용량. 한도에 가까워지면 Claude가 대화를 스스로 요약하고 계속합니다. 새 대화는 메모리를 제외한 모든 것을 잊습니다.",
   "settings.snappy.context_aria": "사용된 컨텍스트",
   "settings.snappy.context_use": "{pct}% 사용 · {used} / {window} 토큰",
   "settings.snappy.reset": "새 대화",

@@ -1106,7 +1106,7 @@
   "settings.snappy.model": "Snappys Modell",
   "settings.snappy.model.sub": "Das Claude-Modell des Werkstattassistenten",
   "settings.snappy.context": "Gespräch",
-  "settings.snappy.context.sub": "Wie voll Snappys Kontext ist. Ein neues Gespräch vergisst alles außer seinem Gedächtnis.",
+  "settings.snappy.context.sub": "Wie voll Snappys Kontext ist. Nahe der Grenze fasst Claude das Gespräch selbst zusammen und macht weiter; ein neues Gespräch vergisst alles außer seinem Gedächtnis.",
   "settings.snappy.context_aria": "Genutzter Kontext",
   "settings.snappy.context_use": "{pct} % genutzt · {used} / {window} Token",
   "settings.snappy.reset": "Neues Gespräch",

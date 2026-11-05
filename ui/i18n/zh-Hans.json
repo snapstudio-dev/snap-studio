@@ -1074,7 +1074,7 @@
   "settings.snappy.model": "Snappy 的模型",
   "settings.snappy.model.sub": "工坊助手使用的 Claude 模型",
   "settings.snappy.context": "对话",
-  "settings.snappy.context.sub": "Snappy 上下文的占用情况。新对话会忘记除记忆以外的一切。",
+  "settings.snappy.context.sub": "Snappy 上下文的占用情况。接近上限时，Claude 会自动总结对话并继续；新对话会忘记除记忆以外的一切。",
   "settings.snappy.context_aria": "已用上下文",
   "settings.snappy.context_use": "已用 {pct}% · {used} / {window} 个 token",
   "settings.snappy.reset": "新对话",

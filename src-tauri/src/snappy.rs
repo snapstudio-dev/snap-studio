@@ -336,11 +336,31 @@ pub fn send(text: &str, context: &Value) -> Result<()> {
 
 // ------------------------------------------------------------ usage, reset
 
-/// Claude's context window, in tokens.
-pub const CONTEXT_WINDOW: u64 = 200_000;
+/// A model's context window, in tokens: 1M for the current Opus, Sonnet
+/// and Fable models, 200k for Haiku 4.5 and older ones.
+pub fn context_window(model: &str) -> u64 {
+    const MILLION: [&str; 8] = [
+        "claude-opus-5",
+        "claude-sonnet-5",
+        "claude-fable-5",
+        "claude-mythos-5",
+        "claude-opus-4-6",
+        "claude-opus-4-7",
+        "claude-opus-4-8",
+        "claude-sonnet-4-6",
+    ];
+    if model.contains("[1m]") || MILLION.iter().any(|m| model.starts_with(m)) {
+        1_000_000
+    } else {
+        200_000
+    }
+}
 
 /// How full the conversation's context is: what the last answer was given
-/// (its input, cache reads and writes), as Claude's transcript records it.
+/// (its input, cache reads and writes), as Claude's transcript records it,
+/// against the window of the model that answered. Near the window, Claude
+/// Code summarizes the conversation by itself (auto-compaction) and goes
+/// on: the use then drops.
 #[derive(serde::Serialize, Debug, PartialEq)]
 pub struct Usage {
     pub used: u64,
@@ -349,13 +369,17 @@ pub struct Usage {
     pub percent: f64,
 }
 
-/// The context use of the last answer in a transcript.
+/// The context use of the last answer in a transcript. Without a model in
+/// it, Snappy's own (Settings), else 200k.
 pub fn usage_of(transcript: &str) -> Usage {
-    let used = transcript
+    let last = transcript
         .lines()
         .rev()
         .filter_map(|l| serde_json::from_str::<Value>(l).ok())
-        .find(|r| r["type"] == "assistant" && r["isSidechain"] != true && r["message"]["usage"].is_object())
+        .find(|r| r["type"] == "assistant" && r["isSidechain"] != true && r["message"]["usage"].is_object());
+    let model = last.as_ref().and_then(|r| r["message"]["model"].as_str().map(String::from)).or_else(model).unwrap_or_default();
+    let window = context_window(&model);
+    let used = last
         .map(|r| {
             let u = &r["message"]["usage"];
             ["input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "output_tokens"]
@@ -364,7 +388,7 @@ pub fn usage_of(transcript: &str) -> Usage {
                 .sum()
         })
         .unwrap_or(0);
-    Usage { used, window: CONTEXT_WINDOW, percent: (used as f64 * 100.0 / CONTEXT_WINDOW as f64).min(100.0) }
+    Usage { used, window, percent: (used as f64 * 100.0 / window as f64).min(100.0) }
 }
 
 /// Snappy's conversation's context use.
@@ -544,9 +568,17 @@ mod tests {
         );
         let u = usage_of(t);
         assert_eq!(u.used, 22_200, "the last answer of the main thread");
-        assert!((u.percent - 11.1).abs() < 1e-9);
         assert_eq!(usage_of("").percent, 0.0);
-        assert_eq!(usage_of(r#"{"type":"assistant","message":{"usage":{"input_tokens":900000}}}"#).percent, 100.0, "capped");
+        let haiku = usage_of(r#"{"type":"assistant","message":{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":22200}}}"#);
+        assert_eq!(haiku.window, 200_000);
+        assert!((haiku.percent - 11.1).abs() < 1e-9);
+        let full = usage_of(r#"{"type":"assistant","message":{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":900000}}}"#);
+        assert_eq!(full.percent, 100.0, "capped");
+        let opus = usage_of(r#"{"type":"assistant","message":{"model":"claude-opus-5-5","usage":{"input_tokens":250000}}}"#);
+        assert_eq!((opus.window, opus.percent), (1_000_000, 25.0), "a 1M window");
+        assert_eq!(context_window("claude-sonnet-5-5"), 1_000_000);
+        assert_eq!(context_window("claude-fable-5-1"), 1_000_000);
+        assert_eq!(context_window("claude-sonnet-5-5[1m]"), 1_000_000);
     }
 
     #[test]

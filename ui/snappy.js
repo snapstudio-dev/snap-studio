@@ -444,7 +444,7 @@ async function snappyUsageFill() {
   meter.classList.toggle("mid", u.percent >= 60 && u.percent < 85);
   meter.classList.toggle("high", u.percent >= 85);
   meter.setAttribute("aria-valuenow", String(pct));
-  const k = (n) => (n >= 1000 ? Math.round(n / 1000) + " k" : String(n));
+  const k = (n) => (n >= 1e6 ? +(n / 1e6).toFixed(1) + " M" : n >= 1000 ? Math.round(n / 1000) + " k" : String(n));
   $("snappy-meter-text").textContent = tr("settings.snappy.context_use", { pct, used: k(u.used), window: k(u.window) });
 }
 

@@ -1074,7 +1074,7 @@
   "settings.snappy.model": "Snappy のモデル",
   "settings.snappy.model.sub": "ワークショップアシスタントの Claude モデル",
   "settings.snappy.context": "会話",
-  "settings.snappy.context.sub": "Snappy のコンテキストの使用量。新しい会話ではメモリー以外はすべて忘れます。",
+  "settings.snappy.context.sub": "Snappy のコンテキストの使用量。上限に近づくと Claude が会話を自動で要約して続けます。新しい会話ではメモリー以外はすべて忘れます。",
   "settings.snappy.context_aria": "使用中のコンテキスト",
   "settings.snappy.context_use": "{pct} % 使用 · {used} / {window} トークン",
   "settings.snappy.reset": "新しい会話",

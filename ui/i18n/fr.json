@@ -1106,7 +1106,7 @@
   "settings.snappy.model": "Modèle de Snappy",
   "settings.snappy.model.sub": "Le modèle Claude de l'assistant d'atelier",
   "settings.snappy.context": "Conversation",
-  "settings.snappy.context.sub": "Le remplissage du contexte de Snappy. Une nouvelle conversation oublie tout, sauf sa mémoire.",
+  "settings.snappy.context.sub": "Le remplissage du contexte de Snappy. Près de la limite, Claude résume lui-même la conversation et continue ; une nouvelle conversation oublie tout, sauf sa mémoire.",
   "settings.snappy.context_aria": "Contexte utilisé",
   "settings.snappy.context_use": "{pct} % utilisés · {used} / {window} tokens",
   "settings.snappy.reset": "Nouvelle conversation",

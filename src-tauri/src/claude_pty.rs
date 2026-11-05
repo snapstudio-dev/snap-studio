@@ -428,6 +428,9 @@ pub fn record(line: &str, slim: &dyn Fn(&Value) -> Value) -> Record {
                 "message": { "id": r["message"]["id"], "content": slim(content), "usage": r["message"]["usage"] },
             }))
         }
+        // Claude's own summary when it compacts a long conversation: not a
+        // prompt of the user's, and not to show.
+        Some("user") if r["isCompactSummary"] == true || r["isVisibleInTranscriptOnly"] == true => Record::Nothing,
         Some("user") => {
             let content = &r["message"]["content"];
             if text_of(content).starts_with(INTERRUPTED) {
@@ -1259,6 +1262,10 @@ mod tests {
     fn a_prompt_record_carries_its_id() {
         let id = |c: &Value| c.clone();
         assert_eq!(record(r#"{"type":"user","promptId":"p1","message":{"content":"hi"}}"#, &id), Record::Prompt("p1".into()));
+        // A compaction's summary, as Claude Code 2.1.286 writes it: no prompt.
+        let summary = r#"{"type":"user","promptId":"p2","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"content":"This session is being continued…"}}"#;
+        assert_eq!(record(summary, &id), Record::Nothing);
+        assert_eq!(record(r#"{"type":"system","subtype":"compact_boundary"}"#, &id), Record::Nothing);
     }
 
     #[test]

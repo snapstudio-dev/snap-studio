@@ -1103,7 +1103,7 @@
   "settings.snappy.model": "Snappy's model",
   "settings.snappy.model.sub": "The Claude model of the workshop assistant",
   "settings.snappy.context": "Conversation",
-  "settings.snappy.context.sub": "How full Snappy's context is. A new conversation forgets everything but its memory.",
+  "settings.snappy.context.sub": "How full Snappy's context is. Near the limit, Claude summarizes the conversation by itself and goes on; a new conversation forgets everything but its memory.",
   "settings.snappy.context_aria": "Context used",
   "settings.snappy.context_use": "{pct} % used · {used} / {window} tokens",
   "settings.snappy.reset": "New Conversation",

@@ -1106,7 +1106,7 @@
   "settings.snappy.model": "Modelo do Snappy",
   "settings.snappy.model.sub": "O modelo Claude do assistente de oficina",
   "settings.snappy.context": "Conversa",
-  "settings.snappy.context.sub": "O quanto o contexto do Snappy está cheio. Uma nova conversa esquece tudo, menos a memória dele.",
+  "settings.snappy.context.sub": "O quanto o contexto do Snappy está cheio. Perto do limite, o Claude resume a conversa sozinho e continua; uma nova conversa esquece tudo, menos a memória dele.",
   "settings.snappy.context_aria": "Contexto usado",
   "settings.snappy.context_use": "{pct} % usado · {used} / {window} tokens",
   "settings.snappy.reset": "Nova conversa",
