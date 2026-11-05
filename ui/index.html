@@ -98,14 +98,16 @@
 <main id="content" class="content">
 <!-- Snappy, the workshop assistant (snappy.js): a nameless icon at the
      content's bottom-left, always there (faded when something else sits
-     there), and its drawer over the view. -->
+     there), and its conversation, a card floating above it. -->
 <button id="snappy-fab" class="snappy-fab hidden" type="button" title="Ask Snappy" data-i18n-title="snappy.open" aria-label="Ask Snappy" data-i18n-aria="snappy.open">
   <span class="snappy-av" id="snappy-fab-av"></span>
 </button>
 <section id="snappy" class="snappy-drawer hidden" aria-label="Snappy">
-  <div class="snappy-head">
-    <span class="snappy-avatar snappy-av" id="snappy-head-av"></span>
-    <div class="snappy-title"><b>Snappy</b><span data-i18n="snappy.subtitle">One ongoing conversation</span></div>
+  <div class="snappy-corner">
+    <button id="snappy-wide" class="snappy-x" type="button" title="Widen the conversation" data-i18n-title="snappy.wider">
+      <svg class="widen" viewBox="0 0 24 24"><path d="M3 12l4-4v3h4v2H7v3zm18 0-4 4v-3h-4v-2h4V8z"/></svg>
+      <svg class="narrow" viewBox="0 0 24 24"><path d="M11 12l-4 4v-3H3v-2h4V8zm2 0 4-4v3h4v2h-4v3z"/></svg>
+    </button>
     <button id="snappy-close" class="snappy-x" type="button" title="Close" data-i18n-title="common.close">
       <svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg>
     </button>

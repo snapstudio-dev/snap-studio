@@ -3,10 +3,11 @@
 
    A nameless icon at the bottom-left of the content, beside the sidebar,
    always there — faded while something else sits at its place, whole
-   again under the pointer; its avatar is alive (snappy-avatar.js). A click
-   fades it out and opens the conversation's drawer over the current view,
-   which stays where it is; a click outside the drawer closes it, and the
-   icon comes back.
+   again under the pointer (and while the conversation is open); its avatar
+   is alive (snappy-avatar.js). A click opens the conversation, a card
+   floating above it over the current view, which stays where it is; the
+   icon or a click outside the card closes it. A corner button doubles the
+   card's width, or brings it back.
 
    One conversation, kept by the app: its past from the log, its events as
    the "snappy-chat" event. Actions that cannot be undone come as cards at
@@ -32,7 +33,7 @@ const snappyAvailable = () => typeof aiChoice !== "function" || aiChoice() !== "
 
 /* ------------------------------------------------------------ the icon */
 
-const SNAP_AV = [snappyAvatar($("snappy-fab-av")), snappyAvatar($("snappy-head-av"))];
+const SNAP_AV = [snappyAvatar($("snappy-fab-av"))];
 const snappyMood = (mood) => SNAP_AV.forEach((a) => a.setMood(mood));
 
 /* Whether something else sits at the icon's place: over it (a sheet, a
@@ -59,19 +60,30 @@ function snappyCovered(fab) {
   return false;
 }
 
-/* Shown unless the drawer is open or the AI is off; faded when covered. */
+/* Shown unless the AI is off; faded when covered, never while its
+   conversation is open (the card sits above it, it speaks). */
 function snappyFabState() {
   const fab = $("snappy-fab");
-  const hide = SNAP.open || !snappyAvailable();
-  if (fab.classList.contains("leaving")) return;
+  const hide = !snappyAvailable();
   fab.classList.toggle("hidden", hide);
-  if (!hide) fab.classList.toggle("dim", snappyCovered(fab));
+  if (!hide) fab.classList.toggle("dim", !SNAP.open && snappyCovered(fab));
 }
 setInterval(snappyFabState, 500);
 window.addEventListener("resize", snappyFabState);
 snappyFabState();
 
-$("snappy-fab").addEventListener("click", snappyOpen);
+/* The icon opens the conversation, and closes it. */
+$("snappy-fab").addEventListener("click", () => (SNAP.open ? snappyClose() : snappyOpen()));
+
+/* Twice as wide, or back: kept for the next openings. */
+function snappyWide(on) {
+  $("snappy").classList.toggle("wide", on);
+  $("snappy-wide").title = tr(on ? "snappy.narrower" : "snappy.wider");
+  localStorage.setItem("snapstudio.snappy.wide", on ? "1" : "");
+}
+$("snappy-wide").addEventListener("click", () => snappyWide(!$("snappy").classList.contains("wide")));
+snappyWide(localStorage.getItem("snapstudio.snappy.wide") === "1");
+window.addEventListener("langchange", () => snappyWide($("snappy").classList.contains("wide")));
 
 /* A click outside the drawer closes it — but not one in a sheet or a
    dialog of the app shown over it (the spool check of a send). */
@@ -89,12 +101,7 @@ document.addEventListener(
 function snappyOpen() {
   if (SNAP.open) return;
   SNAP.open = true;
-  const fab = $("snappy-fab");
-  fab.classList.add("leaving");
-  setTimeout(() => {
-    fab.classList.add("hidden");
-    fab.classList.remove("leaving");
-  }, 160);
+  $("snappy-fab").classList.remove("dim");
   const d = $("snappy");
   d.classList.remove("hidden");
   requestAnimationFrame(() => d.classList.add("in"));
@@ -114,7 +121,7 @@ function snappyClose() {
   // Closed, whatever waited for a yes is refused (snappy_tools.rs).
   invoke("snappy_drawer", { open: false }).catch(() => {});
   for (const id of [...SNAP.cards.keys()]) snappyCardDone(id, false);
-  setTimeout(snappyFabState, 170);
+  snappyFabState();
 }
 
 $("snappy-close").addEventListener("click", snappyClose);
