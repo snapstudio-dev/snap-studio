@@ -87,6 +87,13 @@
       <span class="lbl" data-i18n="whatsnew.title">What's new</span>
     </button>
   </div>
+  <!-- The separator, and Snappy at its right end (snappy.js): the line
+       stops before the avatar. -->
+  <div class="side-sep">
+    <button id="snappy-fab" class="snappy-fab hidden" type="button" title="Ask Snappy" data-i18n-title="snappy.open" aria-label="Ask Snappy" data-i18n-aria="snappy.open">
+      <span class="snappy-av" id="snappy-fab-av"></span>
+    </button>
+  </div>
   <div class="side-footer">
     <button class="side-item" data-view="settings">
       <span class="glyph" style="color: #8E8E93"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg></span>
@@ -96,12 +103,8 @@
   </div>
 </aside>
 <main id="content" class="content">
-<!-- Snappy, the workshop assistant (snappy.js): a nameless icon at the
-     content's bottom-left, always there (faded when something else sits
-     there), and its conversation, a card floating above it. -->
-<button id="snappy-fab" class="snappy-fab hidden" type="button" title="Ask Snappy" data-i18n-title="snappy.open" aria-label="Ask Snappy" data-i18n-aria="snappy.open">
-  <span class="snappy-av" id="snappy-fab-av"></span>
-</button>
+<!-- Snappy's conversation (snappy.js): a card floating beside the sidebar,
+     its bottom level with Snappy's icon. -->
 <section id="snappy" class="snappy-drawer hidden" aria-label="Snappy">
   <div class="snappy-corner">
     <button id="snappy-wide" class="snappy-x" type="button" title="Widen the conversation" data-i18n-title="snappy.wider">

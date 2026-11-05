@@ -1,12 +1,12 @@
 "use strict";
 /* Snappy, the workshop assistant (src-tauri/src/snappy.rs).
 
-   A nameless icon at the bottom-left of the content, beside the sidebar,
-   always there — faded while something else sits at its place, whole
-   again under the pointer (and while the conversation is open); its avatar
-   is alive (snappy-avatar.js). A click opens the conversation, a card
-   floating above it over the current view, which stays where it is; the
-   icon or a click outside the card closes it. A corner button doubles the
+   A nameless icon at the right end of the sidebar's separator, between
+   What's new and Settings, always there; its avatar is alive
+   (snappy-avatar.js). A click opens the conversation, a card floating
+   beside the sidebar over the current view — its bottom level with the
+   icon, a tail pointing at it — and the view stays where it is; the icon
+   or a click outside the card closes it. A corner button doubles the
    card's width, or brings it back.
 
    One conversation, kept by the app: its past from the log, its events as
@@ -36,41 +36,21 @@ const snappyAvailable = () => typeof aiChoice !== "function" || aiChoice() !== "
 const SNAP_AV = [snappyAvatar($("snappy-fab-av"))];
 const snappyMood = (mood) => SNAP_AV.forEach((a) => a.setMood(mood));
 
-/* Whether something else sits at the icon's place: over it (a sheet, a
-   menu), or under it — anything smaller than half the content (a list, a
-   card, a button); the view's own background (a page, the 3D view) does
-   not count. */
-function snappyCovered(fab) {
-  const r = fab.getBoundingClientRect();
-  if (!r.width) return false;
-  const c = $("content").getBoundingClientRect();
-  const big = c.width * c.height * 0.5;
-  for (const [fx, fy] of [[0.5, 0.5], [0.15, 0.15], [0.85, 0.15], [0.15, 0.85], [0.85, 0.85]]) {
-    const list = document.elementsFromPoint(r.left + r.width * fx, r.top + r.height * fy);
-    const at = list.findIndex((el) => fab.contains(el));
-    if (at !== 0) return true;
-    for (const el of list.slice(1)) {
-      if (fab.contains(el)) continue;
-      if (el === document.body || el === document.documentElement) break;
-      if (getComputedStyle(el).opacity === "0") continue;
-      const b = el.getBoundingClientRect();
-      if (b.width * b.height < big) return true;
-    }
-  }
-  return false;
-}
-
-/* Shown unless the AI is off; faded when covered, never while its
-   conversation is open (the card sits above it, it speaks). */
+/* Shown unless the AI is off. */
 function snappyFabState() {
-  const fab = $("snappy-fab");
-  const hide = !snappyAvailable();
-  fab.classList.toggle("hidden", hide);
-  if (!hide) fab.classList.toggle("dim", !SNAP.open && snappyCovered(fab));
+  $("snappy-fab").classList.toggle("hidden", !snappyAvailable());
 }
-setInterval(snappyFabState, 500);
-window.addEventListener("resize", snappyFabState);
+setInterval(snappyFabState, 1000);
 snappyFabState();
+
+/* The card's bottom level with the icon, wherever the sidebar puts it. */
+function snappyPlace() {
+  const f = $("snappy-fab").getBoundingClientRect();
+  const c = $("content").getBoundingClientRect();
+  if (!f.height) return;
+  $("snappy").style.bottom = Math.max(14, Math.round(c.bottom - f.bottom)) + "px";
+}
+window.addEventListener("resize", () => SNAP.open && snappyPlace());
 
 /* The icon opens the conversation, and closes it. */
 $("snappy-fab").addEventListener("click", () => (SNAP.open ? snappyClose() : snappyOpen()));
@@ -101,7 +81,7 @@ document.addEventListener(
 function snappyOpen() {
   if (SNAP.open) return;
   SNAP.open = true;
-  $("snappy-fab").classList.remove("dim");
+  snappyPlace();
   const d = $("snappy");
   d.classList.remove("hidden");
   requestAnimationFrame(() => d.classList.add("in"));

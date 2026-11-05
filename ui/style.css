@@ -1030,7 +1030,12 @@ body:has(#view-prepare:not(.hidden)) .toast.out { transform: translateY(-12px); 
 .sidebar.inactive .side-item.on .count { color: var(--text-secondary); opacity: 1; }
 .side-add { color: var(--text-secondary); }
 .side-add:hover { color: var(--text); background: transparent; }
-.side-footer { padding: 8px 10px 12px; border-top: 1px solid var(--separator); }
+.side-footer { padding: 8px 10px 12px; }
+/* The separator above Settings, with Snappy's avatar at its right end: the
+   line stops short of it (and runs full width when Snappy is off). */
+.side-sep { position: relative; flex: none; height: 1px; margin: 0 12px; }
+.side-sep::before { content: ""; position: absolute; left: -12px; right: 54px; top: 0; height: 1px; background: var(--separator); }
+.side-sep:has(.snappy-fab.hidden)::before { right: -12px; }
 
 /* What's new, above the separator: a card while the installed version's
    page is unopened, then a plain line like the others. */
@@ -5436,26 +5441,25 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .modal-actions .btn.link { background: none; border-color: transparent; box-shadow: none; color: var(--accent); }
 
 /* ---------- Snappy (snappy.js) ---------- */
-/* The icon: only the avatar, no plate, at the content's bottom-left (just
-   right of the sidebar), always there; faded while something else sits
-   at its place (over or under it), whole again under the pointer. */
+/* The icon: only the avatar, no plate, at the right end of the sidebar's
+   separator, centered on its line. */
 .snappy-fab {
   position: absolute;
-  left: 14px;
-  bottom: 14px;
-  z-index: 70;
-  width: 42px;
-  height: 42px;
+  right: 0;
+  top: 0;
+  translate: 0 -50%;
+  z-index: 2;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: 0;
   background: none;
   cursor: pointer;
-  transition: opacity 180ms ease, transform 160ms ease;
+  transition: transform 160ms ease;
 }
-.snappy-fab .snv { filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.28)); }
+.snappy-fab .snv { filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.22)); }
 .snappy-fab:hover { transform: scale(1.06); }
 .snappy-fab:active { transform: scale(0.97); }
-.snappy-fab.dim:not(:hover):not(:focus-visible) { opacity: 0.25; }
 .snappy-fab:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 12px; }
 
 /* The avatar (snappy-avatar.js), in CSS 3D: 1 em is one unit of its
@@ -5486,12 +5490,13 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .snappy-meter.high i { background: var(--danger); }
 .snappy-meter-text { display: block; font-size: 11px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 
-/* The conversation: a card floating above the icon, apart from the
-   sidebar, its corner buttons over the messages. Twice as wide on demand. */
+/* The conversation: a card floating beside the sidebar, apart from it,
+   its bottom level with the icon (set by snappy.js) and a tail pointing at
+   it; its corner buttons over the messages. Twice as wide on demand. */
 .snappy-drawer {
   position: absolute;
   left: 14px;
-  bottom: 66px;
+  bottom: 14px;
   top: 14px;
   z-index: 72;
   width: min(380px, calc(100% - 28px));
@@ -5501,13 +5506,24 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
   border: 1px solid var(--separator);
   border-radius: 16px;
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.12);
-  overflow: hidden;
   opacity: 0;
-  transform: translateY(10px) scale(0.97);
-  transform-origin: 21px 100%;
+  transform: translateX(-8px) scale(0.97);
+  transform-origin: 0 calc(100% - 20px);
   transition: opacity 160ms ease, transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), width 220ms ease;
 }
 .snappy-drawer.wide { width: min(760px, calc(100% - 28px)); }
+.snappy-drawer::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  bottom: 13px;
+  width: 14px;
+  height: 14px;
+  background: var(--content-bg);
+  border-left: 1px solid var(--separator);
+  border-bottom: 1px solid var(--separator);
+  transform: rotate(45deg);
+}
 .snappy-drawer.in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) {
   .snappy-fab, .snappy-drawer { transition: none; }
@@ -5635,6 +5651,7 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 }
 :root[data-theme="macos"] .sidebar.inactive .side-item.on { background: color-mix(in srgb, var(--text) 9%, transparent); }
 :root[data-theme="macos"] .side-footer { border-top: 0; }
+:root[data-theme="macos"] .side-sep::before { display: none; }
 
 /* Toolbar: no bar; its groups float as glass capsules. */
 :root[data-theme="macos"] .toolbar { border-bottom: 0; padding-left: 18px; }
