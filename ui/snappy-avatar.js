@@ -69,10 +69,60 @@ function snvWander(seed, t) {
   const SLOT = 1.9;
   const s = Math.floor(t / SLOT);
   const target = (k) =>
-    snvNoise(seed, 1000 + k * 3) < 0.4 ? [0, 0] : [(snvNoise(seed, 1001 + k * 3) * 2 - 1) * 0.6, (snvNoise(seed, 1002 + k * 3) * 2 - 1) * 0.35];
+    snvNoise(seed, 1000 + k * 3) < 0.35 ? [0, 0] : [(snvNoise(seed, 1001 + k * 3) * 2 - 1) * 0.9, (snvNoise(seed, 1002 + k * 3) * 2 - 1) * 0.5];
   const a = target(s - 1), b = target(s);
   const e = snvSmooth((t - s * SLOT) / 0.16);
   return [a[0] + (b[0] - a[0]) * e, a[1] + (b[1] - a[1]) * e];
+}
+
+/* Idle gestures, now and then at random moments: a sway left then right,
+   a look around, a little hop, a curious head tilt, a quick wiggle. Slots
+   of SNV_GESTURE_SLOT s; in each, maybe one gesture, starting at a random
+   point — so they come every 4 to 9 s or so, never on a beat. Returns the
+   pose offsets at `t` (all zero between gestures). */
+const SNV_GESTURE_SLOT = 6.5;
+const SNV_GESTURES = ["sway", "look", "hop", "tilt", "wiggle"];
+function snvGesture(seed, t) {
+  const none = { kind: null, yaw: 0, roll: 0, lift: 0, sx: 1, sy: 1, gazeX: 0 };
+  const slot = Math.floor(t / SNV_GESTURE_SLOT);
+  for (const s of [slot - 1, slot]) {
+    if (snvNoise(seed, 5000 + s * 4) < 0.18) continue;
+    const kind = SNV_GESTURES[Math.floor(snvNoise(seed, 5001 + s * 4) * SNV_GESTURES.length)];
+    const dur = { sway: 2.2, look: 2.6, hop: 0.75, tilt: 1.8, wiggle: 0.9 }[kind];
+    const start = s * SNV_GESTURE_SLOT + snvNoise(seed, 5002 + s * 4) * (SNV_GESTURE_SLOT - dur);
+    const u = (t - start) / dur;
+    if (u <= 0 || u >= 1) continue;
+    const side = snvNoise(seed, 5003 + s * 4) < 0.5 ? -1 : 1;
+    // Eased in and out over the gesture.
+    const env = Math.sin(Math.PI * u);
+    const g = { ...none, kind };
+    if (kind === "sway") {
+      // Left, then right, then back.
+      g.roll = 10 * side * Math.sin(SNV_TAU * u) * env;
+      g.yaw = 0.28 * side * Math.sin(SNV_TAU * u) * env;
+      g.lift = -1.2 * env;
+    } else if (kind === "look") {
+      // One side, a hold, the other side, back.
+      const k = u < 0.4 ? snvSmooth(u / 0.18) : u < 0.8 ? 1 - 2 * snvSmooth((u - 0.4) / 0.2) : -1 + snvSmooth((u - 0.8) / 0.2);
+      g.yaw = 0.6 * side * k;
+      g.gazeX = 0.9 * side * k;
+    } else if (kind === "hop") {
+      const air = 4 * u * (1 - u);
+      g.lift = -6 * air;
+      const land = snvClamp(1 - Math.min(u, 1 - u) / 0.15, 0, 1);
+      g.sy = 1 - 0.1 * land + 0.04 * air;
+      g.sx = 1 + 0.08 * land - 0.02 * air;
+    } else if (kind === "tilt") {
+      // A curious tilt, held, the eyes up the same way.
+      const k = snvSmooth(u / 0.25) * (1 - snvSmooth((u - 0.75) / 0.25));
+      g.roll = 14 * side * k;
+      g.gazeX = 0.4 * side * k;
+    } else {
+      g.roll = 5 * Math.sin(SNV_TAU * 3 * u) * env;
+    }
+    return g;
+  }
+  return none;
 }
 
 /* The thinking turn's angle at `t`: a full eased turn, then a pause. */
@@ -115,16 +165,27 @@ function snvMoodPose({ seed, t: time, mood, gaze, reduced }) {
     pose.squint = 0.3 + 0.1 * wave(3.1);
     if (!reduced) pose.blink = snvBlink(seed, t * 0.7);
   } else {
-    pose.yaw += 0.07 * sway * wave(6.1);
-    pose.pitch += 0.04 * sway * wave(4.7, 1);
-    pose.roll = 1.6 * wave(5.3, 2);
-    pose.lift = reduced ? 0 : -0.45 * (1 - Math.cos((SNV_TAU * t) / 3.4));
+    // Rest, well visible: a sway, a tilt, a float, a breath.
+    pose.yaw += 0.16 * sway * wave(6.1);
+    pose.pitch += 0.08 * sway * wave(4.7, 1);
+    pose.roll = 3.5 * wave(5.3, 2);
+    pose.lift = reduced ? 0 : -1.4 * (1 - Math.cos((SNV_TAU * t) / 3.4));
     const breath = wave(3.4, -Math.PI / 2);
-    pose.sy = 1 + 0.012 * breath;
-    pose.sx = 1 - 0.008 * breath;
+    pose.sy = 1 + 0.03 * breath;
+    pose.sx = 1 - 0.02 * breath;
     if (!reduced) {
       pose.blink = snvBlink(seed, t);
       [pose.gazeX, pose.gazeY] = snvWander(seed, t);
+      // Now and then a gesture, softer while it looks at the pointer.
+      const g = snvGesture(seed, t);
+      if (g.kind) {
+        pose.yaw += g.yaw * sway;
+        pose.roll += g.roll * sway;
+        pose.lift += g.lift;
+        pose.sx *= g.sx;
+        pose.sy *= g.sy;
+        if (g.gazeX) pose.gazeX = g.gazeX;
+      }
     }
   }
 
@@ -208,7 +269,7 @@ function snvEyesSvg(pose) {
     .join("");
 }
 
-if (typeof module !== "undefined") module.exports = { snvMoodPose, snvBlend, snvSpin, snvPointerGaze, snvFollow, snvEyesSvg, SNV_EYES };
+if (typeof module !== "undefined") module.exports = { snvGesture, snvMoodPose, snvBlend, snvSpin, snvPointerGaze, snvFollow, snvEyesSvg, SNV_EYES };
 
 if (typeof document !== "undefined") {
   const AVATARS = new Set();

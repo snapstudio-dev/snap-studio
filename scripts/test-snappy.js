@@ -87,6 +87,28 @@ assert.ok(Math.abs(Math.sin(b.yaw)) < 1e-9 && Math.cos(b.yaw) > 0, "through 0, n
 // Reduced motion: no turn, no lift.
 const r = pose("thinking", { reduced: true });
 assert.ok(Math.abs(r.yaw) < 0.2 && r.lift === 0);
+// Idle gestures: now and then, at random moments, of every kind; none
+// under reduced motion.
+const seen = new Set(), starts = [];
+let was = null;
+for (let t = 0; t < 600; t += 0.05) {
+  const g = A.snvGesture(7, t);
+  if (g.kind && !was) starts.push(t);
+  if (g.kind) seen.add(g.kind);
+  was = g.kind;
+}
+assert.deepStrictEqual([...seen].sort(), ["hop", "look", "sway", "tilt", "wiggle"]);
+const gaps = starts.slice(1).map((s, i) => s - starts[i]);
+assert.ok(Math.min(...gaps) > 0.5 && new Set(gaps.map((g) => g.toFixed(1))).size > 10, "irregular: " + gaps.slice(0, 8));
+assert.ok(starts.length > 60 && starts.length < 130, "every 4 to 9 s or so: " + starts.length);
+// A sway goes one way, then the other.
+let sway = null;
+for (let t = 0; t < 600 && !sway; t += 0.05) if (A.snvGesture(7, t).kind === "sway") sway = t;
+const rolls = [];
+for (let t = sway; A.snvGesture(7, t).kind === "sway"; t += 0.05) rolls.push(A.snvGesture(7, t).roll);
+assert.ok(Math.max(...rolls) > 3 && Math.min(...rolls) < -3, "left and right");
+assert.strictEqual(A.snvMoodPose({ seed: 7, t: sway + 0.5, mood: "idle", reduced: true }).roll, 0, "still under reduced motion");
+
 // The pointer is looked at softly, from the eyes.
 const g = A.snvPointerGaze({ x: 1000, y: 0 }, { left: 0, top: 0, width: 42, height: 42 });
 assert.ok(g.x > 0.99 && g.x <= 1);
