@@ -300,18 +300,40 @@ pub fn verify(engine: &str) -> Check {
         return Check { ok: false, message: crate::util::ui_err(e) };
     }
     let end = Instant::now() + deadline;
-    let decisive = |e: &Value| matches!(e["type"].as_str(), Some("result" | "auth_failed" | "exited"));
+    let key = format!("auth-{id}");
+    let decisive = |e: &Value| matches!(e["type"].as_str(), Some("result" | "exited"));
+    let mut screen_says = None;
     while !got.lock().unwrap().iter().any(decisive) && Instant::now() < end {
+        // Signed out, Claude shows its sign-in (or first-run) screen and
+        // writes nothing: the screen says it.
+        if let Some(why) = signed_out(&crate::claude_pty::screen_text(&crate::claude_pty::screen(&key))) {
+            screen_says = Some(why);
+            break;
+        }
         std::thread::sleep(Duration::from_millis(200));
     }
-    let key = format!("auth-{id}");
     crate::claude_pty::close(&key);
+    // Give a refused sign-in's result its moment after the auth_failed.
+    if got.lock().unwrap().iter().any(|e| e["type"] == "auth_failed") && !got.lock().unwrap().iter().any(decisive) {
+        std::thread::sleep(Duration::from_millis(600));
+    }
     let _ = std::fs::remove_file(crate::ia::session_file_in(&cwd, &id));
+    if let Some(why) = screen_says {
+        return Check { ok: false, message: why };
+    }
     let events = got.lock().unwrap().clone();
-    if !events.iter().any(decisive) {
+    if !events.iter().any(|e| decisive(e) || e["type"] == "auth_failed") {
         return Check { ok: false, message: crate::t!("err.auth_timeout") };
     }
     check_of(&events)
+}
+
+/// What a signed-out Claude's screen says: its sign-in or first-run
+/// screen, or a refused key.
+fn signed_out(screen: &str) -> Option<String> {
+    let flat: String = screen.chars().filter(|c| !c.is_whitespace()).collect::<String>().to_lowercase();
+    let signs = ["selectloginmethod", "pleaserun/login", "notloggedin", "invalidapikey", "choosethetextstyle", "loginwithyourclaude"];
+    signs.iter().any(|s| flat.contains(s)).then(|| crate::t!("auth.check_signed_out"))
 }
 
 /// The engine's launch of a sign-in check, in an empty folder of our own,
@@ -357,6 +379,9 @@ fn check_of(events: &[Value]) -> Check {
             return Check { ok: true, message: crate::t!("auth.check_ok") };
         }
         return Check { ok: false, message: r["result"].as_str().filter(|s| !s.is_empty()).unwrap_or("?").to_string() };
+    }
+    if events.iter().any(|e| e["type"] == "auth_failed") {
+        return Check { ok: false, message: crate::t!("auth.check_signed_out") };
     }
     match events.iter().find(|e| e["type"] == "exited") {
         Some(e) if e["stderr"].as_str().is_some_and(|s| !s.is_empty()) => {
@@ -532,6 +557,16 @@ mod tests {
         let died = check_of(&[json!({ "type": "exited", "code": 1, "stderr": "claude: command failed" })]);
         assert!(!died.ok && died.message.contains("command failed"));
         assert!(!check_of(&[]).ok);
+    }
+
+    #[test]
+    fn a_signed_out_screen_ends_the_check() {
+        assert!(signed_out("Select login method:\n❯ 1. Claude account with subscription").is_some());
+        assert!(signed_out("Invalid API key · Please run /login").is_some());
+        assert!(signed_out("Choose the text style that looks best").is_some(), "first run");
+        assert!(signed_out("❯ Reply with the single word OK.\n⏺ OK").is_none());
+        // A refused sign-in without its result yet: still said as such.
+        assert!(!check_of(&[json!({ "type": "auth_failed" })]).ok);
     }
 
     #[test]

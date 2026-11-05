@@ -1178,6 +1178,7 @@
   "auth.checking": "Interrogazione di Claude…",
   "auth.checking.container": "Avvio della sandbox e interrogazione di Claude, può richiedere un minuto…",
   "auth.check_ok": "Claude risponde: l'accesso funziona.",
+  "auth.check_signed_out": "Claude non ha effettuato l'accesso da questo lato: accedi, poi controlla di nuovo.",
   "auth.check_failed": "L'accesso non funziona: {msg}",
   "auth.term.login": "Segui i passaggi: il browser si apre per accedere a Claude.",
   "auth.term.setup": "Segui i passaggi nel browser. Il token mostrato alla fine viene salvato da Snap Studio: niente da copiare.",

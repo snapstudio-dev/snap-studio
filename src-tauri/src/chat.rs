@@ -623,12 +623,31 @@ fn app_listener(app: &AppHandle, id: &str, sandbox: bool) -> claude_pty::Listene
     })
 }
 
-/// The terminal's bytes, for the Terminal tab.
+/// Conversations whose Terminal tab is shown: only they get the terminal's
+/// bytes (Claude redraws its screen many times a second).
+fn viewed() -> &'static Mutex<HashSet<String>> {
+    static V: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    V.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+/// The Terminal tab of `id` shown or left.
+pub fn set_viewed(id: &str, on: bool) {
+    let mut v = viewed().lock().unwrap();
+    if on {
+        v.insert(id.to_string());
+    } else {
+        v.remove(id);
+    }
+}
+
+/// The terminal's bytes, for the Terminal tab while it is shown.
 fn app_screen(app: &AppHandle, id: &str) -> claude_pty::Screen {
     let app = app.clone();
     let id = id.to_string();
     Arc::new(move |bytes: &[u8]| {
-        let _ = app.emit("ia-screen", json!({ "id": id, "b64": crate::util::b64_encode(bytes) }));
+        if viewed().lock().unwrap().contains(&id) {
+            let _ = app.emit("ia-screen", json!({ "id": id, "b64": crate::util::b64_encode(bytes) }));
+        }
     })
 }
 

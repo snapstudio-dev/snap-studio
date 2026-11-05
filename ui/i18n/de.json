@@ -1178,6 +1178,7 @@
   "auth.checking": "Claude wird gefragt …",
   "auth.checking.container": "Sandbox wird gestartet und Claude gefragt, das kann eine Minute dauern …",
   "auth.check_ok": "Claude antwortet: Die Anmeldung funktioniert.",
+  "auth.check_signed_out": "Claude ist auf dieser Seite nicht angemeldet: melde dich an und prüfe erneut.",
   "auth.check_failed": "Die Anmeldung funktioniert nicht: {msg}",
   "auth.term.login": "Folgen Sie den Schritten: Ihr Browser öffnet sich zur Anmeldung bei Claude.",
   "auth.term.setup": "Folgen Sie den Schritten im Browser. Der am Ende angezeigte Token wird von Snap Studio gespeichert: nichts zu kopieren.",

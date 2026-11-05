@@ -1145,6 +1145,7 @@
   "auth.checking": "Claude に問い合わせ中…",
   "auth.checking.container": "サンドボックスを起動して Claude に問い合わせています。1 分ほどかかることがあります…",
   "auth.check_ok": "Claude が応答しました。サインインは有効です。",
+  "auth.check_signed_out": "こちら側の Claude はサインインしていません。サインインしてから再度確認してください。",
   "auth.check_failed": "サインインが機能していません：{msg}",
   "auth.term.login": "手順に従ってください。ブラウザが開き、Claude にサインインします。",
   "auth.term.setup": "ブラウザの手順に従ってください。最後に表示されるトークンは Snap Studio が保存するので、コピーは不要です。",

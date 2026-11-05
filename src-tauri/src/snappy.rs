@@ -378,7 +378,7 @@ mod tests {
             }
             false
         });
-        send("Use your memory_read tool, then tell me in one sentence which material I print most.", &json!({ "view": "prepare" }))
+        send("Call your memory_read tool now (do not answer from the memory attached to this message), then tell me in one sentence which material I print most.", &json!({ "view": "prepare" }))
             .unwrap();
         wait(1);
         assert!(yes.join().unwrap(), "the read asked first");

@@ -124,6 +124,16 @@ if (typeof document !== "undefined") {
     return bytes;
   };
 
+  /* The conversation whose Terminal tab is shown: only it gets Claude's
+     screen (claude_pty.rs). Null: none. */
+  let traceViewed = null;
+  window.iaTraceView = function iaTraceView(id) {
+    if (traceViewed === id) return;
+    if (traceViewed) invoke("ia_term_view", { id: traceViewed, on: false }).catch(() => {});
+    traceViewed = id;
+    if (id) invoke("ia_term_view", { id, on: true }).catch(() => {});
+  };
+
   /* The terminal's size follows the tab's (only while it shows Claude's). */
   const traceResize = (id, t) => {
     if (t.mode === "pty") invoke("ia_term_resize", { id, cols: t.term.cols, rows: t.term.rows }).catch(() => {});
@@ -134,6 +144,7 @@ if (typeof document !== "undefined") {
      are dropped: the past holds them already, or will on the next opening. */
   window.iaTraceOpen = async function iaTraceOpen(c) {
     const id = c.id;
+    iaTraceView(id);
     const t = iaTerm(id);
     const host = $("ia-term");
     host.innerHTML = "";

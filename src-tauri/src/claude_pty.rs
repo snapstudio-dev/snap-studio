@@ -211,9 +211,21 @@ pub fn argv(l: &Launch, pidfile: &Path) -> Vec<String> {
     out.push(if l.resume { "--resume" } else { "--session-id" }.into());
     out.push(l.session_id.clone());
     if !l.prompt.is_empty() {
-        out.push(l.prompt.clone());
+        out.push(as_message(&l.prompt));
     }
     out
+}
+
+/// A message as the CLI must read it: text, never a command. A leading
+/// `/` (slash command), `!` (shell mode) or `#` would be run by the CLI
+/// instead of reaching the model; a space before it keeps it a message
+/// (checked against Claude Code 2.1.286, which sends it as typed).
+pub fn as_message(text: &str) -> String {
+    if text.trim_start().starts_with(['/', '!', '#']) {
+        format!(" {}", text.trim_start())
+    } else {
+        text.to_string()
+    }
 }
 
 /// Refuses a prompt over the argument limit, before anything starts.
@@ -375,6 +387,8 @@ fn next_seq() -> u64 {
 pub enum Record {
     /// To show: an answer, or tool results.
     Show(Value),
+    /// A prompt was submitted (its `promptId`).
+    Prompt(String),
     /// Claude's own proof that the turn ended (`system/turn_duration`).
     TurnEnd {
         duration_ms: Option<u64>,
@@ -421,7 +435,10 @@ pub fn record(line: &str, slim: &dyn Fn(&Value) -> Value) -> Record {
             }
             let results: Vec<Value> = content.as_array().into_iter().flatten().filter(|b| b["type"] == "tool_result").cloned().collect();
             if results.is_empty() {
-                return Record::Nothing;
+                return match r["promptId"].as_str() {
+                    Some(id) => Record::Prompt(id.to_string()),
+                    None => Record::Nothing,
+                };
             }
             Record::Show(json!({ "type": "user", "message": { "content": slim(&Value::Array(results)) } }))
         }
@@ -436,6 +453,37 @@ pub fn sentinel(text: &str, event: &str, session_id: &str) -> Option<Value> {
 }
 
 // ------------------------------------------------------------ sessions
+
+/// Which prompt the end-of-turn proofs belong to. Claude writes each
+/// prompt's `promptId` in the transcript and the Stop hook names it: a
+/// proof is taken only for the latest prompt, once — a late Stop or
+/// `turn_duration` of the previous message cannot end the next one.
+#[derive(Default, Debug)]
+pub struct Proofs {
+    /// The latest prompt read in the transcript.
+    current: Option<String>,
+    /// The last prompt whose turn was delivered.
+    delivered: Option<String>,
+}
+
+impl Proofs {
+    pub fn prompt(&mut self, id: &str) {
+        self.current = Some(id.to_string());
+    }
+
+    /// Whether a proof (of `prompt`, when it says) may end the turn.
+    pub fn accepts(&self, prompt: Option<&str>) -> bool {
+        match &self.current {
+            // Before any prompt id (an older Claude): every proof counts.
+            None => true,
+            Some(c) => prompt.is_none_or(|p| p == c) && self.delivered.as_ref() != Some(c),
+        }
+    }
+
+    pub fn delivered(&mut self) {
+        self.delivered = self.current.clone();
+    }
+}
 
 #[derive(Default)]
 struct Turn {
@@ -483,8 +531,21 @@ fn next_token() -> u64 {
     N.fetch_add(1, Ordering::Relaxed)
 }
 
+/// A Claude that runs and is not being closed.
 pub fn is_open(key: &str) -> bool {
-    session(key).is_some()
+    session(key).is_some_and(|s| !s.shared.lock().unwrap().closing)
+}
+
+/// Waits until a closing Claude under `key` is gone (or `d` passed).
+fn gone_within(key: &str, d: Duration) -> bool {
+    let end = Instant::now() + d;
+    while session(key).is_some() {
+        if Instant::now() >= end {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    true
 }
 
 /// True while a message waits for its answer.
@@ -500,12 +561,19 @@ pub fn host_sentinel_dir(run: &str) -> PathBuf {
 
 /// Starts Claude. `listener` gets the view events, then
 /// `{"type":"exited"}`; `screen` the terminal's bytes.
-pub fn start(l: Launch, listener: Listener, screen: Option<Screen>) -> Result<()> {
+pub fn start(mut l: Launch, listener: Listener, screen: Option<Screen>) -> Result<()> {
     check_prompt(&l.prompt)?;
     if is_open(&l.key) {
         return Err(anyhow!("already running: {}", l.key));
     }
+    // One being closed (a model switch, a sign-in restart): its end first,
+    // so two Claudes never write the same session.
+    if !gone_within(&l.key, GRACE + TERM_GRACE + Duration::from_secs(2)) {
+        return Err(anyhow!("still closing: {}", l.key));
+    }
     let run = uuid::Uuid::new_v4().simple().to_string();
+    // A folder of its own per run: the one before may still be cleaning up.
+    l.sentinel_dir = l.sentinel_dir.join(&run[..12]);
     let dir = l.sentinel_dir.clone();
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir)?;
@@ -569,15 +637,19 @@ pub fn start(l: Launch, listener: Listener, screen: Option<Screen>) -> Result<()
     let s = sess.clone();
     std::thread::spawn(move || {
         let mut buf = [0u8; 8192];
-        let mut trusted = false;
+        // Looked for until the session started: the prompt comes before.
+        let mut trusting = true;
         loop {
             match reader.read(&mut buf) {
                 Ok(0) | Err(_) => break,
                 Ok(n) => {
+                    if trusting && s.dir.join("start.json").exists() {
+                        trusting = false;
+                    }
                     // A trust prompt despite `pretrust` (a container's own
                     // settings): the folder is the app's, it is trusted.
-                    if !trusted && trust_prompt(&s.shared.lock().unwrap().screen, &buf[..n]) {
-                        trusted = true;
+                    if trusting && trust_prompt(&s.shared.lock().unwrap().screen, &buf[..n]) {
+                        trusting = false;
                         let _ = write_raw(&s, b"\x1b[B");
                         std::thread::sleep(Duration::from_millis(100));
                         let _ = write_raw(&s, b"\r");
@@ -585,7 +657,8 @@ pub fn start(l: Launch, listener: Listener, screen: Option<Screen>) -> Result<()
                     {
                         let mut sh = s.shared.lock().unwrap();
                         sh.screen.extend_from_slice(&buf[..n]);
-                        if sh.screen.len() > SCREEN_KEEP {
+                        // Trimmed by large steps, not at every redraw.
+                        if sh.screen.len() > SCREEN_KEEP + SCREEN_KEEP / 4 {
                             let cut = sh.screen.len() - SCREEN_KEEP;
                             sh.screen.drain(..cut);
                         }
@@ -681,6 +754,7 @@ fn finish(sess: &Session, listener: &Listener, result: Value) {
 fn poll(key: String, sess: Arc<Session>, session_id: String, mut tail: Tail, listener: Listener) {
     let slim = |c: &Value| crate::chat::slim_content(c);
     let mut announced: HashSet<String> = HashSet::new();
+    let mut proofs = Proofs::default();
     loop {
         let (busy, exited, closing) = {
             let sh = sess.shared.lock().unwrap();
@@ -699,6 +773,7 @@ fn poll(key: String, sess: Arc<Session>, session_id: String, mut tail: Tail, lis
         let mut ended: Option<Value> = None;
         for line in tail.read_new() {
             match record(&line, &slim) {
+                Record::Prompt(id) => proofs.prompt(&id),
                 Record::Show(ev) => {
                     if ev["type"] == "assistant" {
                         let mut sh = sess.shared.lock().unwrap();
@@ -716,18 +791,21 @@ fn poll(key: String, sess: Arc<Session>, session_id: String, mut tail: Tail, lis
                 }
                 Record::TurnEnd { duration_ms } => {
                     let team = sess.shared.lock().unwrap().turn.team;
-                    if !team {
+                    if !team && proofs.accepts(None) {
                         ended.get_or_insert(json!({ "subtype": "success", "is_error": false, "duration_ms": duration_ms }));
                     }
                 }
-                Record::Interrupted => {
+                Record::Interrupted if proofs.accepts(None) => {
                     ended = Some(json!({ "subtype": "error_during_execution", "is_error": true }));
                 }
+                Record::Interrupted => {}
                 Record::ApiError(text) => {
                     if crate::auth::is_auth_failure(&text) {
                         emit(&listener, json!({ "type": "auth_failed" }));
                     }
-                    ended = Some(json!({ "subtype": "error", "is_error": true, "result": text }));
+                    if proofs.accepts(None) {
+                        ended = Some(json!({ "subtype": "error", "is_error": true, "result": text }));
+                    }
                 }
                 Record::Nothing => {}
             }
@@ -739,12 +817,15 @@ fn poll(key: String, sess: Arc<Session>, session_id: String, mut tail: Tail, lis
             let _ = std::fs::remove_file(&done);
             let team = v["background_tasks"].as_array().is_some_and(|a| !a.is_empty());
             sess.shared.lock().unwrap().turn.team = team;
-            if !team && ended.is_none() {
+            if !team && ended.is_none() && proofs.accepts(v["prompt_id"].as_str()) {
                 ended = Some(json!({ "subtype": "success", "is_error": false, "result": v["last_assistant_message"] }));
             }
         }
 
-        // Requests from the question and permission hooks.
+        // Requests from the question and permission hooks. An answered one
+        // leaves (its script removes it): its id, a shell's pid, may come
+        // back with a later request.
+        announced.retain(|id| sess.dir.join(format!("{id}.req")).exists());
         let mut fresh = Vec::new();
         for e in std::fs::read_dir(&sess.dir).into_iter().flatten().flatten() {
             let name = e.file_name().to_string_lossy().to_string();
@@ -768,6 +849,7 @@ fn poll(key: String, sess: Arc<Session>, session_id: String, mut tail: Tail, lis
             ended = Some(json!({ "subtype": "error_during_execution", "is_error": true }));
         }
         if let Some(r) = ended {
+            proofs.delivered();
             finish(&sess, &listener, r);
         }
 
@@ -862,7 +944,7 @@ fn write_raw(sess: &Session, bytes: &[u8]) -> Result<()> {
 /// of the message already answered goes first, so it cannot close this one.
 pub fn inject_prompt(key: &str, text: &str) -> Result<()> {
     check_prompt(text)?;
-    let sess = session(key).ok_or_else(|| anyhow!(crate::t!("err.terminal_closed")))?;
+    let sess = session(key).filter(|_| is_open(key)).ok_or_else(|| anyhow!(crate::t!("err.terminal_closed")))?;
     {
         let mut sh = sess.shared.lock().unwrap();
         sh.turn.pending += 1;
@@ -871,7 +953,7 @@ pub fn inject_prompt(key: &str, text: &str) -> Result<()> {
     }
     let _ = std::fs::remove_file(sess.dir.join("done.json"));
     // A paste, so line ends stay in the message, then Enter on its own.
-    let clean = text.replace("\x1b[201~", "");
+    let clean = as_message(&text.replace("\x1b[201~", ""));
     let sent = write_raw(&sess, format!("\x1b[200~{clean}\x1b[201~").as_bytes()).and_then(|_| {
         std::thread::sleep(Duration::from_millis(150));
         write_raw(&sess, b"\r")
@@ -927,6 +1009,8 @@ fn ended_within(sess: &Session, d: Duration) -> bool {
 pub fn close(key: &str) {
     let Some(sess) = session(key) else { return };
     refuse_all(key);
+    // From now on it is not open: a message starts a new one, which waits
+    // for this one's end.
     sess.shared.lock().unwrap().closing = true;
     let _ = write_raw(&sess, b"\x1b");
     std::thread::sleep(Duration::from_millis(100));
@@ -1141,6 +1225,40 @@ mod tests {
     fn screen_text_drops_escapes() {
         let s = b"\x1b[1mBold\x1b[0m line\r\n\x1b]0;title\x07Error: sandbox unavailable\n\n";
         assert_eq!(screen_text(s), "Bold line\nError: sandbox unavailable");
+    }
+
+    #[test]
+    fn a_late_proof_never_ends_the_next_turn() {
+        let mut p = Proofs::default();
+        assert!(p.accepts(None), "an older Claude without prompt ids: every proof counts");
+        p.prompt("a");
+        assert!(p.accepts(Some("a")) && p.accepts(None));
+        p.delivered();
+        // The previous turn's Stop or turn_duration, read late.
+        assert!(!p.accepts(Some("a")) && !p.accepts(None), "turn a was delivered already");
+        p.prompt("b");
+        assert!(!p.accepts(Some("a")), "a's Stop does not end b");
+        assert!(p.accepts(Some("b")) && p.accepts(None));
+        p.delivered();
+        assert!(!p.accepts(None), "once");
+    }
+
+    #[test]
+    fn messages_are_never_commands() {
+        assert_eq!(as_message("/clear the support"), " /clear the support");
+        assert_eq!(as_message("  !rm -rf x"), " !rm -rf x");
+        assert_eq!(as_message("#note"), " #note");
+        assert_eq!(as_message("make it 2 mm thicker / wider"), "make it 2 mm thicker / wider");
+        let d = tmp("cmd");
+        let mut l = launch(&d);
+        l.prompt = "/exit".into();
+        assert_eq!(argv(&l, Path::new("/p")).last().unwrap(), " /exit");
+    }
+
+    #[test]
+    fn a_prompt_record_carries_its_id() {
+        let id = |c: &Value| c.clone();
+        assert_eq!(record(r#"{"type":"user","promptId":"p1","message":{"content":"hi"}}"#, &id), Record::Prompt("p1".into()));
     }
 
     #[test]

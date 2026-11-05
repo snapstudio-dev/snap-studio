@@ -1178,6 +1178,7 @@
   "auth.checking": "Preguntando a Claude…",
   "auth.checking.container": "Iniciando el sandbox y preguntando a Claude, puede tardar un minuto…",
   "auth.check_ok": "Claude responde: el inicio de sesión funciona.",
+  "auth.check_signed_out": "Claude no ha iniciado sesión en este lado: inicia sesión y vuelve a comprobarlo.",
   "auth.check_failed": "El inicio de sesión no funciona: {msg}",
   "auth.term.login": "Sigue los pasos: tu navegador se abre para iniciar sesión en Claude.",
   "auth.term.setup": "Sigue los pasos en el navegador. Snap Studio guarda el token que aparece al final: no hay nada que copiar.",

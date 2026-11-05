@@ -323,10 +323,15 @@ async function snappySendSlice({ printer, queue, options }) {
   $("snd-level").checked = !!options?.bed_leveling;
   $("snd-flow").checked = !!options?.flow_calibration;
   $("snd-timelapse").checked = !!options?.timelapse;
-  const asQueue = !!queue || SL.sendMode === "queue";
-  if (!asQueue && $("snd-go").disabled) return { error: $("snd-state").textContent || "The printer cannot start this print." };
-  sendPrint(asQueue);
-  return { started: true, queued: asQueue, note: asQueue && !queue ? "The printer is busy or silent: the print was added to its queue." : undefined };
+  // "Start now" was what the user approved: a busy or silent printer is
+  // said, never turned into a queue add without asking.
+  if (!queue && (SL.sendMode === "queue" || $("snd-go").disabled)) {
+    return { error: ($("snd-state").textContent || "The printer cannot start this print now.") + " Nothing was sent; ask the user whether to add it to the queue instead." };
+  }
+  const r = (await sendPrint(!!queue)) || { error: "not sent" };
+  if (r.cancelled) return { error: "The user cancelled the send in the app. Nothing was sent." };
+  if (r.error) return { error: "Not sent: " + r.error };
+  return { sent: true, queued: !!queue };
 }
 
 listen("snappy-ui", async (e) => {

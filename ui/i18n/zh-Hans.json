@@ -1145,6 +1145,7 @@
   "auth.checking": "正在询问 Claude…",
   "auth.checking.container": "正在启动沙盒并询问 Claude，可能需要一分钟…",
   "auth.check_ok": "Claude 已响应：登录有效。",
+  "auth.check_signed_out": "此处的 Claude 未登录：请先登录，然后再次检查。",
   "auth.check_failed": "登录无效：{msg}",
   "auth.term.login": "按步骤操作：浏览器会打开以登录 Claude。",
   "auth.term.setup": "在浏览器中按步骤操作。最后显示的令牌会由 Snap Studio 保存，无需拷贝。",

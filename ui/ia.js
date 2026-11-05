@@ -1128,6 +1128,7 @@ async function iaOpen(id) {
   // One Claude per conversation, the chat's: the terminal shows it.
   chatOpen(c);
   if (IA.view === "term") iaTraceOpen(c);
+  else iaTraceView(null);
 }
 
 /* Why a conversation is read-only. */
@@ -1152,6 +1153,7 @@ function iaSetVisible(on) {
 function iaBack() {
   iaUndock();
   IA.open = null;
+  iaTraceView(null);
   chatLeave();
   // The element goes back in reserve: the terminal history is kept.
   const host = $("ia-term");
@@ -1586,7 +1588,10 @@ function iaSwitchView(view) {
   $("ia-left").dataset.mode = view;
   document.querySelectorAll("#ia-views [data-iaview]").forEach((b) => b.classList.toggle("on", b.dataset.iaview === view));
   if (view === "term") iaTraceOpen(c);
-  else requestAnimationFrame(() => $("chat-input").focus());
+  else {
+    iaTraceView(null);
+    requestAnimationFrame(() => $("chat-input").focus());
+  }
 }
 
 $("ia-views").addEventListener("click", (e) => {

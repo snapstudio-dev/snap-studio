@@ -1178,6 +1178,7 @@
   "auth.checking": "Question à Claude…",
   "auth.checking.container": "Démarrage du bac à sable et question à Claude, cela peut prendre une minute…",
   "auth.check_ok": "Claude répond : la connexion fonctionne.",
+  "auth.check_signed_out": "Claude n'est pas connecté de ce côté : connectez-vous, puis vérifiez à nouveau.",
   "auth.check_failed": "La connexion ne fonctionne pas : {msg}",
   "auth.term.login": "Suivez les étapes : le navigateur s'ouvre pour la connexion à Claude.",
   "auth.term.setup": "Suivez les étapes dans le navigateur. Le jeton affiché à la fin est enregistré par Snap Studio : rien à copier.",

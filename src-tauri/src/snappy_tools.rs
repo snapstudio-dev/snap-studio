@@ -98,7 +98,7 @@ pub static TOOLS: &[Tool] = &[
         name: "memory_write",
         description: "Replaces your memory (MEMORY.md) with `content`, Markdown, at most about 200 lines / 24 KB. Never serial numbers, addresses, hostnames or file paths.",
         params: memory_params,
-        reads: true,
+        reads: false,
         ask: ask_memory_write,
         run: memory_write,
     },
@@ -114,7 +114,7 @@ pub static TOOLS: &[Tool] = &[
         name: "task_cancel",
         description: "Cancels a long operation that is still running.",
         params: task_param,
-        reads: true,
+        reads: false,
         ask: ask_task_cancel,
         run: task_cancel,
     },
@@ -187,9 +187,26 @@ pub fn list() -> Vec<Value> {
         .collect()
 }
 
-/// Runs a tool: checked, approved when it must be, its result filtered.
+thread_local! {
+    /// What a card named, resolved when it was drawn (a printer's file, a
+    /// local file's path): what the user approved is what runs, without
+    /// asking the printer or the Files view again. The card and the run
+    /// happen on the same thread, in `call`.
+    static RESOLVED: std::cell::RefCell<Option<Value>> = const { std::cell::RefCell::new(None) };
+}
+
+fn keep_resolved(v: Value) {
+    RESOLVED.with(|r| *r.borrow_mut() = Some(v));
+}
+
+fn take_resolved() -> Option<Value> {
+    RESOLVED.with(|r| r.borrow_mut().take())
+}
+
+/// Runs a tool: checked, approved, its result filtered.
 pub fn call(name: &str, args: &Value) -> Result<Value> {
     let tool = find(name).ok_or_else(|| anyhow!("unknown tool: {name}"))?;
+    take_resolved();
     let card = (tool.ask)(args)?;
     if !approve(tool.name, &card) {
         return Err(anyhow!("The user did not approve this action ({card}). Nothing was done."));
@@ -422,9 +439,17 @@ fn overview(p: &crate::printers::Printer) -> Result<crate::printer_files::Overvi
 fn printers(_: &Value) -> Result<Value> {
     let list = crate::printers::load();
     let out: Vec<Value> = block_on(async {
+        // All at once: printers switched off cost one timeout, not one each.
+        let asked: Vec<_> = list
+            .iter()
+            .map(|p| {
+                let (host, port) = (p.host.clone(), p.port);
+                tauri::async_runtime::spawn(async move { crate::printers::status(&host, port).await })
+            })
+            .collect();
         let mut out = Vec::new();
-        for p in &list {
-            let st = crate::printers::status(&p.host, p.port).await;
+        for (p, h) in list.iter().zip(asked) {
+            let st = h.await.unwrap_or_default();
             let s = serde_json::to_value(&st).unwrap_or_default();
             out.push(json!({
                 "name": p.name,
@@ -594,20 +619,37 @@ fn start_job(args: &Value) -> Result<Value> {
     }))
 }
 
-fn ask_print_file(args: &Value) -> Result<String> {
+/// The printer and the file's path a card named: resolved once, at the
+/// card, and kept for the run.
+fn printer_and_file(args: &Value) -> Result<(crate::printers::Printer, String)> {
+    if let Some(v) = take_resolved() {
+        let p = crate::printers::load().into_iter().find(|p| p.id == v["printer"].as_str().unwrap_or_default());
+        if let (Some(p), Some(path)) = (p, v["path"].as_str()) {
+            return Ok((p, path.to_string()));
+        }
+    }
     let p = printer_named(str_arg(args, "printer")?)?;
     let f = printer_file(&p, str_arg(args, "file")?)?;
-    Ok(crate::t!("snappy.ask.print_file", file = base_name(&f.path), printer = p.name))
+    Ok((p, f.path))
+}
+
+fn ask_printer_file(args: &Value, key: &str) -> Result<String> {
+    let (p, path) = printer_and_file(args)?;
+    keep_resolved(json!({ "printer": p.id, "path": path }));
+    Ok(crate::t!(key, file = base_name(&path), printer = p.name))
+}
+
+fn ask_print_file(args: &Value) -> Result<String> {
+    ask_printer_file(args, "snappy.ask.print_file")
 }
 
 fn print_file(args: &Value) -> Result<Value> {
-    let p = printer_named(str_arg(args, "printer")?)?;
-    let f = printer_file(&p, str_arg(args, "file")?)?;
+    let (p, path) = printer_and_file(args)?;
     let app = crate::snappy::app().ok_or_else(|| anyhow!("app not ready"))?.clone();
-    let name = base_name(&f.path).to_string();
+    let name = base_name(&path).to_string();
     let request = crate::PfPrintRequest {
         source_id: p.id.clone(),
-        path: f.path.clone(),
+        path,
         printer_id: p.id.clone(),
         options: crate::printers::StartOptions::default(),
         tools: Vec::new(),
@@ -620,18 +662,15 @@ fn print_file(args: &Value) -> Result<Value> {
 }
 
 fn ask_delete_file(args: &Value) -> Result<String> {
-    let p = printer_named(str_arg(args, "printer")?)?;
-    let f = printer_file(&p, str_arg(args, "file")?)?;
-    Ok(crate::t!("snappy.ask.delete_file", file = base_name(&f.path), printer = p.name))
+    ask_printer_file(args, "snappy.ask.delete_file")
 }
 
 fn delete_file(args: &Value) -> Result<Value> {
-    let p = printer_named(str_arg(args, "printer")?)?;
-    let f = printer_file(&p, str_arg(args, "file")?)?;
-    let errors = block_on(crate::pf_delete(p.id.clone(), "gcodes".into(), vec![f.path.clone()])).map_err(|e| anyhow!(e))?;
+    let (p, path) = printer_and_file(args)?;
+    let errors = block_on(crate::pf_delete(p.id.clone(), "gcodes".into(), vec![path.clone()])).map_err(|e| anyhow!(e))?;
     match errors.into_iter().next().flatten() {
         Some(e) => Err(anyhow!(e)),
-        None => Ok(json!({ "deleted": base_name(&f.path), "printer": p.name })),
+        None => Ok(json!({ "deleted": base_name(&path), "printer": p.name })),
     }
 }
 
@@ -723,7 +762,7 @@ fn ask_send(args: &Value) -> Result<String> {
 fn send_slice(args: &Value) -> Result<Value> {
     let (p, queue, o) = send_choices(args)?;
     // The send sheet does it, as by hand: printer check, spool check, upload.
-    ui_call_within("send_slice", json!({ "printer": p.id, "queue": queue, "options": serde_json::to_value(o)? }), Duration::from_secs(60))
+    ui_call_within("send_slice", json!({ "printer": p.id, "queue": queue, "options": serde_json::to_value(o)? }), APPROVAL_TIMEOUT)
 }
 
 // ------------------------------------------------------------ local files
@@ -741,12 +780,20 @@ fn local_file(args: &Value) -> Result<(String, std::path::PathBuf)> {
 }
 
 fn ask_delete_local(args: &Value) -> Result<String> {
-    let (name, _) = local_file(args)?;
+    let (name, path) = local_file(args)?;
+    // The file named on the card is the one trashed, whatever the Files
+    // view shows by the time the user answers.
+    keep_resolved(json!({ "name": name, "path": path }));
     Ok(crate::t!("snappy.ask.delete_local_file", file = name))
 }
 
 fn delete_local(args: &Value) -> Result<Value> {
-    let (name, path) = local_file(args)?;
+    let (name, path) = match take_resolved() {
+        Some(v) if v["path"].is_string() => {
+            (v["name"].as_str().unwrap_or_default().to_string(), std::path::PathBuf::from(v["path"].as_str().unwrap_or_default()))
+        }
+        _ => local_file(args)?,
+    };
     if !path.is_file() {
         return Err(anyhow!("“{name}” is no longer there"));
     }
@@ -781,7 +828,16 @@ mod tests {
         let acts: Vec<&str> = TOOLS.iter().filter(|t| !t.reads).map(|t| t.name).collect();
         assert_eq!(
             acts,
-            ["apply_slice_setting", "start_queued_print", "print_printer_file", "delete_printer_file", "send_slice", "delete_local_file"]
+            [
+                "memory_write",
+                "task_cancel",
+                "apply_slice_setting",
+                "start_queued_print",
+                "print_printer_file",
+                "delete_printer_file",
+                "send_slice",
+                "delete_local_file"
+            ]
         );
     }
 
@@ -852,6 +908,15 @@ mod tests {
         assert!(e.to_string().contains("no printer named"), "{e}");
         let schema = send_params();
         assert_eq!(schema["required"].as_array().unwrap().len(), 5, "every option is asked");
+    }
+
+    /// What the card named runs, even if the source changed meanwhile.
+    #[test]
+    fn the_approved_file_is_the_one_used() {
+        keep_resolved(json!({ "name": "benchy.stl", "path": "/folder-a/benchy.stl" }));
+        let v = take_resolved().unwrap();
+        assert_eq!(v["path"], "/folder-a/benchy.stl");
+        assert!(take_resolved().is_none(), "used once");
     }
 
     #[test]

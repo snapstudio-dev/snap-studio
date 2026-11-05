@@ -1175,6 +1175,7 @@
   "auth.checking": "Asking Claude…",
   "auth.checking.container": "Starting the sandbox and asking Claude, this can take a minute…",
   "auth.check_ok": "Claude answers: the sign-in works.",
+  "auth.check_signed_out": "Claude is not signed in on this side: sign in, then check again.",
   "auth.check_failed": "The sign-in does not work: {msg}",
   "auth.term.login": "Follow the steps: your browser opens to sign in to Claude.",
   "auth.term.setup": "Follow the steps in the browser. The token shown at the end is saved by Snap Studio: nothing to copy.",

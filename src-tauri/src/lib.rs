@@ -1578,6 +1578,13 @@ fn ia_term_screen(id: String) -> String {
     chat::screen(&id)
 }
 
+/// The conversation's Terminal tab shown or left: its terminal's bytes come
+/// as `ia-screen` events only while it is shown.
+#[tauri::command]
+fn ia_term_view(id: String, on: bool) {
+    chat::set_viewed(&id, on);
+}
+
 /// The Terminal tab's size, for the conversation's terminal.
 #[tauri::command]
 fn ia_term_resize(id: String, cols: u16, rows: u16) -> Result<(), String> {
@@ -2226,6 +2233,7 @@ pub fn run() {
             ia_chat_close,
             ia_term_screen,
             ia_term_resize,
+            ia_term_view,
             snappy_history,
             snappy_send,
             snappy_stop,
