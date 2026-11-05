@@ -1641,6 +1641,18 @@ async fn snappy_set_model(model: Option<String>) -> Result<(), String> {
     off_main(move || snappy::set_model(model.as_deref().filter(|m| !m.is_empty())).map_err(ui_err)).await
 }
 
+/// How full Snappy's conversation is (Settings › AI).
+#[tauri::command]
+fn snappy_usage() -> snappy::Usage {
+    snappy::usage()
+}
+
+/// A new conversation: the current one is deleted, the memory stays.
+#[tauri::command]
+async fn snappy_reset() -> Result<(), String> {
+    off_main(|| snappy::reset().map_err(ui_err)).await
+}
+
 /// The drawer opened or closed: closed, what waits for approval is refused.
 #[tauri::command]
 fn snappy_drawer(open: bool) {
@@ -2238,6 +2250,8 @@ pub fn run() {
             snappy_send,
             snappy_stop,
             snappy_busy,
+            snappy_usage,
+            snappy_reset,
             snappy_model,
             snappy_set_model,
             snappy_drawer,

@@ -334,6 +334,63 @@ pub fn send(text: &str, context: &Value) -> Result<()> {
     Ok(())
 }
 
+// ------------------------------------------------------------ usage, reset
+
+/// Claude's context window, in tokens.
+pub const CONTEXT_WINDOW: u64 = 200_000;
+
+/// How full the conversation's context is: what the last answer was given
+/// (its input, cache reads and writes), as Claude's transcript records it.
+#[derive(serde::Serialize, Debug, PartialEq)]
+pub struct Usage {
+    pub used: u64,
+    pub window: u64,
+    /// 0..100.
+    pub percent: f64,
+}
+
+/// The context use of the last answer in a transcript.
+pub fn usage_of(transcript: &str) -> Usage {
+    let used = transcript
+        .lines()
+        .rev()
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .find(|r| r["type"] == "assistant" && r["isSidechain"] != true && r["message"]["usage"].is_object())
+        .map(|r| {
+            let u = &r["message"]["usage"];
+            ["input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "output_tokens"]
+                .iter()
+                .filter_map(|k| u[*k].as_u64())
+                .sum()
+        })
+        .unwrap_or(0);
+    Usage { used, window: CONTEXT_WINDOW, percent: (used as f64 * 100.0 / CONTEXT_WINDOW as f64).min(100.0) }
+}
+
+/// Snappy's conversation's context use.
+pub fn usage() -> Usage {
+    let id = session_id();
+    usage_of(&std::fs::read_to_string(crate::ia::session_file_in(&root(), &id)).unwrap_or_default())
+}
+
+/// A new conversation: the current one (Snappy's log and its Claude
+/// session) is deleted, and the next message starts afresh. The memory
+/// stays: it is all Snappy keeps.
+pub fn reset() -> Result<()> {
+    crate::snappy_tools::refuse_all();
+    claude_pty::close(KEY);
+    let old = session_id();
+    let _ = std::fs::remove_file(crate::ia::session_file_in(&root(), &old));
+    let _ = std::fs::remove_file(log_path());
+    let mut st = state();
+    st["session_id"] = json!(uuid::Uuid::new_v4().to_string());
+    save_state(&st);
+    if let Some(app) = app() {
+        let _ = app.emit("snappy-reset", ());
+    }
+    Ok(())
+}
+
 pub fn stop() -> Result<()> {
     crate::snappy_tools::refuse_all();
     if claude_pty::is_open(KEY) {
@@ -471,6 +528,25 @@ mod tests {
         for tool in crate::snappy_tools::TOOLS.iter().filter(|t| t.name.contains('_')) {
             assert!(!id.contains(tool.name), "{}", tool.name);
         }
+    }
+
+    #[test]
+    fn the_context_use_is_the_last_answers() {
+        let t = concat!(
+            r#"{"type":"assistant","message":{"usage":{"input_tokens":10,"cache_read_input_tokens":1000,"output_tokens":5}}}"#,
+            "\n",
+            r#"{"type":"user","message":{"content":"hi"}}"#,
+            "\n",
+            r#"{"type":"assistant","isSidechain":true,"message":{"usage":{"input_tokens":99999}}}"#,
+            "\n",
+            r#"{"type":"assistant","message":{"usage":{"input_tokens":4,"cache_read_input_tokens":20000,"cache_creation_input_tokens":2000,"output_tokens":196}}}"#,
+            "\n",
+        );
+        let u = usage_of(t);
+        assert_eq!(u.used, 22_200, "the last answer of the main thread");
+        assert!((u.percent - 11.1).abs() < 1e-9);
+        assert_eq!(usage_of("").percent, 0.0);
+        assert_eq!(usage_of(r#"{"type":"assistant","message":{"usage":{"input_tokens":900000}}}"#).percent, 100.0, "capped");
     }
 
     #[test]

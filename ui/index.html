@@ -1201,6 +1201,14 @@
         </span>
         <select id="set-snappy-model"></select>
       </div>
+      <div class="grow-row snappy-use">
+        <span class="k"><span data-i18n="settings.snappy.context">Conversation</span>
+          <span class="sub" data-i18n="settings.snappy.context.sub">How full Snappy's context is. A new conversation forgets everything but its memory.</span>
+          <span class="snappy-meter" id="snappy-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-label="Context used" data-i18n-aria="settings.snappy.context_aria"><i></i></span>
+          <span class="snappy-meter-text" id="snappy-meter-text"></span>
+        </span>
+        <button type="button" id="snappy-reset" class="btn small" data-i18n="settings.snappy.reset">New Conversation</button>
+      </div>
     </div>
     <div class="set-section" data-i18n="settings.ai.components">Components</div>
     <div class="group set-ai">

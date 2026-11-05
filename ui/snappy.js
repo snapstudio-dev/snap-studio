@@ -432,3 +432,51 @@ $("set-snappy-model").addEventListener("change", (e) => {
 
 snappyModelFill();
 window.addEventListener("langchange", snappyModelFill);
+
+/* Snappy's conversation in Settings › AI: how full its context is, and a
+   new conversation (the current one deleted, the memory kept). */
+async function snappyUsageFill() {
+  const u = await invoke("snappy_usage").catch(() => null);
+  if (!u) return;
+  const pct = Math.round(u.percent);
+  const meter = $("snappy-meter");
+  meter.querySelector("i").style.width = Math.max(u.used ? 1 : 0, u.percent) + "%";
+  meter.classList.toggle("mid", u.percent >= 60 && u.percent < 85);
+  meter.classList.toggle("high", u.percent >= 85);
+  meter.setAttribute("aria-valuenow", String(pct));
+  const k = (n) => (n >= 1000 ? Math.round(n / 1000) + " k" : String(n));
+  $("snappy-meter-text").textContent = tr("settings.snappy.context_use", { pct, used: k(u.used), window: k(u.window) });
+}
+
+$("snappy-reset").addEventListener("click", async () => {
+  const ok = await confirmDelete(tr("settings.snappy.reset_title"), tr("settings.snappy.reset_text"), tr("settings.snappy.reset_ok"));
+  if (!ok) return;
+  try {
+    await invoke("snappy_reset");
+    toast(tr("settings.snappy.reset_done"));
+  } catch (e) {
+    toast(String(e), true);
+  }
+  snappyUsageFill();
+});
+
+/* A new conversation: the card starts empty. */
+listen("snappy-reset", () => {
+  SNAP.loaded = false;
+  SNAP.tools.clear();
+  snapList.innerHTML = "";
+  for (const id of [...SNAP.cards.keys()]) snappyCardDone(id, false);
+  snappySetBusy(false);
+  snappyMood("idle");
+  if (SNAP.open) snappyLoad();
+});
+
+/* Kept current: after each answer, and while Settings shows it. */
+listen("snappy-chat", (e) => {
+  if ((e.payload.events || []).some((ev) => ev.type === "result")) snappyUsageFill();
+});
+setInterval(() => {
+  if ($("snappy-meter").offsetParent) snappyUsageFill();
+}, 5000);
+snappyUsageFill();
+window.addEventListener("langchange", snappyUsageFill);
