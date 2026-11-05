@@ -215,6 +215,12 @@ if (typeof document !== "undefined") {
   /* Slices of the ring behind the front, for the volume. */
   const SLICES = 6;
   const DEPTH = 12;
+  /* Gaps between planes, in real pixels: WebKit (Tauri on macOS) merges
+     planes closer than about a pixel and may draw the face over the eyes
+     — at 42 px a unit is 0.4 px, so these are never in units
+     (open-bot-avatar's EYE_LIFT note). */
+  const EYES_LIFT_PX = 3;
+  const SLICE_GAP_PX = 2;
   const reduced = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
   /* Mounts an avatar in `host`; returns { setMood, destroy }. */
@@ -222,22 +228,29 @@ if (typeof document !== "undefined") {
     const el = document.createElement("span");
     el.className = "snv";
     let slices = "";
-    for (let i = SLICES; i >= 1; i--) slices += `<span class="snv-slice" style="transform:translateZ(${(-DEPTH * i) / SLICES}em)"></span>`;
+    // The slices go from SLICE_GAP_PX behind the front to the back.
+    for (let i = SLICES; i >= 1; i--) {
+      slices += `<span class="snv-slice" style="transform:translateZ(calc(${(-DEPTH * i) / SLICES}em - ${SLICE_GAP_PX}px))"></span>`;
+    }
     el.innerHTML =
       `<span class="snv-body">${slices}` +
-      `<span class="snv-back" style="transform:translateZ(${-DEPTH}em) rotateY(180deg)"><span class="snv-ring"></span><span class="snv-face"></span></span>` +
+      `<span class="snv-back" style="transform:translateZ(calc(${-DEPTH}em - ${SLICE_GAP_PX * 2}px)) rotateY(180deg)"><span class="snv-ring"></span><span class="snv-face"></span></span>` +
       `<span class="snv-front"><span class="snv-ring"></span><span class="snv-face"></span></span>` +
-      `<svg class="snv-eyes" viewBox="0 0 100 100" aria-hidden="true"></svg></span>`;
+      `<span class="snv-eyes" style="transform:translateZ(${EYES_LIFT_PX}px)"><svg viewBox="0 0 100 100" aria-hidden="true"></svg></span></span>`;
     host.appendChild(el);
     const a = {
       el,
       body: el.querySelector(".snv-body"),
-      eyes: el.querySelector(".snv-eyes"),
+      eyes: el.querySelector(".snv-eyes svg"),
       seed: Math.floor(Math.random() * 2 ** 31),
       mood: { now: "idle", from: null, since: 0 },
       look: { x: 0, y: 0, attention: 0 },
       eyesHtml: "",
     };
+    // Drawn at once, at rest: never a face without eyes, even before the
+    // first frame (or when frames are paused).
+    a.eyesHtml = snvEyesSvg(snvMoodPose({ seed: a.seed, t: 0, mood: "idle", gaze: null, reduced: true }));
+    a.eyes.innerHTML = a.eyesHtml;
     AVATARS.add(a);
     snvTick();
     return {
@@ -273,6 +286,8 @@ if (typeof document !== "undefined") {
 
   function snvFrame(now) {
     running = false;
+    // The next frame first: one frame that fails must not stop them all.
+    if (AVATARS.size) snvTick();
     const dt = last ? (now - last) / 1000 : 0;
     last = now;
     const still = reduced();
@@ -298,12 +313,18 @@ if (typeof document !== "undefined") {
       a.body.style.transform =
         `translateY(${pose.lift.toFixed(2)}em) rotateZ(${pose.roll.toFixed(2)}deg) rotateY(${pose.yaw.toFixed(4)}rad) ` +
         `rotateX(${pose.pitch.toFixed(4)}rad) translateZ(${DEPTH / 2}em) scale(${pose.sx.toFixed(4)}, ${pose.sy.toFixed(4)})`;
+      // Eyes only while the face looks towards us (open-bot-avatar's
+      // EYE_FACING): WebKit does not always hide a turned-away plane.
+      const facing = Math.cos(pose.yaw) * Math.cos(pose.pitch) > 0.22;
+      if (a.facing !== facing) {
+        a.facing = facing;
+        a.eyes.style.visibility = facing ? "" : "hidden";
+      }
       const html = snvEyesSvg(pose);
       if (html !== a.eyesHtml) {
         a.eyesHtml = html;
         a.eyes.innerHTML = html;
       }
     }
-    if (AVATARS.size) snvTick();
   }
 }
