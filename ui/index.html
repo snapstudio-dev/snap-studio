@@ -1197,14 +1197,20 @@
       </div>
     </div>
     <div class="set-section" translate="no">Snappy</div>
-    <div class="group">
-      <div class="grow-row">
+    <div class="group" id="set-snappy">
+      <label class="grow-row">
+        <span class="k"><span data-i18n="settings.snappy.on">Turn on Snappy</span>
+          <span class="sub" data-i18n="settings.snappy.on.sub">The workshop assistant, under its icon at the bottom of the sidebar</span>
+        </span>
+        <input type="checkbox" id="set-snappy-on" class="sw" role="switch" checked />
+      </label>
+      <div class="grow-row snappy-more">
         <span class="k"><span data-i18n="settings.snappy.model">Snappy's model</span>
           <span class="sub" data-i18n="settings.snappy.model.sub">The Claude model of the workshop assistant</span>
         </span>
         <select id="set-snappy-model"></select>
       </div>
-      <div class="grow-row snappy-use">
+      <div class="grow-row snappy-use snappy-more">
         <span class="k"><span data-i18n="settings.snappy.context">Conversation</span>
           <span class="sub" data-i18n="settings.snappy.context.sub">How full Snappy's context is. Near the limit, Claude summarizes the conversation by itself and goes on; a new conversation forgets everything but its memory.</span>
           <span class="snappy-meter" id="snappy-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-label="Context used" data-i18n-aria="settings.snappy.context_aria"><i></i></span>

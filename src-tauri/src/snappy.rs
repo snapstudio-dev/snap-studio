@@ -183,6 +183,24 @@ fn save_state(st: &Value) {
     let _ = crate::util::write_atomic(&state_path(), st.to_string().as_bytes());
 }
 
+/// Whether Snappy is on (Settings › AI); on until switched off.
+pub fn enabled() -> bool {
+    state()["enabled"] != false
+}
+
+/// Switches Snappy on or off. Off, its Claude stops and what waited for
+/// approval is refused; its memory and conversation stay for when it is
+/// back.
+pub fn set_enabled(on: bool) {
+    let mut st = state();
+    st["enabled"] = json!(on);
+    save_state(&st);
+    if !on {
+        crate::snappy_tools::refuse_all();
+        claude_pty::close(KEY);
+    }
+}
+
 /// Snappy's model (Settings › AI); none: the account's default.
 pub fn model() -> Option<String> {
     state()["model"].as_str().filter(|m| crate::chat::MODELS.contains(m)).map(String::from)
@@ -304,6 +322,9 @@ pub fn send(text: &str, context: &Value) -> Result<()> {
     let _gate = GATE.get_or_init(|| Mutex::new(())).lock().unwrap();
     if text.trim().is_empty() {
         return Ok(());
+    }
+    if !enabled() {
+        return Err(anyhow!(crate::t!("err.snappy_off")));
     }
     let prompt = turn_text(text, context);
     claude_pty::check_prompt(&prompt)?;

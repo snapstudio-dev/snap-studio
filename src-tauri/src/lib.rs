@@ -1628,6 +1628,22 @@ fn snappy_busy() -> bool {
     snappy::is_busy()
 }
 
+/// Whether Snappy is on (Settings › AI).
+#[tauri::command]
+fn snappy_enabled() -> bool {
+    snappy::enabled()
+}
+
+/// Switches Snappy on or off; off, its Claude stops: off the main thread.
+#[tauri::command]
+async fn snappy_set_enabled(on: bool) -> Result<(), String> {
+    off_main(move || {
+        snappy::set_enabled(on);
+        Ok(())
+    })
+    .await
+}
+
 /// Snappy's model (Settings › AI); none: the account's default.
 #[tauri::command]
 fn snappy_model() -> Option<String> {
@@ -2250,6 +2266,8 @@ pub fn run() {
             snappy_send,
             snappy_stop,
             snappy_busy,
+            snappy_enabled,
+            snappy_set_enabled,
             snappy_usage,
             snappy_reset,
             snappy_model,

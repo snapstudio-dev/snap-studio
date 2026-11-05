@@ -28,8 +28,11 @@ const SNAP = {
 
 const snapList = $("snappy-list");
 
-/* Snappy needs the AI: hidden when the AI is off in Settings. */
-const snappyAvailable = () => typeof aiChoice !== "function" || aiChoice() !== "off";
+/* Snappy is on (Settings › AI › Snappy) until switched off. */
+SNAP.enabled = true;
+
+/* Snappy needs the AI and its own switch: hidden when either is off. */
+const snappyAvailable = () => SNAP.enabled && (typeof aiChoice !== "function" || aiChoice() !== "off");
 
 /* ------------------------------------------------------------ the icon */
 
@@ -460,3 +463,19 @@ setInterval(() => {
 }, 5000);
 snappyUsageFill();
 window.addEventListener("langchange", snappyUsageFill);
+
+/* Settings › AI › Snappy: its switch. Off, the icon and the card go, its
+   Claude stops; its memory and conversation stay. */
+function snappyEnabledShow(on) {
+  SNAP.enabled = on;
+  $("set-snappy-on").checked = on;
+  $("set-snappy").classList.toggle("off", !on);
+  if (!on) snappyClose();
+  snappyFabState();
+}
+$("set-snappy-on").addEventListener("change", (e) => {
+  const on = e.target.checked;
+  snappyEnabledShow(on);
+  invoke("snappy_set_enabled", { on }).catch((err) => toast(String(err), true));
+});
+invoke("snappy_enabled").then((on) => snappyEnabledShow(on !== false)).catch(() => {});
