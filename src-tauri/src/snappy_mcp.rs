@@ -235,9 +235,13 @@ pub fn rpc(msg: &Value) -> Option<Value> {
             if crate::snappy_tools::find(name).is_none() {
                 return Some(error(id, -32602, &format!("unknown tool: {name}")));
             }
-            let (text, is_error) = match crate::snappy_tools::call(name, &args) {
-                Ok(v) => (v.to_string(), false),
-                Err(e) => (crate::privacy::text(&e.to_string(), &crate::privacy::known()), true),
+            // A tool that panics answers as a failed call: the connection
+            // stays up and Snappy is told, instead of a reset socket.
+            let called = std::panic::catch_unwind(|| crate::snappy_tools::call(name, &args));
+            let (text, is_error) = match called {
+                Ok(Ok(v)) => (v.to_string(), false),
+                Ok(Err(e)) => (crate::privacy::text(&e.to_string(), &crate::privacy::known()), true),
+                Err(_) => (format!("The tool {name} failed inside Snap Studio. Nothing more is known; tell the user."), true),
             };
             ok(id, json!({ "content": [{ "type": "text", "text": text }], "isError": is_error }))
         }

@@ -53,9 +53,13 @@ fn word(w: &str) -> String {
     let space = &w[body.len()..];
     // Punctuation around the word stays: "(192.168.1.4)," keeps its brackets.
     let start = body.find(|c: char| !matches!(c, '(' | '[' | '{' | '"' | '\'' | '<' | '«' | '`')).unwrap_or(body.len());
+    // After the last kept character, counted in bytes: "Désactivé" ends
+    // on a two-byte letter.
     let end = body
-        .rfind(|c: char| !matches!(c, ')' | ']' | '}' | '"' | '\'' | '>' | '»' | '`' | ',' | ';' | '.' | ':' | '!' | '?'))
-        .map(|i| i + 1)
+        .char_indices()
+        .rev()
+        .find(|&(_, c)| !matches!(c, ')' | ']' | '}' | '"' | '\'' | '>' | '»' | '`' | ',' | ';' | '.' | ':' | '!' | '?'))
+        .map(|(i, c)| i + c.len_utf8())
         .unwrap_or(start);
     if start >= end {
         return w.to_string();
@@ -189,6 +193,16 @@ mod tests {
         assert_eq!(text("serial SM1U2A3B4C5D6 ok", &[]), "serial [redacted] ok");
         assert_eq!(text("Snapmaker U1, PLA, 0.4 nozzle, HF-PLA", &[]), "Snapmaker U1, PLA, 0.4 nozzle, HF-PLA");
         assert_eq!(text("job 3f9a0c7e21b4d5e6", &[]), "job 3f9a0c7e21b4d5e6", "lower-case ids are not serials");
+    }
+
+    /// Words ending on a letter of several bytes are kept whole, not cut
+    /// inside it (which panicked, and closed Snappy's tool connection).
+    #[test]
+    fn non_ascii_words_stay_whole() {
+        for w in ["Désactivé", "Activé.", "«Gyroïde»", "20 °C", "填充", "(Brillé)", "Ironing · top"] {
+            assert_eq!(text(w, &[]), w);
+        }
+        assert_eq!(text("«192.168.1.4»", &[]), "«[redacted]»");
     }
 
     #[test]

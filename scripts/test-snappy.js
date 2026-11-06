@@ -55,9 +55,38 @@ assert.deepStrictEqual(S.snappyLocalFile(files, "f1.stl"), { name: "f1.stl", pat
 assert.ok(S.snappyLocalFile(files, "nope.stl").error);
 assert.ok(S.snappyLocalFile([...files, { name: "f1.stl", path: "/y/f1.stl" }], "f1.stl").error.includes("several"));
 
-// A setting applied over the remembered ones; unknown ones refused.
-assert.deepStrictEqual(S.snappySimpleWith({ infill: 15, walls: 2 }, "infill", 40), { infill: 40, walls: 2 });
-assert.throws(() => S.snappySimpleWith({}, "speed", 3));
+// Changes to the slice sheet: checked against what it offers, profiles
+// first, one line each for the card; already set values left out.
+const opts = {
+  machine: { value: "U1 0.4", options: [{ value: "U1 0.4", label: "U1 0.4" }, { value: "U1 0.6", label: "U1 0.6" }] },
+  process: { value: "0.20mm Standard", options: [{ value: "0.20mm Standard", label: "0.20mm Standard" }, { value: "0.16mm Fine", label: "0.16mm Fine" }] },
+  bed: { value: "pei", options: [{ value: "pei", label: "Textured PEI" }] },
+  quick: { infill: { value: 15 }, walls: { value: 2 }, speed: { value: 100 }, supports: { value: false }, brim: { value: true } },
+  advanced: [
+    { key: "sparse_infill_pattern", label: "Pattern", type: "enum", value: "grid", options: [{ value: "grid", label: "Grid" }, { value: "gyroid", label: "Gyroid" }] },
+    { key: "ironing_type", label: "Ironing", type: "enum", value: "no ironing", options: [{ value: "no ironing", label: "None" }, { value: "top", label: "Top surfaces" }] },
+    { key: "thick_bridges", label: "Thick bridges", type: "bool", value: "0" },
+    { key: "top_shell_layers", label: "Top layers", type: "int", value: "4", min: 0, max: 100 },
+  ],
+};
+const words = { machine: "Nozzle", process: "Quality", bed: "Plate", infill: "Infill", walls: "Walls", speed: "Speed", supports: "Supports", brim: "Brim", yes: "Yes", no: "No" };
+const c = S.snappySliceCheck({ infill: "30%", sparse_infill_pattern: "Gyroid", process: "0.16mm Fine", supports: true, thick_bridges: 1, brim: true, top_shell_layers: 6 }, opts, words);
+assert.ok(!c.error, c.error);
+assert.deepStrictEqual(c.changes.map((x) => x.key), ["process", "infill", "sparse_infill_pattern", "supports", "thick_bridges", "top_shell_layers"]);
+assert.deepStrictEqual(c.changes.find((x) => x.key === "sparse_infill_pattern").value, "gyroid");
+assert.strictEqual(c.changes.find((x) => x.key === "thick_bridges").value, "1");
+assert.strictEqual(c.lines[0], "Quality: 0.20mm Standard → 0.16mm Fine");
+assert.ok(c.lines.includes("Infill: 15 % → 30 %"));
+assert.ok(c.lines.includes("Supports: No → Yes"));
+assert.ok(c.lines.includes("Pattern: Grid → Gyroid"));
+assert.ok(S.snappySliceCheck({ infill: 300 }, opts, words).error);
+assert.ok(S.snappySliceCheck({ walls: 0 }, opts, words).error);
+assert.ok(S.snappySliceCheck({ machine: "U2" }, opts, words).error);
+assert.ok(S.snappySliceCheck({ nope: 1 }, opts, words).error);
+assert.ok(S.snappySliceCheck({ ironing_type: "everything" }, opts, words).error);
+assert.ok(S.snappySliceCheck({ top_shell_layers: 500 }, opts, words).error);
+assert.ok(S.snappySliceCheck({ brim: true }, opts, words).error, "nothing to change");
+assert.ok(S.snappySliceCheck({}, opts, words).error);
 
 // The avatar (ui/snappy-avatar.js): open-bot-avatar's pose model.
 const A = require("../ui/snappy-avatar.js");

@@ -39,6 +39,7 @@ pub mod sim;
 mod slice;
 mod slicers;
 mod snappy;
+mod snappy_actions;
 mod snappy_mcp;
 mod snappy_tools;
 mod stl;
@@ -295,7 +296,23 @@ fn lib_nav(app: tauri::AppHandle, what: String) -> Result<(), String> {
 /// shown. Async: a web view is created off the main thread (see lib_open).
 #[tauri::command]
 async fn cam_view_set(app: tauri::AppHandle, rect: Option<library::Rect>, setup: String) {
-    library::set_cam(&app, rect, setup);
+    library::CAM.set(&app, rect, setup);
+}
+
+/// Snappy's conversation over a site (library.rs): where the card is, or
+/// None, and the page's settings (language, the context its messages
+/// carry).
+#[tauri::command]
+async fn snappy_view_set(app: tauri::AppHandle, rect: Option<library::Rect>, setup: String) {
+    library::SNAPPY.set(&app, rect, setup);
+}
+
+/// The buttons of Snappy's view over a site (close, widen, sign in):
+/// passed on to the interface, which owns the card.
+#[tauri::command]
+fn snappy_view_action(app: tauri::AppHandle, action: serde_json::Value) {
+    use tauri::Emitter;
+    let _ = app.emit("snappy-view-action", action);
 }
 
 /// The camera view's buttons (open the printer, unpin, close): passed on
@@ -1681,6 +1698,12 @@ fn snappy_approve(id: String, yes: bool) {
     snappy_tools::answer(&id, yes);
 }
 
+/// The user's answer to Snappy's question (None: skipped).
+#[tauri::command]
+fn snappy_reply(id: String, answer: Option<String>) {
+    snappy_tools::reply(&id, answer);
+}
+
 /// The UI's answer to a question from a tool (Prepare's state, the Files
 /// view).
 #[tauri::command]
@@ -2227,6 +2250,9 @@ pub fn run() {
             lib_nav,
             cam_view_set,
             cam_view_action,
+            snappy_view_set,
+            snappy_reply,
+            snappy_view_action,
             lib_favicon,
             lib_open,
             lib_close,

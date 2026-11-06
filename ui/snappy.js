@@ -1,35 +1,25 @@
 "use strict";
-/* Snappy, the workshop assistant (src-tauri/src/snappy.rs).
+/* Snappy, the workshop assistant (src-tauri/src/snappy.rs), in the app;
+   its conversation card is snappy-card.js.
 
    A nameless icon at the right end of the sidebar's separator, between
    What's new and Settings, always there; its avatar is alive
    (snappy-avatar.js). A click opens the conversation, a card floating
-   beside the sidebar over the current view — its bottom level with the
-   icon, a tail pointing at it — and the view stays where it is; the icon
+   beside the sidebar over the current view (its bottom level with the
+   icon, a tail pointing at it) and the view stays where it is; the icon
    or a click outside the card closes it. A corner button doubles the
-   card's width, or brings it back.
+   card's width, or brings it back. Over a sheet, Snappy goes beside the
+   sheet; over a site of Explore, a native view of ours shows the card
+   (snappy-view.html), since the site's view covers the page.
 
-   One conversation, kept by the app: its past from the log, its events as
-   the "snappy-chat" event. Actions that cannot be undone come as cards at
-   the bottom of the drawer: only an explicit yes lets them through, and
-   closing the drawer refuses them. The app answers Snappy's questions
-   about what only the page holds (Prepare's state, the Files view) through
-   "snappy-ui". */
+   The app answers Snappy's questions about what only the page holds
+   (Prepare's state, the Files view) through "snappy-ui". */
 
-const SNAP = {
-  open: false,
-  busy: false,
-  loaded: false,
-  /* tool_use id → its row. */
-  tools: new Map(),
-  /* approval id → its card. */
-  cards: new Map(),
-};
-
-const snapList = $("snappy-list");
-
-/* Snappy is on (Settings › AI › Snappy) until switched off. */
+/* Snappy is on (Settings › AI › Snappy) until switched off. Its view over
+   a site: what it was last told, and whether it shows. */
 SNAP.enabled = true;
+SNAP.viewKey = "";
+SNAP.viewShown = false;
 
 /* Snappy needs the AI and its own switch: hidden when either is off. */
 const snappyAvailable = () => SNAP.enabled && (typeof aiChoice !== "function" || aiChoice() !== "off");
@@ -42,18 +32,31 @@ const snappyMood = (mood) => SNAP_AV.forEach((a) => a.setMood(mood));
 /* Shown unless the AI is off. */
 function snappyFabState() {
   $("snappy-fab").classList.toggle("hidden", !snappyAvailable());
+  snappyDock();
+  snappyViewSync();
 }
-setInterval(snappyFabState, 1000);
-snappyFabState();
 
-/* The card's bottom level with the icon, wherever the sidebar puts it. */
+/* The card's bottom level with the icon, wherever the sidebar puts it;
+   beside a sheet, the icon level with the sheet's bottom and the card
+   above it. */
 function snappyPlace() {
+  if (SNAP.sheet) {
+    const h = SNAP.sheet.querySelector(".modal-box")?.offsetHeight || 0;
+    snappyDockEl.style.height = h + "px";
+    $("snappy").style.bottom = "";
+    $("snappy").style.height = Math.max(240, h - 48) + "px";
+    return;
+  }
+  $("snappy").style.height = "";
   const f = $("snappy-fab").getBoundingClientRect();
   const c = $("content").getBoundingClientRect();
   if (!f.height) return;
   $("snappy").style.bottom = Math.max(14, Math.round(c.bottom - f.bottom)) + "px";
 }
-window.addEventListener("resize", () => SNAP.open && snappyPlace());
+window.addEventListener("resize", () => {
+  if (SNAP.open) snappyPlace();
+  snappyViewSync();
+});
 
 /* The icon opens the conversation, and closes it. */
 $("snappy-fab").addEventListener("click", () => (SNAP.open ? snappyClose() : snappyOpen()));
@@ -61,10 +64,10 @@ $("snappy-fab").addEventListener("click", () => (SNAP.open ? snappyClose() : sna
 /* Twice as wide, or back: kept for the next openings. */
 function snappyWide(on) {
   $("snappy").classList.toggle("wide", on);
+  snappyViewSoon();
   $("snappy-wide").title = tr(on ? "snappy.narrower" : "snappy.wider");
   localStorage.setItem("snapstudio.snappy.wide", on ? "1" : "");
 }
-$("snappy-wide").addEventListener("click", () => snappyWide(!$("snappy").classList.contains("wide")));
 snappyWide(localStorage.getItem("snapstudio.snappy.wide") === "1");
 window.addEventListener("langchange", () => snappyWide($("snappy").classList.contains("wide")));
 
@@ -79,6 +82,57 @@ document.addEventListener(
   true
 );
 
+/* Over a sheet: the app behind it is dimmed and blurred, so Snappy goes
+   to the sheet, above the blur. Its icon stands at the sheet's bottom left
+   corner, its conversation opens as a panel above the icon, beside the
+   sheet, and the sheet moves aside to make room. Back home when the sheet
+   goes. */
+const SNAP_HOME = { fab: $("snappy-fab").parentElement, drawer: $("snappy").parentElement };
+const snappyDockEl = snappyDiv("snappy-dock");
+/* The sheet grows or shrinks (an advanced panel, a message): the icon
+   stays level with its bottom. */
+const snappyDockFit = new ResizeObserver(() => snappyPlace());
+
+function snappyTopSheet() {
+  if (!snappyAvailable()) return null;
+  const open = [...document.querySelectorAll(".modal")].filter((m) => !m.classList.contains("hidden") && !m.classList.contains("closing"));
+  return open.pop() || null;
+}
+
+function snappyDock() {
+  const sheet = snappyTopSheet();
+  if (sheet === SNAP.sheet) return;
+  SNAP.sheet?.classList.remove("with-snappy");
+  SNAP.sheet = sheet;
+  snappyDockFit.disconnect();
+  if (sheet) {
+    snappyDockEl.append($("snappy-fab"), $("snappy"));
+    sheet.prepend(snappyDockEl);
+    sheet.classList.add("with-snappy");
+    snappyDockFit.observe(sheet.querySelector(".modal-box"));
+  } else {
+    // Home first: once the dock leaves the page, its content cannot be
+    // found by id any more.
+    SNAP_HOME.fab.appendChild($("snappy-fab"));
+    SNAP_HOME.drawer.prepend($("snappy"));
+    snappyDockEl.remove();
+  }
+  snappyPlace();
+  snappyViewSync();
+}
+
+{
+  const obs = new MutationObserver(snappyDock);
+  for (const m of document.querySelectorAll(".modal")) obs.observe(m, { attributes: true, attributeFilter: ["class"] });
+}
+
+/* The card keeps its keys: a sheet under it must not take Enter (slice)
+   or Escape (close) typed to Snappy. */
+$("snappy").addEventListener("keydown", (e) => e.stopPropagation());
+
+setInterval(snappyFabState, 1000);
+snappyFabState();
+
 /* ------------------------------------------------------------ the drawer */
 
 function snappyOpen() {
@@ -91,6 +145,7 @@ function snappyOpen() {
   invoke("snappy_drawer", { open: true }).catch(() => {});
   if (!SNAP.loaded) snappyLoad();
   requestAnimationFrame(() => $("snappy-input").focus());
+  snappyViewSoon();
 }
 
 function snappyClose() {
@@ -107,120 +162,52 @@ function snappyClose() {
   snappyFabState();
 }
 
-$("snappy-close").addEventListener("click", snappyClose);
+/* ------------------------------------------------------------ over a site */
 
-async function snappyLoad() {
-  SNAP.loaded = true;
-  let past = [];
-  try {
-    past = (await invoke("snappy_history")) || [];
-  } catch {}
-  snapList.innerHTML = "";
-  SNAP.tools.clear();
-  for (const ev of past) for (const item of snappyItems(ev)) snappyShow(item, false);
-  if (!snapList.children.length) snapList.appendChild(snappyDiv("snappy-empty", tr("snappy.empty")));
-  snappySetBusy(await invoke("snappy_busy").catch(() => false));
-  snapList.scrollTop = snapList.scrollHeight;
-}
-
-/* ------------------------------------------------------------ rendering */
-
-function snappyDiv(cls, text) {
-  const d = document.createElement("div");
-  d.className = cls;
-  if (text !== undefined) d.textContent = text;
-  return d;
-}
-
-function snappyAdd(el) {
-  snapList.querySelector(".snappy-empty")?.remove();
-  const stick = snapList.scrollHeight - snapList.scrollTop - snapList.clientHeight < 80;
-  snapList.appendChild(el);
-  // The working dots stay last.
-  const w = snapList.querySelector(".chat-working");
-  if (w && w !== el) snapList.appendChild(w);
-  if (stick) snapList.scrollTop = snapList.scrollHeight;
-}
-
-/* A tool's label: its own words when the catalog has them. */
-function snappyToolLabel(name) {
-  const key = "snappy.tool." + name;
-  const t = tr(key);
-  return t === key ? name : t;
-}
-
-/* One item of the conversation (snappy-logic.js). `live`: it just happened. */
-function snappyShow(item, live) {
-  switch (item.kind) {
-    case "user":
-      snappyAdd(snappyDiv("snappy-msg user", item.text));
-      break;
-    case "assistant": {
-      const d = snappyDiv("snappy-msg assistant");
-      d.innerHTML = chatMd(item.text);
-      snappyAdd(d);
-      break;
-    }
-    case "tool": {
-      const row = snappyDiv("snappy-tool");
-      row.append(snappyDiv("dot"), snappyDiv("name", snappyToolLabel(item.name)));
-      SNAP.tools.set(item.id, row);
-      snappyAdd(row);
-      break;
-    }
-    case "tool_done": {
-      const row = SNAP.tools.get(item.id);
-      if (row) row.classList.add(item.error ? "error" : "done");
-      break;
-    }
-    case "end":
-      if (item.stopped) snappyAdd(snappyDiv("snappy-note", tr("snappy.stopped")));
-      else if (item.error) snappyAdd(snappyDiv("snappy-note error", item.error));
-      if (live) {
-        snappySetBusy(false);
-        // No hop for an answer that did not come.
-        if (item.stopped || item.error) snappyMood("idle");
-      }
-      break;
-    case "exited":
-      if (live) snappySetBusy(false);
-      break;
-    case "auth":
-      if (live) {
-        const note = snappyDiv("snappy-note error", tr("chat.auth_failed"));
-        const b = document.createElement("button");
-        b.className = "btn small";
-        b.textContent = tr("chat.auth_fix");
-        b.onclick = () => authOpen({ engine: "local" });
-        note.appendChild(b);
-        snappyAdd(note);
-      }
-      break;
+/* A site of Explore is a native view over the page, which covers the card.
+   While one shows, Rust lays a view of ours at the card's place
+   (library.rs SNAPPY, snappy-view.html), as for the floating navigation:
+   told where the card is, with the language and the context its messages
+   carry, or that it is not wanted. The card here stays under the site;
+   it takes over again when the site goes, with what was said meanwhile. */
+function snappyViewSync() {
+  const want = SNAP.open && !SNAP.sheet && typeof LIB !== "undefined" && LIB.visible;
+  let rect = null;
+  let setup = "";
+  if (want) {
+    const r = $("snappy").getBoundingClientRect();
+    // Its tail, on the left, comes too.
+    rect = { x: r.left - 10, y: r.top, w: r.width + 10, h: r.height };
+    setup = JSON.stringify({ lang: LANG, context: snappyContext() });
   }
+  const key = rect ? `${setup}|${[rect.x, rect.y, rect.w, rect.h].map(Math.round).join(",")}` : "";
+  if (key === SNAP.viewKey) return;
+  SNAP.viewKey = key;
+  invoke("snappy_view_set", { rect, setup }).catch(() => {});
 }
 
-function snappySetBusy(on) {
-  // Thinking while it answers; a happy hop when an answer lands.
-  if (on) snappyMood("thinking");
-  else if (SNAP.busy) snappyMood("happy");
-  else snappyMood("idle");
-  SNAP.busy = !!on;
-  $("snappy-send").classList.toggle("hidden", SNAP.busy);
-  $("snappy-stop").classList.toggle("hidden", !SNAP.busy);
-  snapList.querySelector(".chat-working")?.remove();
-  if (SNAP.busy) snappyAdd(chatWorking());
-  snappyGrow();
+/* Once the card has finished moving (opening, widening). */
+function snappyViewSoon() {
+  setTimeout(snappyViewSync, 240);
 }
 
-listen("snappy-chat", (e) => {
-  if (!SNAP.loaded) return;
-  for (const ev of e.payload.events || []) for (const item of snappyItems(ev)) snappyShow(item, true);
+listen("snappy-view", (e) => {
+  const shown = !!e.payload?.shown;
+  if (SNAP.viewShown && !shown && SNAP.open) snappyLoad();
+  else if (SNAP.viewShown && !shown) SNAP.loaded = false;
+  SNAP.viewShown = shown;
 });
 
-/* ------------------------------------------------------------ sending */
+/* Its buttons: the card's state is this page's. */
+listen("snappy-view-action", (e) => {
+  const what = e.payload?.what;
+  if (what === "close") snappyClose();
+  else if (what === "wide") SNAP_PAGE.wide();
+  else if (what === "auth") SNAP_PAGE.auth();
+});
 
 /* What Snappy is told about the app with each message: the view, the
-   printer chosen, what Prepare holds — names only (the backend filters
+   printer chosen, what Prepare holds; names only (the backend filters
    again). */
 function snappyContext() {
   const view = window.currentView || "files";
@@ -231,90 +218,13 @@ function snappyContext() {
   return ctx;
 }
 
-async function snappySubmit() {
-  const input = $("snappy-input");
-  const text = input.value.trim();
-  if (!text || SNAP.busy) return;
-  input.value = "";
-  snappyShow({ kind: "user", text }, true);
-  snappySetBusy(true);
-  try {
-    await invoke("snappy_send", { text, context: snappyContext() });
-  } catch (e) {
-    snappySetBusy(false);
-    snappyAdd(snappyDiv("snappy-note error", String(e)));
-  }
-}
-
-function snappyGrow() {
-  const input = $("snappy-input");
-  if (!input.value) input.style.height = "";
-  else {
-    input.style.height = "auto";
-    input.style.height = Math.min(input.scrollHeight, 160) + "px";
-  }
-  $("snappy-send").disabled = !input.value.trim();
-}
-
-$("snappy-input").addEventListener("input", snappyGrow);
-$("snappy-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
-    e.preventDefault();
-    snappySubmit();
-  } else if (e.key === "Escape") {
-    e.preventDefault();
-    if (SNAP.busy) invoke("snappy_stop").catch(() => {});
-    else snappyClose();
-  }
+Object.assign(SNAP_PAGE, {
+  context: snappyContext,
+  close: snappyClose,
+  wide: () => snappyWide(!$("snappy").classList.contains("wide")),
+  mood: snappyMood,
+  auth: () => authOpen({ engine: "local" }),
 });
-$("snappy-send").addEventListener("click", snappySubmit);
-$("snappy-stop").addEventListener("click", () => invoke("snappy_stop").catch((e) => toast(String(e), true)));
-
-/* Links open in the browser, never in the app's window. */
-snapList.addEventListener("click", (e) => {
-  const a = e.target.closest("a");
-  if (!a?.href) return;
-  e.preventDefault();
-  invoke("plugin:opener|open_url", { url: a.href }).catch((err) => toast(String(err), true));
-});
-
-/* ------------------------------------------------------------ approvals */
-
-listen("snappy-approval", (e) => {
-  const { id, text } = e.payload;
-  const card = snappyDiv("snappy-card");
-  card.append(snappyDiv("title", tr("snappy.approve.title")), snappyDiv("what", text));
-  const row = snappyDiv("row");
-  const yes = document.createElement("button");
-  yes.className = "btn small primary";
-  yes.textContent = tr("snappy.approve.allow");
-  yes.onclick = () => snappyAnswer(id, true);
-  const no = document.createElement("button");
-  no.className = "btn small";
-  no.textContent = tr("snappy.approve.refuse");
-  no.onclick = () => snappyAnswer(id, false);
-  row.append(yes, no);
-  card.appendChild(row);
-  SNAP.cards.set(id, card);
-  $("snappy-cards").appendChild(card);
-});
-
-function snappyAnswer(id, yes) {
-  invoke("snappy_approve", { id, yes }).catch(() => {});
-  snappyCardDone(id, yes);
-}
-
-/* A card answered, refused or expired: it leaves, its outcome stays as a
-   line of the conversation. */
-function snappyCardDone(id, yes) {
-  const card = SNAP.cards.get(id);
-  if (!card) return;
-  SNAP.cards.delete(id);
-  card.remove();
-  snappyAdd(snappyDiv("snappy-note", tr(yes ? "snappy.approved" : "snappy.refused", { what: card.querySelector(".what")?.textContent || "" })));
-}
-
-listen("snappy-approval-done", (e) => snappyCardDone(e.payload.id, e.payload.approved));
 
 /* ------------------------------------------------------------ the page's side */
 
@@ -334,24 +244,174 @@ function snappyPrepare() {
   });
 }
 
-/* A quick setting for the next slices, as if changed by hand on the sheet. */
-function snappyApply({ setting, value }) {
-  if (setting === "supports") {
-    slSetSupports(!!value);
-    return { applied: true, setting, value: !!value };
+/* ------------------------------------------------------------ the slice sheet */
+
+const snappySheetOpen = () => !$("smodal").classList.contains("hidden");
+const snappyChoices = (id) => [...$(id).options].map((o) => ({ value: o.value, label: o.textContent }));
+
+/* Every setting of the open sheet, as the user sees it (slice_options):
+   the profiles with their choices, the quick settings, and each advanced
+   setting that applies now, from the same catalog as its panels. The
+   heads' pickers are left out: the plate's colors decide them. */
+function snappySliceOptions() {
+  if (!snappySheetOpen()) return { error: "The slice sheet is closed: open it with open_slice_sheet." };
+  const profile = (id) => ({ value: $(id).value, options: snappyChoices(id) });
+  const quick = {};
+  for (const [k, q] of Object.entries(SNAPPY_QUICK)) {
+    const el = $("s-" + k);
+    quick[k] = q.bool ? { value: el.checked } : { value: +el.value, min: q.min, max: q.max, step: +el.step || 1 };
   }
-  const machine = $("s-machine").value || SL.memory.last;
-  if (!machine) return { error: "Prepare has no printer preset yet: open the slice sheet once." };
-  remember(machine, { simple: snappySimpleWith(rememberFor(machine).simple, setting, value) });
-  slTouch("s-" + setting);
-  if (!$("smodal").classList.contains("hidden")) {
-    const el = $("s-" + setting);
-    if (el.type === "checkbox") el.checked = !!value;
+  const schema = ADV.schema?.keys || {};
+  const advanced = [];
+  for (const cat of Object.keys(ADV_CATS)) {
+    for (const k of advCatKeys(cat)) {
+      if (ADV_FILAMENT.has(k) || (ADV_WHEN[k] && !ADV_WHEN[k]())) continue;
+      const d = schema[k] || {};
+      const options = d.type === "enum" ? advOptions(k).map(([value, label]) => ({ value, label })) : undefined;
+      advanced.push({
+        key: k,
+        label: d.label || k,
+        panel: tr(ADV_CATS[cat].title),
+        level: ADV_LEVEL_KEYS.has(k) ? "advanced" : "basic",
+        type: d.type || null,
+        value: advVal(k) ?? null,
+        profile_value: ADV.defaults[k] ?? null,
+        ...(options ? { options } : {}),
+        ...(d.unit || ADV_UNITS[k] ? { unit: d.unit || ADV_UNITS[k] } : {}),
+        ...(d.min != null ? { min: d.min } : {}),
+        ...(d.max != null ? { max: d.max } : {}),
+      });
+    }
+  }
+  return {
+    printer: currentPrinter()?.name || null,
+    machine: profile("s-machine"),
+    process: profile("s-process"),
+    bed: profile("s-bed"),
+    layer_height: $("s-layer-val").textContent,
+    quick,
+    advanced,
+  };
+}
+
+const snappySliceWords = () => ({
+  machine: tr("slice.nozzle"),
+  process: tr("slice.quality"),
+  bed: tr("slice.plate"),
+  infill: tr("slice.infill"),
+  walls: tr("slice.walls"),
+  speed: tr("slice.speed"),
+  supports: tr("slice.supports"),
+  brim: tr("slice.brim"),
+  yes: tr("common.yes"),
+  no: tr("common.no"),
+});
+
+/* Snappy's changes checked against the open sheet (snappy-logic.js). */
+function snappySliceChecked(changes) {
+  const o = snappySliceOptions();
+  return o.error ? o : { ...snappySliceCheck(changes, o, snappySliceWords()), options: o };
+}
+
+/* One change, as by hand: a nozzle profile reloads its lists, a quality
+   profile its quick settings; both are waited for. */
+async function snappySliceApply({ key, kind, value }) {
+  if (key === "machine") {
+    $("s-machine").value = value;
+    await onMachineChange(null);
+  } else if (key === "process") {
+    $("s-process").value = value;
+    await slProcessChanged();
+  } else if (key === "bed") document.querySelector(`#s-beds [data-bed="${CSS.escape(value)}"]`)?.click();
+  else if (key === "speed") spdSetPct(value);
+  else if (key === "supports") slSetSupports(value);
+  else if (kind === "quick") {
+    const el = $("s-" + key);
+    if (el.type === "checkbox") el.checked = value;
     else el.value = value;
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.dispatchEvent(new Event("change", { bubbles: true }));
+    slTouch("s-" + key);
+    slSummary();
+  } else advSet(key, value);
+}
+
+/* Where a change shows on the sheet: its control, or the button of the
+   advanced panel holding it. */
+function snappySliceSpot(key) {
+  const at = { machine: "s-nozzles", process: "s-layer-chips", bed: "s-beds" }[key];
+  if (at) return $(at);
+  if (key in SNAPPY_QUICK) return $("s-" + key).closest(".sl-tile, .grow-row, .row, label") || $("s-" + key);
+  const cat = Object.keys(ADV_CATS).find((c) => advCatKeysAll(c).includes(key));
+  return cat ? document.querySelector(`#smodal [data-adv="${cat}"]`) : null;
+}
+
+function snappyHighlight(keys) {
+  for (const el of new Set(keys.map(snappySliceSpot).filter(Boolean))) {
+    el.classList.remove("snappy-hl");
+    void el.offsetWidth;
+    el.classList.add("snappy-hl");
+    setTimeout(() => el.classList.remove("snappy-hl"), 2400);
   }
-  return { applied: true, setting, value };
+}
+
+/* The approved changes, applied in order and shown on the sheet; the
+   conversation gets a line to undo them, back to the values before. */
+async function snappySliceSet({ changes }) {
+  const c = snappySliceChecked(changes);
+  if (c.error) return { error: c.error };
+  const o = c.options;
+  const before = c.changes.map((ch) => ({
+    ...ch,
+    value: ch.kind === "profile" ? o[ch.key].value : ch.kind === "quick" ? o.quick[ch.key].value : o.advanced.find((a) => a.key === ch.key).value,
+  }));
+  for (const ch of c.changes) await snappySliceApply(ch);
+  snappyHighlight(c.changes.map((ch) => ch.key));
+  const note = snappyDiv("snappy-note");
+  const undo = document.createElement("button");
+  undo.className = "btn small";
+  undo.textContent = tr("snappy.undo");
+  undo.onclick = async () => {
+    undo.disabled = true;
+    if (!snappySheetOpen()) return;
+    for (const ch of before) await snappySliceApply(ch);
+    snappyHighlight(before.map((ch) => ch.key));
+    note.textContent = tr("snappy.undone");
+  };
+  note.append(undo);
+  snappyAdd(note);
+  return { applied: c.lines };
+}
+
+/* A view of the app, as its sidebar item shows it. */
+function snappyOpenView({ view }) {
+  const item = document.querySelector(`.side-item[data-view="${CSS.escape(view || "")}"]`);
+  if (!item) return { error: "Unknown view: " + view };
+  item.click();
+  return { shown: view };
+}
+
+/* The slice sheet for Prepare's plate, loaded. */
+async function snappyOpenSliceSheet() {
+  if (snappySheetOpen()) return { opened: true };
+  if ((window.currentView || "files") !== "prepare") snappyOpenView({ view: "prepare" });
+  if (!PR.objects.length) return { error: "Prepare's plate is empty: there is nothing to slice." };
+  await openSlice();
+  if (!snappySheetOpen()) return { error: "The slice sheet could not open." };
+  if (engNeeded()) return { error: "The slicing engine is not installed: the sheet offers to download it." };
+  return { opened: true };
+}
+
+/* Slices as the sheet's button does, and waits for the end: the preview,
+   or the sheet's message. */
+async function snappySliceRun() {
+  if (!snappySheetOpen()) return { error: "The slice sheet is closed: open it with open_slice_sheet." };
+  await startSlice();
+  const job = SL.job;
+  if (!job) return { error: $("s-msg").textContent || "The slice did not start." };
+  while (SL.job === job) await new Promise((r) => setTimeout(r, 500));
+  if (SL.preview?.job !== job) return { error: $("s-msg").textContent || "The slice did not finish." };
+  return { sliced: true, estimates: snappySliceSummary({ stats: SL.preview.stats }).last_slice };
 }
 
 /* The slice of Prepare sent with Snappy's choices (confirmed on its card):
@@ -387,7 +447,16 @@ listen("snappy-ui", async (e) => {
     else if (method === "slice_summary") result = snappyPrepare();
     else if (method === "local_files") result = snappyLocalFiles(state.view_files);
     else if (method === "local_file") result = snappyLocalFile(state.view_files, args?.name);
-    else if (method === "apply_setting") result = snappyApply(args || {});
+    else if (method === "slice_options") result = snappySliceOptions();
+    else if (method === "slice_check") {
+      const c = snappySliceChecked(args?.changes);
+      result = c.error ? { error: c.error } : { lines: c.lines };
+    }
+    else if (method === "slice_set") result = await snappySliceSet(args || {});
+    else if (method === "slice_run") result = await snappySliceRun();
+    else if (method === "open_slice_sheet") result = await snappyOpenSliceSheet();
+    else if (method === "open_view") result = snappyOpenView(args || {});
+    else if (SNAPPY_ACTIONS[method]) result = await SNAPPY_ACTIONS[method](args || {});
     else result = { error: "unknown request: " + method };
   } catch (err) {
     result = { error: String(err?.message || err) };
@@ -441,17 +510,6 @@ $("snappy-reset").addEventListener("click", async () => {
     toast(String(e), true);
   }
   snappyUsageFill();
-});
-
-/* A new conversation: the card starts empty. */
-listen("snappy-reset", () => {
-  SNAP.loaded = false;
-  SNAP.tools.clear();
-  snapList.innerHTML = "";
-  for (const id of [...SNAP.cards.keys()]) snappyCardDone(id, false);
-  snappySetBusy(false);
-  snappyMood("idle");
-  if (SNAP.open) snappyLoad();
 });
 
 /* Kept current: after each answer, and while Settings shows it. */

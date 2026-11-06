@@ -103,30 +103,9 @@
   </div>
 </aside>
 <main id="content" class="content">
-<!-- Snappy's conversation (snappy.js): a card floating beside the sidebar,
-     its bottom level with Snappy's icon. -->
-<section id="snappy" class="snappy-drawer hidden" aria-label="Snappy">
-  <div class="snappy-corner">
-    <button id="snappy-wide" class="snappy-x" type="button" title="Widen the conversation" data-i18n-title="snappy.wider">
-      <svg class="widen" viewBox="0 0 24 24"><path d="M3 12l4-4v3h4v2H7v3zm18 0-4 4v-3h-4v-2h4V8z"/></svg>
-      <svg class="narrow" viewBox="0 0 24 24"><path d="M11 12l-4 4v-3H3v-2h4V8zm2 0 4-4v3h4v2h-4v3z"/></svg>
-    </button>
-    <button id="snappy-close" class="snappy-x" type="button" title="Close" data-i18n-title="common.close">
-      <svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg>
-    </button>
-  </div>
-  <div id="snappy-list" class="snappy-list"></div>
-  <div id="snappy-cards" class="snappy-cards"></div>
-  <div class="snappy-foot">
-    <textarea id="snappy-input" rows="1" placeholder="Write to Snappy…" data-i18n-placeholder="snappy.placeholder"></textarea>
-    <button id="snappy-send" class="snappy-send" type="button" title="Send (⏎)" data-i18n-title="chat.send" disabled>
-      <svg viewBox="0 0 24 24"><path d="M12 4 5 11l1.4 1.4L11 7.8V20h2V7.8l4.6 4.6L19 11z"/></svg>
-    </button>
-    <button id="snappy-stop" class="snappy-send stop hidden" type="button" title="Stop Snappy's answer (Esc)" data-i18n-title="snappy.stop">
-      <svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg>
-    </button>
-  </div>
-</section>
+<!-- Snappy's conversation (snappy-card.js, placed by snappy.js): a card
+     floating beside the sidebar, its bottom level with Snappy's icon. -->
+<section id="snappy" class="snappy-drawer hidden" aria-label="Snappy"></section>
 <!-- The printer camera at full size, over the content area, and where its box
      waits when nothing shows it (camera.js camPlace). -->
 <div id="cam-full" class="cam-full hidden"></div>
@@ -2366,6 +2345,7 @@
 <script src="vendor/xterm.js"></script>
 <script src="vendor/marked.js"></script>
 <script src="vendor/purify.js"></script>
+<script src="chat-render.js"></script>
 <script src="vendor/xterm-addon-fit.js"></script>
 <script src="attach-logic.js"></script>
 <script src="ai-logic.js"></script>
@@ -2377,7 +2357,9 @@
 <script src="auth.js"></script>
 <script src="snappy-logic.js"></script>
 <script src="snappy-avatar.js"></script>
+<script src="snappy-card.js"></script>
 <script src="snappy.js"></script>
+<script src="snappy-actions.js"></script>
 <script src="settings.js"></script>
 <script src="window-controls.js"></script>
 <script src="update.js"></script>

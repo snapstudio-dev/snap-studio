@@ -81,11 +81,81 @@ function snappyLocalFile(files, name) {
   return { error: found.length ? `several files are named “${name}” in the Files view` : `no file named “${name}” in the Files view` };
 }
 
-/* A quick setting applied as the slice sheet would keep it: the machine's
-   remembered adjustments, with the setting touched by hand. */
-function snappySimpleWith(simple, setting, value) {
-  if (!["infill", "walls", "supports", "brim"].includes(setting)) throw new Error("unknown setting: " + setting);
-  return { ...(simple || {}), [setting]: value };
+/* The slice sheet's quick settings: what a change may be. */
+const SNAPPY_QUICK = {
+  infill: { min: 0, max: 100, unit: "%" },
+  walls: { min: 1, max: 6 },
+  speed: { min: 50, max: 120, unit: "%" },
+  supports: { bool: true },
+  brim: { bool: true },
+};
+/* The profiles, in the order they apply: a nozzle profile reloads the
+   quality profiles, a quality profile reloads the quick settings. */
+const SNAPPY_PROFILES = ["machine", "process", "bed"];
+
+const snappyBool = (v) => (v === true || v === 1 || v === "1" || v === "true" ? true : v === false || v === 0 || v === "0" || v === "false" ? false : null);
+
+/* Snappy's changes to the slice sheet, checked against what the sheet
+   offers (`o`, as slice_options gives it): every key known, every value
+   allowed. Gives them in the order they apply (profiles first, then the
+   rest), each as { key, kind: "profile" | "quick" | "adv", value }, with
+   one line each, "label: before → after", for the confirmation card.
+   `words`: the sheet's labels (machine, process, bed, the quick settings,
+   yes, no). */
+function snappySliceCheck(changes, o, words) {
+  const entries = Object.entries(changes && typeof changes === "object" ? changes : {});
+  if (!entries.length) return { error: "No change given." };
+  const yn = (b) => (b ? words.yes : words.no);
+  const out = [];
+  for (const [key, raw] of entries) {
+    if (SNAPPY_PROFILES.includes(key)) {
+      const p = o[key] || { options: [] };
+      const opt = p.options.find((x) => x.value === raw) || p.options.find((x) => x.label === raw);
+      if (!opt) return { error: `${key}: “${raw}” is not one of the choices slice_options gives.` };
+      if (opt.value === p.value) continue;
+      const before = p.options.find((x) => x.value === p.value)?.label ?? p.value ?? "-";
+      out.push({ key, kind: "profile", value: opt.value, line: `${words[key]}: ${before} → ${opt.label}` });
+    } else if (key in SNAPPY_QUICK) {
+      const q = SNAPPY_QUICK[key];
+      const cur = o.quick?.[key]?.value;
+      if (q.bool) {
+        const v = snappyBool(raw);
+        if (v == null) return { error: `${key} is true or false.` };
+        if (v === cur) continue;
+        out.push({ key, kind: "quick", value: v, line: `${words[key]}: ${yn(cur)} → ${yn(v)}` });
+      } else {
+        const n = Number(String(raw).replace("%", "").trim());
+        if (!Number.isFinite(n) || n < q.min || n > q.max) return { error: `${key} goes from ${q.min} to ${q.max}.` };
+        const v = Math.round(n);
+        if (v === cur) continue;
+        const u = q.unit ? " " + q.unit : "";
+        out.push({ key, kind: "quick", value: v, line: `${words[key]}: ${cur}${u} → ${v}${u}` });
+      }
+    } else {
+      const a = (o.advanced || []).find((x) => x.key === key);
+      if (!a) return { error: `${key} is not a setting of this sheet, or does not apply now.` };
+      let v = null;
+      if (a.type === "bool") {
+        const b = snappyBool(raw);
+        v = b == null ? null : b ? "1" : "0";
+      } else if (a.options?.length) {
+        v = (a.options.find((x) => x.value === String(raw)) || a.options.find((x) => x.label === raw))?.value ?? null;
+      } else if (/^-?\d+(\.\d+)?%?$/.test(String(raw).trim())) {
+        const s = String(raw).trim();
+        const n = parseFloat(s);
+        v = s.endsWith("%") || ((a.min == null || n >= a.min) && (a.max == null || n <= a.max)) ? s : null;
+      }
+      if (v == null) return { error: `${key}: “${raw}” is not allowed${a.options?.length ? "; choose among its options" : ""}.` };
+      if (String(v) === String(a.value)) continue;
+      const label = (x) =>
+        a.type === "bool" ? yn(x === "1" || x === true) : a.options?.find((y) => y.value === String(x))?.label ?? `${x ?? "-"}${a.unit ? " " + a.unit : ""}`;
+      out.push({ key, kind: "adv", value: v, line: `${a.label}: ${label(a.value)} → ${label(v)}` });
+    }
+  }
+  if (!out.length) return { error: "The sheet already has these values." };
+  const rank = (c) => (c.kind === "profile" ? SNAPPY_PROFILES.indexOf(c.key) : 9);
+  out.sort((x, y) => rank(x) - rank(y));
+  return { changes: out.map(({ line, ...c }) => c), lines: out.map((c) => c.line) };
 }
 
-if (typeof module !== "undefined") module.exports = { snappyToolName, snappyItems, snappySliceSummary, snappyLocalFiles, snappyLocalFile, snappySimpleWith };
+if (typeof module !== "undefined") module.exports = { snappyToolName, snappyItems, snappySliceSummary, snappyLocalFiles, snappyLocalFile, snappySliceCheck };

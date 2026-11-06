@@ -1170,11 +1170,13 @@ window.addEventListener("langchange", () => {
 $("s-printer").addEventListener("change", onPrinterChange);
 $("s-machine").addEventListener("change", () => onMachineChange(null));
 // Changing profile (height, style) applies its values, except for the
-// adjustments the user already touched in this sheet.
-$("s-process").addEventListener("change", () => {
+// adjustments the user already touched in this sheet. Snappy waits for it
+// (snappy.js) before changing anything else.
+function slProcessChanged() {
   const cur = currentSimple();
-  loadDefaults(Object.fromEntries([...(SL.touched || [])].map((k) => [k, cur[k]]))).then(advRefreshDefaults);
-});
+  return loadDefaults(Object.fromEntries([...(SL.touched || [])].map((k) => [k, cur[k]]))).then(advRefreshDefaults);
+}
+$("s-process").addEventListener("change", slProcessChanged);
 $("s-go").addEventListener("click", startSlice);
 $("s-cancel").addEventListener("click", () => closeSheet($("smodal")));
 $("s-stop").addEventListener("click", () => {

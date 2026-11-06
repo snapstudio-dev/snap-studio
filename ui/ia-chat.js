@@ -44,11 +44,6 @@ const chatList = $("chat-list");
 
 /* ------------------------------------------------------------ rendering */
 
-marked.setOptions({ gfm: true, breaks: true });
-/* Text can carry what third parties wrote (tool results, web pages):
-   sanitized before it shows. */
-const chatMd = (text) => DOMPurify.sanitize(marked.parse(text || ""));
-
 const chatNearBottom = () => chatList.scrollHeight - chatList.scrollTop - chatList.clientHeight < 80;
 
 function chatAdd(el) {
@@ -93,13 +88,6 @@ function chatDecorate(el) {
     const code = pre.querySelector("code");
     pre.appendChild(chatCopyButton("chat-copy", () => (code || pre).innerText));
   });
-}
-
-function chatWorking() {
-  const w = chatDiv("chat-working");
-  w.setAttribute("aria-label", tr("chat.working"));
-  w.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
-  return w;
 }
 
 /* The working dots always stay last. */

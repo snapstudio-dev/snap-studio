@@ -16,9 +16,17 @@ with its packages for macOS, Windows and Linux. What comes next:
   appears at the bottom-left; it opens a conversation drawer over the
   current view. Snappy answers about your printers, their files, the print
   queue and what Prepare holds, remembers what matters between
-  conversations, and asks your confirmation before each tool it uses,
-  reads included (changing a slice setting, sending the slice with the options
-  you pick, starting a print, deleting a file on a printer or moving one of yours to the Trash). Its model is
+  conversations, and asks your confirmation before each action that
+  changes something, never for a read (changing slice settings, sending the slice with the options
+  you pick, starting a print, deleting a file on a printer or moving one of yours to the Trash).
+  It can open the slice sheet, read every setting, ask you a question
+  with answer buttons, change several settings at once on one
+  confirmation (shown on the sheet, with an undo) and slice; and drive
+  the rest of the app: the plate in Prepare, the printers' controls and
+  prints, their files, the queue, Create's conversations, Explore and
+  its favorites, the Files view's folders and the settings. Over a
+  sheet it sits beside it, above the blur, and it stays visible over
+  the sites of Explore. Its model is
   set in Settings › AI. It uses the Claude already set up for the AI,
   with none of Claude's own tools, and never sends serial numbers,
   addresses, hostnames or file paths (#95).
