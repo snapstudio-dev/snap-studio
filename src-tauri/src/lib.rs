@@ -39,7 +39,6 @@ pub mod sim;
 mod slice;
 mod slicers;
 mod snappy;
-mod snappy_actions;
 mod snappy_eyes;
 mod snappy_mcp;
 mod snappy_tools;

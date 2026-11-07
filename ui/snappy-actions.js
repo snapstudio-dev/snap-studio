@@ -1,5 +1,5 @@
 "use strict";
-/* Snappy's tools over what only the page holds (src-tauri/src/snappy_actions.rs):
+/* Snappy's tools over what only the page holds (src-tauri/src/snappy_tools/):
    Prepare's plate, the Files view's folders, Explore's tabs, Create's
    sheets, Settings' fields. Each is done as the page's own controls do it.
    A tool that changes something has a `<name>_check` here too, which checks

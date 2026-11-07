@@ -6,11 +6,11 @@
 //! notification. Every request must carry the server's token; the token
 //! and the address reach Claude through a `0600` config file
 //! (`--mcp-config`), never the command line, where `ps` would show them.
-//! The tools themselves are a static Rust table (`snappy_tools.rs`).
+//! The tools themselves are a static Rust table (`snappy_tools/`, one file per domain).
 
 use anyhow::Result;
 use serde_json::{json, Value};
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -259,6 +259,7 @@ pub fn rpc(msg: &Value) -> Option<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Read;
 
     #[test]
     fn the_handshake_and_the_tool_list() {
@@ -273,7 +274,7 @@ mod tests {
         assert_eq!(rpc(&json!({ "jsonrpc": "2.0", "id": 2, "method": "ping" })).unwrap()["result"], json!({}));
         let list = rpc(&json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/list" })).unwrap();
         let tools = list["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), crate::snappy_tools::TOOLS.len());
+        assert_eq!(tools.len(), crate::snappy_tools::tools().len());
         assert!(tools.iter().all(|t| t["inputSchema"]["type"] == "object" && t["description"].as_str().is_some_and(|d| !d.is_empty())));
         assert_eq!(rpc(&json!({ "jsonrpc": "2.0", "id": 4, "method": "resources/list" })).unwrap()["error"]["code"], -32601);
         assert_eq!(

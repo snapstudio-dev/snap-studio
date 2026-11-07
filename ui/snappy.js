@@ -158,7 +158,7 @@ function snappyClose() {
   setTimeout(() => {
     if (!SNAP.open) d.classList.add("hidden");
   }, 160);
-  // Closed, whatever waited for a yes is refused (snappy_tools.rs).
+  // Closed, whatever waited for a yes is refused (snappy_tools/approval.rs).
   invoke("snappy_drawer", { open: false }).catch(() => {});
   for (const id of [...SNAP.cards.keys()]) snappyCardDone(id, false);
   snappyFabState();

@@ -8,7 +8,7 @@
 //!
 //! Snappy gets none of Claude's own tools — no Bash, no file tools, no web:
 //! it acts on the workshop only through the app's MCP server
-//! (`snappy_mcp.rs`, tools in `snappy_tools.rs`), where actions that cannot
+//! (`snappy_mcp.rs`, tools in `snappy_tools/`), where actions that cannot
 //! be undone wait for the user's explicit yes. Everything sent to the
 //! model goes through the privacy filter (`privacy.rs`).
 
@@ -698,7 +698,7 @@ mod tests {
         let id = identity("fr");
         assert!(id.contains("Snappy") && id.contains("« vous »"));
         // Actions are described by the tools only.
-        for tool in crate::snappy_tools::TOOLS.iter().filter(|t| t.name.contains('_')) {
+        for tool in crate::snappy_tools::tools().iter().filter(|t| t.name.contains('_')) {
             assert!(!id.contains(tool.name), "{}", tool.name);
         }
     }
