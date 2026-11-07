@@ -93,7 +93,7 @@
           "color": "#bf5af2",
           "edge": "linear-gradient(90deg, #ff375f, #bf5af2 40%, #0a84ff 70%, #30d158)",
           "image": "../assets/snappy.webp",
-          "frame": "1190/204",
+          "frame": "1230/1788",
           "mark": {
             "src": "../assets/snappy-avatar.webp",
             "w": 92,
@@ -110,12 +110,12 @@
           },
           "title": { "en": "Snappy, beside what you are doing", "fr": "Snappy, à côté de ce que vous faites" },
           "text": {
-            "en": "The icon stays at the end of the sidebar’s separator, above Settings, and opens a card that floats beside it. You type there. Snappy asks before it changes anything, and does not ask for a read. It needs the AI: with the AI off, its switch stays locked. The model, the memory and a new conversation are in Settings › AI. The picture is that icon and the card’s input, not a full conversation and not an approval card.",
-            "fr": "L’icône reste au bout du séparateur de la barre latérale, au-dessus de Réglages, et ouvre une carte qui flotte à côté. Vous écrivez là. Snappy demande confirmation avant de changer quoi que ce soit, et ne la demande pas pour une lecture. Il a besoin de l’IA : IA désactivée, son interrupteur reste verrouillé. Le modèle, la mémoire et une nouvelle conversation sont dans Réglages › IA. L’image montre cette icône et le champ de la carte, pas une conversation complète et pas une demande de confirmation."
+            "en": "The icon stays at the end of the sidebar’s separator, above Settings, and opens a card that floats beside it. You type there. Snappy asks before it changes anything, and does not ask for a read. It needs the AI: with the AI off, its switch stays locked. The model, the memory and a new conversation are in Settings › AI. The picture is that card with a real answer. Names in the sidebar are covered. It is not an approval card.",
+            "fr": "L’icône reste au bout du séparateur de la barre latérale, au-dessus de Réglages, et ouvre une carte qui flotte à côté. Vous écrivez là. Snappy demande confirmation avant de changer quoi que ce soit, et ne la demande pas pour une lecture. Il a besoin de l’IA : IA désactivée, son interrupteur reste verrouillé. Le modèle, la mémoire et une nouvelle conversation sont dans Réglages › IA. L’image montre cette carte avec une vraie réponse. Les noms dans la barre sont masqués. Ce n’est pas une demande de confirmation."
           },
           "alt": {
-            "en": "The Snappy icon at the end of the sidebar separator, above Settings, beside the card’s input reading “Hey! What can you do?”. Not a full conversation.",
-            "fr": "L’icône Snappy au bout du séparateur de la barre latérale, au-dessus de Réglages, à côté du champ « Hey! What can you do? ». Pas une conversation complète."
+            "en": "Snappy’s card beside the sidebar. The message asks what Snappy can do. The reply lists printers, files, Prepare and slicing, the queue, Create, and Explore and settings, and says a change needs confirmation first. Some sidebar labels are covered.",
+            "fr": "La carte de Snappy à côté de la barre latérale. Le message demande ce que Snappy peut faire. La réponse liste les imprimantes, les fichiers, Préparer et la découpe, la file, Créer, Explorer et les réglages, et dit qu’un changement demande d’abord une confirmation. Certains libellés de la barre sont masqués."
           }
         },
         {

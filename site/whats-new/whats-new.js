@@ -120,12 +120,17 @@ function chipsHtml(v) {
 
 function featureHtml(f, i) {
   const frame = shotFrame(f);
+  const [fw, fh] = frame ? frame.split("/").map(Number) : [0, 0];
+  const tall = fw > 0 && fh > fw;
+  const img = `<img src="${esc(f.image)}" alt="${esc(L(f.alt))}"${fw ? ` width="${fw}" height="${fh}"` : ""} loading="lazy"${shotStyle(f)}>`;
+  const shotInner = tall ? `<a class="shot-open" href="${esc(f.image)}">${img}</a>` : img;
+  const fullLink = tall ? `<a class="shot-full" href="${esc(f.image)}">${esc(t("wn.full"))}</a>` : "";
   const media =
     f.stage === "icon"
       ? `<div class="icon-stage"><div class="glow"></div><img class="big" src="../assets/icon-512.png" alt="">
           <div class="dock"><i></i><i></i><img src="../assets/icon-512.png" alt=""><i></i><i></i></div></div>`
-      : `<div class="shot${frame ? " natural" : ""}"${frame ? ` style="--frame:${frame}"` : ""}><img src="${esc(f.image)}" alt="${esc(L(f.alt))}" loading="lazy"${shotStyle(f)}></div>`;
-  return `<article class="feat${i % 2 ? " flip" : ""}${f.stage === "icon" ? " icon" : ""}" id="${esc(f.id)}" style="--c:${esc(f.edge)};--c1:${esc(f.color)}">
+      : `<div class="shot${frame ? " natural" : ""}${tall ? " tall" : ""}"${frame ? ` style="--frame:${frame}"` : ""}>${shotInner}</div>${fullLink}`;
+  return `<article class="feat${i % 2 ? " flip" : ""}${f.stage === "icon" ? " icon" : ""}${tall ? " tall" : ""}" id="${esc(f.id)}" style="--c:${esc(f.edge)};--c1:${esc(f.color)}">
     <div class="media">${media}</div>
     <div class="txt">
       ${markHtml(f)}

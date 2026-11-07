@@ -182,7 +182,7 @@ Claude modifie une pièce ou en crée une à partir d'une description.
 ### ✦ Snappy
 
 <img src="docs/screenshots/snappy-avatar.png" width="92" height="96" alt="L'icône de Snappy, à sa taille réelle">
-<img src="docs/screenshots/snappy.png" width="1190" height="204" alt="L'icône Snappy au-dessus de Réglages, et le champ de la carte. Pas une conversation complète." style="max-width:100%;height:auto">
+<img src="docs/screenshots/snappy.png" width="1230" height="1788" alt="La carte de Snappy à côté de la barre latérale, avec une question et la réponse de Snappy. Certains libellés de la barre sont masqués. Pas une demande de confirmation." style="max-width:min(100%,420px);height:auto">
 
 L'assistant d'atelier. L'icône reste au bout du séparateur de la barre
 latérale, au-dessus de Réglages, et ouvre une carte qui flotte à côté.
@@ -195,8 +195,9 @@ latérale, au-dessus de Réglages, et ouvre une carte qui flotte à côté.
   n'est pas un oui est un non.
 - Le modèle, la mémoire (lire, modifier ou effacer) et une nouvelle
   conversation sont dans Réglages › IA.
-- Les images sont l'icône, à sa taille réelle, et le champ de la carte.
-  Ce n'est pas une conversation complète, ni une demande de confirmation.
+- Les images sont l'icône, à sa taille réelle, et la carte ouverte avec
+  une réponse. Les noms dans la barre sont masqués. Ce n'est pas une
+  demande de confirmation.
 
 <br clear="both">
 

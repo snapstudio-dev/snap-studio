@@ -87,6 +87,14 @@ html.embed .feat { scroll-margin-top: 20px; }
    and the file is not stretched. */
 .feat .shot.natural { aspect-ratio: var(--frame); }
 .feat .shot.natural img { object-fit: contain; object-position: center; background: #141518; }
+/* A portrait capture stays whole, at a width where its text can be read,
+   with the native file one click away. */
+.feat.tall { grid-template-columns: 1fr; }
+.feat.tall .media, .feat.tall.flip .media { order: 0; flex-direction: column; padding: 28px 28px 0; }
+.feat.tall .shot.tall { width: min(100%, 840px); margin-inline: auto; }
+.feat .shot-open { display: block; height: 100%; }
+.feat .shot-open img { display: block; }
+.feat .shot-full { display: block; width: min(100%, 840px); margin: 12px auto 0; text-align: center; font-size: 13.5px; font-weight: 650; }
 .feat .avatar-mark {
   display: block; width: auto; height: auto; max-width: 92px; max-height: 96px;
   margin: 0 0 16px;

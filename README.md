@@ -162,7 +162,7 @@ Claude modifies a part or creates one from a description.
 ### ✦ Snappy
 
 <img src="docs/screenshots/snappy-avatar.png" width="92" height="96" alt="Snappy's icon at its real size">
-<img src="docs/screenshots/snappy.png" width="1190" height="204" alt="The Snappy icon above Settings, and the card's input. Not a full conversation." style="max-width:100%;height:auto">
+<img src="docs/screenshots/snappy.png" width="1230" height="1788" alt="Snappy's card beside the sidebar, with a question and Snappy's answer. Some sidebar labels are covered. Not an approval card." style="max-width:min(100%,420px);height:auto">
 
 The workshop assistant. The icon stays at the end of the sidebar's
 separator, above Settings, and opens a card that floats beside the sidebar.
@@ -174,8 +174,8 @@ separator, above Settings, and opens a card that floats beside the sidebar.
   not ask for a read. Anything other than a yes is a no.
 - The model, the memory (read, edit or clear) and a new conversation are
   in Settings › AI.
-- The pictures are the icon, at its real size, and the card's input. They
-  are not a full conversation and not an approval card.
+- The pictures are the icon, at its real size, and the open card with one
+  answer. Names in the sidebar are covered. It is not an approval card.
 
 <br clear="both">
 
