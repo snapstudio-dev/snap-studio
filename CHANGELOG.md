@@ -12,9 +12,9 @@ with its packages for macOS, Windows and Linux. What comes next:
 ## [Unreleased]
 
 ### Added
-- **Snappy, the workshop assistant**: hover the content and a small icon
-  appears at the bottom-left; it opens a conversation drawer over the
-  current view. Snappy answers about your printers, their files, the print
+- **Snappy, the workshop assistant**: its icon is always there, at the end
+  of the sidebar's separator, above Settings; it opens a conversation card
+  that floats beside the sidebar, over the current view. Snappy answers about your printers, their files, the print
   queue and what Prepare holds, remembers what matters between
   conversations, and asks your confirmation before each action that
   changes something, never for a read (changing slice settings, sending the slice with the options

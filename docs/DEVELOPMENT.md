@@ -295,7 +295,9 @@ python3 scripts/check-i18n.py                    # missing or unused texts
 `cargo test --lib presets -- --ignored` also checks that every preset of
 your own Snapmaker Orca still resolves (a parent renamed by an Orca update
 shows there). Some tests are opt-in (`--ignored`) because they need real tools: the
-slicing engine, Claude Code (`CHAT_REAL=1`, `AUTH_REAL=1`, `IA_REAL=1`), a
+slicing engine, Claude Code (`CHAT_REAL=1`, `AUTH_REAL=1`, `IA_REAL=1`; the
+last one also Docker or Podman and yolobox, as it runs a Create conversation
+in container mode through the shared engine), a
 Python with trimesh (`SS_PYTHON=…`), a 3MF of your own (`IA_3MF=…`). Each
 says how to run it in its comment.
 

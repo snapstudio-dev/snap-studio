@@ -4,28 +4,34 @@ Status: UX and technical approach decided (2026-11-05). Implemented in draft PR 
 
 ## What it is
 
-Snappy is a single, persistent workshop assistant inside Snap Studio: one shared conversation with durable memory. It uses the LLM already configured in the app, and will later drive MCP-style actions over app features (local files, printer files, slice settings, etc.).
+Snappy is a single, persistent workshop assistant inside Snap Studio: one shared conversation with durable memory. It uses the LLM already configured in the app and drives the app's features through its MCP tools (printers and their files, the queue, Prepare and slicing, the Files view, Create, Explore, Settings), every change confirmed by the user.
 
 It is distinct from the existing object-specific AI chats in Create (`data-view="ia"`).
 
 ## Placement
 
-- A small, nameless icon at the bottom-right of the left sidebar: it sits on the main content, just to the right of the sidebar, at the bottom.
-- The icon appears when the user hovers the content.
-- No dark plate or circular chrome behind it: only the white rounded-square avatar with its rainbow outline, transparent around it ([asset](snappy/snappy-squircle-clear.png)).
-- No name ("Snappy" or other) is written next to the icon.
-- Click: the icon fades out and disappears, and a conversation drawer opens over the current view (e.g. Prepare), so the user stays on that page.
-- Closing the drawer brings the icon back (when the content is hovered).
+As implemented (owner's decisions, 2026-11-05; see the Implementation note "Icon and avatar"):
 
-| Idle (content hovered) | Drawer open |
+- A small, nameless icon, always there, at the right end of the sidebar's separator, between What's new and Settings. The separator line stops short of it (it runs full width when Snappy is off; the macOS theme has no line there).
+- No dark plate or circular chrome behind it: only the avatar, transparent around it. No name ("Snappy" or other) is written next to it.
+- Click: a conversation card opens beside the sidebar, apart from it, with rounded corners, its bottom level with the icon and a tail pointing at it, over the current view (e.g. Prepare), so the user stays on that page. The icon stays in place, whole, while the card is open.
+- The card has no title bar: a close button (×), a width toggle (twice as wide, or back) and New conversation in its corner.
+- The icon, the × or a click outside the card closes it.
+- Beside the slice sheet (which blurs the app), the icon and the card move into the sheet's layer (Implementation note "Beside the slice sheet").
+
+The first mockups, superseded on 2026-11-05 (a hover-only icon on the content's bottom-left, a drawer against the sidebar), kept as history:
+
+| First mockup: icon on hover | First mockup: drawer open |
 | --- | --- |
 | ![Icon on hover](snappy/mockup-float-hover.png) | ![Drawer open](snappy/mockup-float-open.png) |
 
 ## Avatar
 
-Rounded square with a pronounced corner radius, white fill, two tilted oval eyes, and a linear rainbow outline using the What's new colors (`#FFCC00`, `#FF3B30`, `#AF52DE`, `#0A84FF`, `#30D158`). No toolhead strokes.
+Rounded square with a pronounced corner radius, white face, and a rainbow outline using the What's new colors (`#FFCC00`, `#FF3B30`, `#AF52DE`, `#0A84FF`, `#30D158`). No toolhead strokes. As implemented, it is drawn in CSS 3D and alive (Implementation note "Icon and avatar"): two upright pill eyes centered and facing front, a volume, the body turning towards the pointer, gestures at rest, a turn about its vertical axis while Snappy works.
 
-![Avatar](snappy/snappy-squircle-clear.png)
+The first drawing (two tilted oval eyes), superseded on 2026-11-05:
+
+![First avatar](snappy/snappy-squircle-clear.png)
 
 ## Copy
 
