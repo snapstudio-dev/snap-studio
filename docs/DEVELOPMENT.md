@@ -63,13 +63,12 @@ then `python3 scripts/whats-new.py`, which copies the highlights' names to
 `ui/whats-new.json` for the sidebar card. The page is published with the
 site; a patch version has no entry of its own.
 
-The 0.19.0 preparation is [plans/v0.19.md](plans/v0.19.md).
-[#95](https://github.com/kameka22/snap-studio/pull/95) is merged. The app
-version stays 0.18.0, the changelog stays under Unreleased, and What's new
-`current` stays 0.18 until a release date is chosen. The 0.19 page is the
-coming section, with Snappy first. `scripts/release.sh` commits, pushes and
-starts `build.yml`; `scripts/engine.sh` starts the engine workflow. Neither
-is a dry run, and neither is part of the documentation draft.
+The 0.19.0 preparation is [plans/v0.19.md](plans/v0.19.md). This branch
+sets the app version to 0.19.0, dates the changelog **2026-11-07**, and
+sets What's new `current` to 0.19, with Snappy first. It does not publish.
+`scripts/release.sh` commits, pushes and starts `build.yml`;
+`scripts/engine.sh` starts the engine workflow. Neither is a dry run.
+Publishing 0.19.0 is a later step, after review.
 
 ## Changing the engine version
 

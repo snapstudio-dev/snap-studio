@@ -4308,7 +4308,7 @@ checksum = "ba467056f1b547ed52077911161fc86985becbc60e8e1857c8a144dab0def891"
 
 [[package]]
 name = "snap-studio"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
  "axum",

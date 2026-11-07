@@ -8,7 +8,7 @@ lists below.
 
 | Plan | Subject | State |
 |---|---|---|
-| [v0.19.md](v0.19.md) | 0.19.0 documentation: changelog, What's new, README, site | Draft checklist. [#95](https://github.com/kameka22/snap-studio/pull/95) is merged. The app version stays **0.18.0**, the changelog stays Unreleased, and What's new `current` stays 0.18. The coming 0.19 page leads with Snappy. No tag and no release in that work. |
+| [v0.19.md](v0.19.md) | 0.19.0 documentation: changelog, What's new, README, site | Prepared in draft [#96](https://github.com/kameka22/snap-studio/pull/96): version **0.19.0**, changelog dated 2026-11-07, What's new `current` **0.19**, Snappy first. No tag and no published packages in that work. |
 
 ## In progress
 
