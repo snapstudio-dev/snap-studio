@@ -1,0 +1,761 @@
+<!doctype html>
+<!--
+  Snap Studio: printer detail page with an interactive 3D view (PR #34).
+  ILLUSTRATIVE MOCKUP. The U1 is a stylised model built from primitives, not
+  the final asset; data is fake; no command is sent. Open this file in a
+  browser (needs network for Three.js from jsDelivr).
+
+  URL parameters (used to render the screenshots):
+    theme=light|dark   state=idle|printing
+    hover=T0..T3|head-T0..|bed|light     select=same ids     instant=1
+-->
+<html lang="en" data-scheme="light" class="mac">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Snap Studio · Printer 3D view (mockup)</title>
+<style>
+:root, [data-scheme="light"] {
+  color-scheme: light;
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace;
+  --accent: #007aff; --accent-text: #fff;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --content-bg: #f3f3f5; --card-bg: #ffffff; --card-border: rgba(0,0,0,.07);
+  --sidebar-bg: #ececee; --sidebar-item-hover: rgba(0,0,0,.05);
+  --text: #1d1d1f; --text-secondary: rgba(60,60,67,.6); --text-tertiary: rgba(60,60,67,.3);
+  --separator: rgba(60,60,67,.16);
+  --control-bg: rgba(255,255,255,.85); --control-border: rgba(0,0,0,.12); --control-bg-hover: rgba(0,0,0,.04);
+  --sheet-bg: #ececee;
+  --sheet-shadow: 0 20px 60px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.08);
+  --danger: #ff3b30; --warning: #ff9500; --success: #34c759;
+  --danger-soft: color-mix(in srgb, var(--danger) 14%, transparent);
+  --success-text: #248a3d; --warning-text: #a05a00;
+  --glass-mix: 84%; --glass-blur: blur(20px) saturate(180%);
+  --radius-control: 7px; --sidebar-width: 220px; --titlebar-height: 52px;
+  --stage-bg: radial-gradient(120% 90% at 50% 38%, #ffffff 0%, #eef0f3 52%, #e2e4e9 100%);
+  --seg-on: #fff; --tip-bg: rgba(28,28,30,.88); --tip-text: #fff;
+}
+[data-scheme="dark"] {
+  color-scheme: dark;
+  --content-bg: #1e1e20; --card-bg: #2b2b2e; --card-border: rgba(255,255,255,.07);
+  --sidebar-bg: #262628; --sidebar-item-hover: rgba(255,255,255,.07);
+  --text: #f5f5f7; --text-secondary: rgba(235,235,245,.6); --text-tertiary: rgba(235,235,245,.3);
+  --separator: rgba(84,84,88,.6);
+  --control-bg: rgba(255,255,255,.08); --control-border: rgba(255,255,255,.12); --control-bg-hover: rgba(255,255,255,.08);
+  --sheet-bg: #2a2a2c;
+  --sheet-shadow: 0 20px 60px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.08);
+  --success-text: #30d158; --warning-text: #ffb340;
+  --stage-bg: radial-gradient(120% 90% at 50% 36%, #3a3b40 0%, #26272b 50%, #18181a 100%);
+  --seg-on: rgba(255,255,255,.16); --tip-bg: rgba(250,250,252,.94); --tip-text: #1d1d1f;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body { font-family: var(--font-ui); font-size: 13px; line-height: 1.35; color: var(--text); -webkit-font-smoothing: antialiased; user-select: none; cursor: default; background: var(--content-bg); }
+button { font: inherit; color: inherit; }
+svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
+.window { display: flex; height: 100%; }
+
+/* sidebar (same structure as ui/index.html) */
+.sidebar { width: var(--sidebar-width); flex: none; display: flex; flex-direction: column; background: var(--sidebar-bg); border-right: 1px solid var(--separator); }
+.titlebar { height: var(--titlebar-height); display: flex; align-items: center; gap: 8px; padding-left: 18px; }
+.titlebar i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+.side-brand { display: flex; align-items: center; gap: 10px; padding: 0 18px 16px; margin-top: -6px; }
+.side-brand img { width: 34px; height: 34px; filter: drop-shadow(0 2px 4px rgba(0,0,0,.2)); }
+.side-brand b { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+.side-nav { flex: 1; padding: 0 10px; display: flex; flex-direction: column; gap: 2px; }
+.side-section { margin: 14px 8px 4px; font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+.side-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; font-size: 13px; width: 100%; border: 0; background: transparent; text-align: left; }
+.side-item .glyph { width: 20px; display: flex; justify-content: center; }
+.side-item .glyph svg { width: 17px; height: 17px; }
+.side-item .lbl { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-item .count { font-size: 12px; color: var(--text-secondary); }
+.side-item:hover { background: var(--sidebar-item-hover); }
+.side-item.on { background: var(--accent); color: #fff; }
+.side-item.on .glyph { color: #fff !important; }
+.side-sub .side-item { padding-left: 22px; }
+.side-footer { padding: 8px 10px 12px; border-top: 1px solid var(--separator); }
+.led { width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary); flex: none; }
+.led.ok { background: var(--success); } .led.busy { background: var(--warning); }
+
+/* toolbar */
+.content { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--content-bg); }
+.toolbar { height: var(--titlebar-height); flex: none; display: flex; align-items: center; gap: 10px; padding: 0 16px 0 22px; border-bottom: 1px solid var(--separator); }
+.tb-title { display: flex; align-items: baseline; gap: 8px; }
+.tb-title h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+.tb-title span { font-size: 12px; color: var(--text-secondary); }
+.tb-spacer { flex: 1; }
+.tb-btn { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-control); border: 1px solid var(--control-border); background: var(--control-bg); }
+.tb-btn svg { width: 15px; height: 15px; }
+.tb-btn.labeled { width: auto; gap: 5px; padding: 0 10px 0 8px; font-size: 12.5px; font-weight: 500; }
+.seg { display: flex; gap: 1px; padding: 2px; border-radius: var(--radius-control); background: var(--control-bg-hover); border: 1px solid var(--control-border); }
+.seg-btn { display: flex; align-items: center; height: 22px; padding: 0 9px; border: 0; border-radius: 5px; background: transparent; color: var(--text-secondary); font-size: 12.5px; }
+.seg-btn:hover { color: var(--text); }
+.seg-btn.on { background: var(--seg-on); color: var(--text); box-shadow: 0 .5px 1px rgba(0,0,0,.15); }
+.pill { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.pill.ok { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success-text); }
+.pill.busy { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning-text); }
+
+/* stage */
+.stage { flex: 1; position: relative; min-height: 0; background: var(--stage-bg); overflow: hidden; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.stage.hovering canvas { cursor: pointer; }
+.glass { background: color-mix(in srgb, var(--sheet-bg) var(--glass-mix), transparent); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); box-shadow: var(--sheet-shadow); }
+
+/* floating panels: same as Prepare's .p-float */
+.p-float { position: absolute; top: 12px; max-height: calc(100% - 80px); display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; }
+.p-float-head { flex: none; display: flex; align-items: center; gap: 6px; padding: 9px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); }
+.p-float-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-float-body { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px; }
+.p-status { left: 12px; width: 340px; }
+.p-insp { right: 12px; width: 312px; transform: translateX(16px); opacity: 0; pointer-events: none; transition: transform 260ms cubic-bezier(.2,.8,.2,1), opacity 200ms ease; }
+.p-insp.open { transform: none; opacity: 1; pointer-events: auto; }
+.p-insp .p-float-head { padding: 11px 10px 9px 12px; }
+.p-insp .p-float-title { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--text); display: flex; align-items: center; gap: 8px; }
+.x-btn { width: 22px; height: 22px; border-radius: 50%; border: 0; background: var(--control-bg-hover); color: var(--text-secondary); display: flex; align-items: center; justify-content: center; }
+.x-btn svg { width: 12px; height: 12px; }
+.sec { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); margin: 4px 0 -2px; display: flex; align-items: center; }
+.sec .r { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.group { border: 1px solid var(--card-border); border-radius: 10px; background: var(--card-bg); overflow: hidden; }
+.row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; font-size: 13px; min-height: 34px; }
+.row + .row { border-top: 1px solid var(--card-border); }
+.row .k { color: var(--text); }
+.row .k .sub { display: block; font-size: 11px; color: var(--text-secondary); }
+.row .v { margin-left: auto; text-align: right; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 6px; }
+.row .v.mono b { font-family: var(--font-mono); font-size: 16px; font-weight: 500; letter-spacing: .03em; }
+.row .v .muted { color: var(--text-secondary); font-size: 11.5px; }
+.select { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px 2px 9px; border-radius: 6px; border: 1px solid var(--control-border); background: var(--control-bg); font-size: 12.5px; }
+.select svg { width: 10px; height: 10px; opacity: .6; }
+.sw { position: relative; width: 38px; height: 22px; border-radius: 11px; background: rgba(120,120,128,.32); border: 0; padding: 0; transition: background 180ms; flex: none; }
+.sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform 180ms cubic-bezier(.2,.8,.2,1); }
+.sw.on { background: var(--success); } .sw.on::after { transform: translateX(16px); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--control-border); background: var(--control-bg); border-radius: var(--radius-control); padding: 4px 12px; min-height: 28px; font-size: 13px; font-weight: 500; box-shadow: 0 .5px 1px rgba(0,0,0,.08); }
+.btn:hover { background: color-mix(in srgb, var(--control-bg) 80%, var(--text) 5%); }
+.btn svg { width: 14px; height: 14px; }
+.btn.primary { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, white), var(--accent)); border-color: color-mix(in srgb, var(--accent) 70%, black 10%); color: #fff; font-weight: 600; }
+.btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.btn.wide { width: 100%; }
+.swatch { width: 14px; height: 14px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); flex: none; }
+.swatch.big { width: 30px; height: 30px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15), 0 2px 6px rgba(0,0,0,.15); position: relative; }
+.swatch.big::after { content: ""; position: absolute; inset: 10px; border-radius: 50%; background: color-mix(in srgb, var(--card-bg) 80%, #888); box-shadow: inset 0 1px 2px rgba(0,0,0,.3); }
+.hero { display: flex; align-items: center; gap: 12px; padding: 10px; }
+.hero .t { font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
+.hero .s { font-size: 12px; color: var(--text-secondary); }
+.tag { margin-left: auto; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; padding: 3px 7px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); }
+.tag.warn { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning-text); }
+.bar { height: 5px; border-radius: 3px; background: var(--separator); overflow: hidden; flex: 1; min-width: 60px; }
+.bar i { display: block; height: 100%; border-radius: 3px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; gap: 5px; align-items: baseline; padding: 3px 8px; border-radius: 6px; font-size: 11.5px; background: var(--control-bg-hover); border: 1px solid var(--card-border); color: var(--text-secondary); }
+.chip b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.presets { display: flex; gap: 6px; padding: 8px 10px 10px; }
+.preset { flex: 1; text-align: center; padding: 4px 0; border-radius: 6px; border: 1px solid var(--control-border); background: var(--control-bg); font-size: 12px; font-variant-numeric: tabular-nums; }
+.preset.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.slider { position: relative; height: 4px; border-radius: 2px; background: var(--separator); margin: 4px 10px 12px; }
+.slider i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: linear-gradient(90deg, var(--warning), var(--danger)); }
+.slider b { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35), 0 0 0 .5px rgba(0,0,0,.1); }
+.links { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
+.link { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; color: var(--accent); font-weight: 500; font-size: 13px; }
+.link:hover { background: var(--accent-soft); }
+.link .chev { margin-left: auto; width: 12px; height: 12px; }
+.link svg:first-child { width: 15px; height: 15px; }
+.tokens { display: flex; gap: 6px; }
+.token { flex: 1; display: flex; align-items: center; gap: 5px; padding: 5px 6px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--card-bg); font-size: 12px; font-weight: 600; }
+.token:hover, .token.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.token .m { font-weight: 500; color: var(--text-secondary); font-size: 10.5px; }
+.prog { display: flex; align-items: center; gap: 10px; }
+.prog .pct { font-family: var(--font-mono); font-size: 20px; font-weight: 500; }
+.job { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* bottom overlays */
+.views-seg { position: absolute; left: 12px; bottom: 12px; padding: 3px; border-radius: 10px; display: flex; gap: 2px; }
+.views-seg .seg-btn { height: 26px; padding: 0 11px; border-radius: 7px; }
+.hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 6px 14px; border-radius: 999px; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; }
+.estop { position: absolute; right: 12px; bottom: 12px; display: flex; align-items: center; gap: 8px; padding: 0 16px 0 10px; height: 38px; border-radius: 12px; border: 0; color: #fff; font-weight: 700; font-size: 13px; letter-spacing: .01em; background: linear-gradient(180deg, #ff5146, #e0261c); box-shadow: 0 8px 24px rgba(255,59,48,.35), inset 0 1px 0 rgba(255,255,255,.25), 0 0 0 1px rgba(150,0,0,.25); }
+.estop svg { width: 22px; height: 22px; }
+.tip { position: absolute; pointer-events: none; padding: 7px 10px; border-radius: 9px; background: var(--tip-bg); color: var(--tip-text); font-size: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.25); transform: translate(-50%, calc(-100% - 14px)); white-space: nowrap; opacity: 0; transition: opacity 120ms; }
+.tip.on { opacity: 1; }
+.tip b { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.tip span { display: block; opacity: .65; font-size: 11px; margin-top: 1px; }
+.tip::after { content: ""; position: absolute; left: 50%; bottom: -5px; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top-color: var(--tip-bg); }
+.toast { position: absolute; left: 50%; top: 14px; transform: translate(-50%, -8px); padding: 7px 14px; border-radius: 9px; background: var(--tip-bg); color: var(--tip-text); font-size: 12px; opacity: 0; transition: all 200ms; pointer-events: none; }
+.toast.on { opacity: 1; transform: translate(-50%, 0); }
+.mock-badge { position: absolute; right: 12px; top: 12px; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-tertiary); }
+.p-insp.open ~ .mock-badge { display: none; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div class="window">
+<aside class="sidebar">
+  <div class="titlebar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+  <div class="side-brand"><img src="../../../ui/assets/app-icon.png" alt="" /><b>Snap Studio</b></div>
+  <nav class="side-nav">
+    <button class="side-item"><span class="glyph" style="color:#FF9500"><svg viewBox="0 0 24 24"><path d="M4 4h5v16H4zm6 0h4v16h-4zm5.3.6 3.9-1 3.8 14.6-3.9 1z"/></svg></span><span class="lbl">Library</span></button>
+    <button class="side-item"><span class="glyph" style="color:#AF52DE"><svg viewBox="0 0 24 24"><path d="M12 2.5 14 8l5.5 2-5.5 2-2 5.5L10 12 4.5 10 10 8zm6.5 10 1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1z"/></svg></span><span class="lbl">AI</span><span class="count">4</span></button>
+    <button class="side-item"><span class="glyph" style="color:#007AFF"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span class="lbl">Files</span></button>
+    <button class="side-item"><span class="glyph" style="color:#5856D6"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5 8.2v7.6l7 3.9 7-3.9V8.2z"/></svg></span><span class="lbl">Prepare</span><span class="count">1</span></button>
+    <button class="side-item"><span class="glyph" style="color:#FF2D55"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m-2 5.5 7 4.5-7 4.5z"/></svg></span><span class="lbl">Prints</span><span class="count" id="side-prints"></span></button>
+    <button class="side-item"><span class="glyph" style="color:#34C759"><svg viewBox="0 0 24 24"><path d="M12 2.5c4 0 7 1.3 7 3v13c0 1.7-3 3-7 3s-7-1.3-7-3v-13c0-1.7 3-3 7-3m0 2c-2.8 0-4.8.8-5 1 .2.2 2.2 1 5 1s4.8-.8 5-1c-.2-.2-2.2-1-5-1"/></svg></span><span class="lbl">Filaments</span><span class="count">12</span></button>
+    <div class="side-section">Printers</div>
+    <button class="side-item on"><span class="glyph"><svg viewBox="0 0 24 24"><path d="M7 3h10v4H7zM4 8h16a2 2 0 0 1 2 2v6h-4v4H6v-4H2v-6a2 2 0 0 1 2-2m4 7v3h8v-3z"/></svg></span><span class="lbl">U1</span><span class="led" id="side-led"></span></button>
+    <div class="side-sub">
+      <button class="side-item"><span class="glyph" style="color:#34C759"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg></span><span class="lbl">Heads and spools</span></button>
+      <button class="side-item"><span class="glyph" style="color:#8E8E93"><svg viewBox="0 0 24 24"><path d="M21 7.5a5 5 0 0 1-6.8 4.6l-7.4 7.4a2 2 0 0 1-2.8-2.8l7.4-7.4A5 5 0 0 1 18 2.8l-3 3 .7 2.5 2.5.7z"/></svg></span><span class="lbl">Care &amp; Tuning</span></button>
+      <button class="side-item"><span class="glyph" style="color:#007AFF"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span class="lbl">Files</span></button>
+    </div>
+    <button class="side-item" style="color:var(--text-secondary)"><span class="glyph"><svg viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg></span><span class="lbl">Add a Printer</span></button>
+  </nav>
+  <div class="side-footer"><button class="side-item"><span class="glyph" style="color:#8E8E93"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg></span><span class="lbl">Settings</span></button></div>
+</aside>
+
+<main class="content">
+  <header class="toolbar">
+    <div class="tb-title"><h1>U1</h1><span>Snapmaker U1 · 192.168.1.42</span></div>
+    <div class="tb-spacer"></div>
+    <span class="pill" id="tb-pill"></span>
+    <button class="tb-btn" title="Camera"><svg viewBox="0 0 24 24"><path d="M4 7h3l2-2h6l2 2h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1m8 3a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7"/></svg></button>
+    <button class="tb-btn" title="Refresh"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
+    <button class="tb-btn" title="Edit"><svg viewBox="0 0 24 24"><path d="M4 17.2V20h2.8l8.3-8.3-2.8-2.8zm14.7-7.6a.8.8 0 0 0 0-1.1l-1.2-1.2a.8.8 0 0 0-1.1 0l-1.4 1.4 2.3 2.3z"/></svg></button>
+  </header>
+
+  <section class="stage" id="stage">
+    <canvas id="gl"></canvas>
+
+    <div class="p-float p-status glass" id="status"></div>
+    <div class="p-float p-insp glass" id="insp"></div>
+    <div class="mock-badge">Mockup · stylised model</div>
+
+    <div class="views-seg glass" id="views">
+      <button class="seg-btn" data-view="left">◀︎ Left</button>
+      <button class="seg-btn on" data-view="front">Front</button>
+      <button class="seg-btn" data-view="right">Right ▶︎</button>
+    </div>
+    <div class="hint glass" id="hint">Hover a part to highlight it · click to open its controls · drag to turn</div>
+    <button class="estop" title="Emergency stop (M112)"><svg viewBox="0 0 24 24"><path d="M8.3 2h7.4L22 8.3v7.4L15.7 22H8.3L2 15.7V8.3z" fill="#fff"/><path d="M8.9 3.5 3.5 8.9v6.2l5.4 5.4h6.2l5.4-5.4V8.9l-5.4-5.4z" fill="#e0261c"/><path d="M7 10.3h10v3.4H7z" fill="#fff"/></svg>Emergency stop</button>
+    <div class="tip" id="tip"></div>
+    <div class="toast" id="toast"></div>
+  </section>
+</main>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+/* ------------------------------------------------------------------ data */
+const Q = new URLSearchParams(location.search);
+const THEME = Q.get('theme') || 'light';
+const STATE = Q.get('state') || 'idle';
+const INSTANT = Q.get('instant') === '1';
+document.documentElement.dataset.scheme = THEME;
+const PRINTING = STATE === 'printing';
+
+// Same source as the #17 Control tab: the spools the printer declares.
+const SPOOLS = [
+  { t: 'T0', side: 'left',  slot: 'upper', mat: 'PLA',  name: 'Cyan',   hex: '#16b4d8', brand: 'Snapmaker', g: 720, rfid: true },
+  { t: 'T1', side: 'left',  slot: 'lower', mat: 'PETG', name: 'Orange', hex: '#ff7a1a', brand: 'Generic',   g: 410, rfid: false },
+  { t: 'T2', side: 'right', slot: 'upper', mat: 'PLA',  name: 'White',  hex: '#f1f1ec', brand: 'Snapmaker', g: 880, rfid: true },
+  { t: 'T3', side: 'right', slot: 'lower', mat: 'TPU 95A', name: 'Black', hex: '#232326', brand: 'Generic', g: 230, rfid: false },
+];
+const ACTIVE = 'T1';
+const HEADS = SPOOLS.map((s, i) => ({
+  t: s.t, i, temp: PRINTING ? (s.t === ACTIVE ? 244.6 : 170.0) : 27.0 + i * 0.4,
+  target: PRINTING ? (s.t === ACTIVE ? 245 : 170) : 0,
+}));
+const BED = { temp: PRINTING ? 79.8 : 26.5, target: PRINTING ? 80 : 0 };
+let lightOn = true;
+
+/* -------------------------------------------------------------- renderer */
+const canvas = document.getElementById('gl');
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = THEME === 'dark' ? 0.95 : 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = THEME === 'dark' ? 0.55 : 0.8;
+
+const camera = new THREE.PerspectiveCamera(26, 1, 0.1, 200);
+scene.add(new THREE.HemisphereLight(0xffffff, THEME === 'dark' ? 0x202024 : 0xd8dbe2, THEME === 'dark' ? 0.55 : 0.7));
+const key = new THREE.DirectionalLight(0xffffff, THEME === 'dark' ? 1.6 : 2.0);
+key.position.set(6, 12, 9);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -7, right: 7, top: 8, bottom: -3, near: 1, far: 40 });
+key.shadow.radius = 6; key.shadow.bias = -0.0006;
+scene.add(key);
+const rim = new THREE.DirectionalLight(THEME === 'dark' ? 0x9db8ff : 0xffffff, THEME === 'dark' ? 0.9 : 0.5);
+rim.position.set(-8, 6, -6); scene.add(rim);
+
+/* ------------------------------------------------------------- helpers */
+const ACCENT = new THREE.Color('#0a84ff');
+function rr(path, x, y, w, h, r) {
+  path.moveTo(x + r, y); path.lineTo(x + w - r, y); path.quadraticCurveTo(x + w, y, x + w, y + r);
+  path.lineTo(x + w, y + h - r); path.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  path.lineTo(x + r, y + h); path.quadraticCurveTo(x, y + h, x, y + h - r);
+  path.lineTo(x, y + r); path.quadraticCurveTo(x, y, x + r, y); return path;
+}
+function canvasTex(w, h, draw, srgb = true) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8; return t;
+}
+const std = (o) => new THREE.MeshStandardMaterial(o);
+const phys = (o) => new THREE.MeshPhysicalMaterial(o);
+function shadowed(o) { o.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } }); return o; }
+
+/* ---------------------------------------------------------------- model */
+const W = 4.0, H = 4.2, D = 4.0, FEET = 0.08;
+const printer = new THREE.Group(); scene.add(printer);
+const body = new THREE.Group(); body.position.y = FEET; printer.add(body);
+
+const shellMat = phys({ color: '#efefef', roughness: 0.42, clearcoat: 0.35, clearcoatRoughness: 0.4 });
+const darkMat = std({ color: '#2a2b2e', roughness: 0.55, metalness: 0.2 });
+const alu = std({ color: '#9ea2a8', roughness: 0.35, metalness: 0.85 });
+const blackAlu = std({ color: '#1b1c1f', roughness: 0.45, metalness: 0.6 });
+
+// Shell: a rounded tube (top, bottom, sides) + back panel + front bezel.
+{
+  const s = rr(new THREE.Shape(), -W / 2, 0, W, H, 0.3);
+  s.holes.push(rr(new THREE.Path(), -W / 2 + 0.1, 0.1, W - 0.2, H - 0.2, 0.22));
+  const g = new THREE.ExtrudeGeometry(s, { depth: D - 0.1, bevelEnabled: false, curveSegments: 16 });
+  g.translate(0, 0, -D / 2 + 0.05);
+  body.add(new THREE.Mesh(g, shellMat));
+  const back = new THREE.ExtrudeGeometry(rr(new THREE.Shape(), -W / 2, 0, W, H, 0.3), { depth: 0.05, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.025, bevelSegments: 3, curveSegments: 16 });
+  back.translate(0, 0, -D / 2);
+  body.add(new THREE.Mesh(back, shellMat));
+  const f = rr(new THREE.Shape(), -W / 2, 0, W, H, 0.3);
+  f.holes.push(rr(new THREE.Path(), -1.62, 0.34, 3.24, 3.12, 0.12));
+  const front = new THREE.ExtrudeGeometry(f, { depth: 0.04, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.025, bevelSegments: 4, curveSegments: 16 });
+  front.translate(0, 0, D / 2 - 0.04);
+  body.add(new THREE.Mesh(front, shellMat));
+  // inner chamber (back faces only, so we see inside through the door)
+  const liner = new THREE.Mesh(new THREE.BoxGeometry(W - 0.22, H - 0.22, D - 0.12), std({ color: '#3a3b3f', roughness: 0.85, side: THREE.BackSide }));
+  liner.position.y = H / 2; liner.receiveShadow = true; body.add(liner);
+  // feet
+  for (const x of [-1.6, 1.6]) for (const z of [-1.6, 1.6]) {
+    const ft = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, FEET, 24), darkMat); ft.position.set(x, -FEET / 2, z); body.add(ft);
+  }
+}
+// Glass door with a dark frame and a handle.
+{
+  const fr = rr(new THREE.Shape(), -1.62, 0.34, 3.24, 3.12, 0.12);
+  fr.holes.push(rr(new THREE.Path(), -1.55, 0.41, 3.1, 2.98, 0.08));
+  const g = new THREE.ExtrudeGeometry(fr, { depth: 0.04, bevelEnabled: false, curveSegments: 12 });
+  g.translate(0, 0, D / 2 + 0.02);
+  body.add(new THREE.Mesh(g, std({ color: '#1f2023', roughness: 0.4, metalness: 0.3 })));
+  const glass = new THREE.Mesh(new THREE.ShapeGeometry(rr(new THREE.Shape(), -1.56, 0.4, 3.12, 3.0, 0.08)),
+    phys({ color: '#d7e2ea', roughness: 0.04, metalness: 0, transparent: true, opacity: THEME === 'dark' ? 0.16 : 0.13, envMapIntensity: 1.6, clearcoat: 1, depthWrite: false }));
+  glass.position.z = D / 2 + 0.05; glass.renderOrder = 5; body.add(glass);
+  // glossy diagonal reflection streak
+  const streak = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 4.2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.05, depthWrite: false }));
+  streak.rotation.z = -0.55; streak.position.set(-0.4, 1.9, D / 2 + 0.055); streak.renderOrder = 6;
+  const clipMask = streak; body.add(clipMask);
+  const handle = new THREE.Mesh(new RoundedBoxGeometry(0.07, 0.6, 0.08, 3, 0.03), std({ color: '#8d9197', roughness: 0.3, metalness: 0.9 }));
+  handle.position.set(1.5, 1.85, D / 2 + 0.1); body.add(handle);
+}
+// Logo and touchscreen on the top band.
+{
+  const logo = canvasTex(512, 96, (c, w, h) => {
+    c.font = '500 54px Inter, Helvetica, Arial'; c.fillStyle = '#6b6d72'; c.textBaseline = 'middle';
+    c.fillText('snapmaker', 4, h / 2); const m = c.measureText('snapmaker ').width;
+    c.font = '300 54px Inter, Helvetica, Arial'; c.fillText('U1', 4 + m, h / 2);
+  });
+  const lg = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.225), new THREE.MeshBasicMaterial({ map: logo, transparent: true }));
+  lg.position.set(-1.0, 3.84, D / 2 + 0.032); body.add(lg);
+  const scr = canvasTex(400, 250, (c, w, h) => {
+    c.fillStyle = '#121316'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#9aa0a8'; c.font = '600 18px Inter, Arial'; c.fillText(PRINTING ? 'Printing · 62%' : 'Ready', 22, 36);
+    SPOOLS.forEach((s, i) => { c.beginPath(); c.arc(60 + i * 70, 100, 22, 0, 7); c.fillStyle = s.hex; c.fill(); c.lineWidth = 3; c.strokeStyle = '#2c2e33'; c.stroke();
+      c.fillStyle = '#c9ccd2'; c.font = '600 15px Inter, Arial'; c.fillText(s.t, 50 + i * 70, 148); });
+    c.fillStyle = '#1e5eff'; c.beginPath(); c.roundRect(250, 180, 120, 44, 10); c.fill();
+    c.fillStyle = '#fff'; c.font = '600 18px Inter, Arial'; c.fillText(PRINTING ? 'Pause' : 'Print', 284, 209);
+    c.fillStyle = '#2a2c31'; c.beginPath(); c.roundRect(24, 180, 200, 44, 10); c.fill();
+    c.fillStyle = '#3b8cff'; c.fillRect(24, 180, PRINTING ? 124 : 0, 44);
+  });
+  const bez = new THREE.Mesh(new RoundedBoxGeometry(0.9, 0.56, 0.05, 3, 0.05), std({ color: '#0d0e10', roughness: 0.2, metalness: 0.2 }));
+  bez.position.set(1.2, 3.86, D / 2 + 0.03); body.add(bez);
+  const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.82, 0.5), new THREE.MeshBasicMaterial({ map: scr, toneMapped: false }));
+  sc.material.color.setScalar(0.9);
+  sc.position.set(1.2, 3.86, D / 2 + 0.06); body.add(sc);
+}
+
+/* ---------------------------------------------------- clickable zones */
+const zones = new Map();   // id -> { group, halo:[], mats:[], anchor, info }
+function zone(id, group, anchor, info) {
+  group.userData.zone = id;
+  const mats = [];
+  group.traverse(o => {
+    if (!o.isMesh || o.userData.noGlow || o.userData.isHalo) return;
+    if (Array.isArray(o.material)) { const c = new Map(); o.material = o.material.map(m => { if (!c.has(m)) c.set(m, m.clone()); return c.get(m); }); c.forEach(m => m.emissive && mats.push(m)); }
+    else if (o.material.emissive) { o.material = o.material.clone(); mats.push(o.material); }
+  });
+  const z = { id, group, halo: [], mats, anchor, info };
+  zones.set(id, z); return z;
+}
+function haloMesh(geo, op = 0.92) {
+  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: ACCENT, side: THREE.BackSide, transparent: true, opacity: 0.0, depthWrite: false }));
+  m.visible = false; m.userData.isHalo = true; m.userData.op = op; m.renderOrder = 2; return m;
+}
+
+const GY = 3.22;
+const carZ = PRINTING ? 0.3 : -0.2, carX = -0.3;
+// Bed (lowered when idle, raised under the nozzle while printing).
+const bedY = PRINTING ? 1.47 : 1.0;
+const bed = new THREE.Group(); bed.position.y = bedY; body.add(bed);
+{
+  const pei = canvasTex(512, 512, (c, w, h) => {
+    const g = c.createLinearGradient(0, 0, w, h); g.addColorStop(0, '#2b2a28'); g.addColorStop(1, '#1f1e1d');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+    for (let i = 0; i < 9000; i++) { c.fillStyle = `rgba(${200 + Math.random() * 40},${170 + Math.random() * 30},120,${Math.random() * 0.07})`; c.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
+    c.strokeStyle = 'rgba(210,180,120,0.16)'; c.lineWidth = 1;
+    for (let i = 1; i < 9; i++) { c.beginPath(); c.moveTo(i * w / 9, 0); c.lineTo(i * w / 9, h); c.stroke(); c.beginPath(); c.moveTo(0, i * h / 9); c.lineTo(w, i * h / 9); c.stroke(); }
+    c.fillStyle = 'rgba(220,190,130,0.35)'; c.font = '600 16px Inter, Arial'; c.fillText('snapmaker · PEI', 18, h - 18);
+  });
+  const plate = new THREE.Mesh(new RoundedBoxGeometry(2.8, 0.05, 2.8, 2, 0.02), [std({ color: '#2a2928', roughness: 0.75, metalness: 0.2 })][0]);
+  plate.material.map = pei; plate.position.y = 0.06;
+  const carrier = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.08, 3.0), alu.clone()); carrier.material.color.set('#7f838a');
+  bed.add(carrier, plate);
+  if (PRINTING) {
+    // the part being printed: a multi-colour vase, 62 % done
+    const prof = []; for (let i = 0; i <= 24; i++) { const y = i / 24 * 0.95; prof.push(new THREE.Vector2(0.28 + 0.1 * Math.sin(y * 3.4) + 0.05 * y, y)); }
+    const bands = [['#16b4d8', 0, 0.2], ['#ff7a1a', 0.2, 0.38], ['#f1f1ec', 0.38, 0.5], ['#ff7a1a', 0.5, 0.59]];
+    for (const [c, a, b] of bands) {
+      const pts = prof.filter(p => p.y >= a - 1e-6 && p.y <= b + 1e-6); pts.unshift(new THREE.Vector2(0.0, a)); 
+      const geo = new THREE.LatheGeometry(pts, 48);
+      const m = new THREE.Mesh(geo, std({ color: c, roughness: 0.55, side: THREE.DoubleSide }));
+      m.position.set(carX - 0.4, 0.09, carZ + 0.14); bed.add(m);
+    }
+  }
+  shadowed(bed);
+  const halo = haloMesh(new THREE.BoxGeometry(3.25, 0.22, 3.15), 0.7); halo.position.y = 0.04; bed.add(halo);
+  const z = zone('bed', bed, new THREE.Vector3(1.4, 0.1, 1.4), {});
+  z.halo.push(halo);
+}
+// Z rods.
+for (const x of [-1.6, 1.6]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, H - 0.3, 16), alu); r.position.set(x, H / 2, -1.75); body.add(r); }
+
+// CoreXY gantry + 4 heads (docked at the back, the active one on the carriage).
+{
+  for (const x of [-1.74, 1.74]) { const r = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 3.7), blackAlu); r.position.set(x, GY, 0); body.add(r); }
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.12, 0.16), blackAlu); beam.position.set(0, GY, carZ); body.add(beam);
+  if (PRINTING) { const car = new THREE.Mesh(new RoundedBoxGeometry(0.66, 0.2, 0.3, 2, 0.04), darkMat); car.position.set(carX, GY - 0.12, carZ + 0.12); body.add(car); }
+  const dock = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.1, 0.2), blackAlu); dock.position.set(0, GY - 0.1, -1.72); body.add(dock);
+}
+const glowTex = canvasTex(128, 128, (c, w) => { const g = c.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(255,170,60,1)'); g.addColorStop(0.35, 'rgba(255,110,20,0.45)'); g.addColorStop(1, 'rgba(255,80,0,0)'); c.fillStyle = g; c.fillRect(0, 0, w, w); });
+const glows = [];
+SPOOLS.forEach((s, i) => {
+  const h = new THREE.Group();
+  const active = PRINTING && s.t === ACTIVE;
+  const dockX = -1.2 + i * 0.8;
+  if (active) h.position.set(carX, GY - 0.55, carZ + 0.14); else h.position.set(dockX, GY - 0.52, -1.42);
+  const shell = new THREE.Mesh(new RoundedBoxGeometry(0.58, 0.6, 0.5, 3, 0.07), phys({ color: '#e9e9ea', roughness: 0.4, clearcoat: 0.3 }));
+  const face = new THREE.Mesh(new RoundedBoxGeometry(0.5, 0.42, 0.04, 2, 0.02), std({ color: '#151618', roughness: 0.3 }));
+  face.position.set(0, 0.03, 0.25);
+  const lab = canvasTex(128, 96, (c, w, hh) => { c.fillStyle = '#e8e9ec'; c.font = '700 44px Inter, Arial'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(s.t, w / 2, hh / 2 + 4); });
+  const label = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.22), new THREE.MeshBasicMaterial({ map: lab, transparent: true }));
+  label.position.set(0, 0.06, 0.275); label.userData.noGlow = true;
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.045, 0.02), std({ color: s.hex, roughness: 0.4, emissive: s.hex, emissiveIntensity: 0.25 }));
+  stripe.position.set(0, -0.12, 0.275); stripe.userData.noGlow = true;
+  const block = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.2), alu); block.position.y = -0.35;
+  const nozMat = std({ color: '#c99a2e', roughness: 0.25, metalness: 1, emissive: '#ff5a00', emissiveIntensity: 0 });
+  const noz = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 20), nozMat); noz.rotation.x = Math.PI; noz.position.y = -0.46; noz.userData.noGlow = true;
+  h.add(shell, face, label, stripe, block, noz);
+  shadowed(h);
+  if (active) {
+    nozMat.emissiveIntensity = 1.2;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    sp.scale.set(0.7, 0.7, 1); sp.position.y = -0.47; h.add(sp);
+    const pl = new THREE.PointLight(0xff7a20, 2.2, 2.2, 2); pl.position.y = -0.5; h.add(pl);
+    glows.push({ sp, pl, nozMat });
+  } else if (PRINTING) { nozMat.emissiveIntensity = 0.35; }
+  body.add(h);
+  const halo = haloMesh(new RoundedBoxGeometry(0.64, 0.66, 0.56, 3, 0.1), 0.5); h.add(halo);
+  const z = zone('head-' + s.t, h, new THREE.Vector3(0, 0.36, 0), { spool: s, i });
+  z.halo.push(halo);
+});
+if (PRINTING) { // empty dock slot of the active head
+  const ghost = new THREE.Mesh(new RoundedBoxGeometry(0.58, 0.08, 0.5, 2, 0.03), std({ color: '#55575c', roughness: 0.7 }));
+  ghost.position.set(-1.2 + SPOOLS.findIndex(s => s.t === ACTIVE) * 0.8, GY - 0.2, -1.42); body.add(ghost);
+}
+// Chamber light: LED bar along the top front edge + a light inside.
+const ledMat = std({ color: '#ffffff', emissive: '#fff4e0', emissiveIntensity: 2.2, roughness: 0.3 });
+const chamberLight = new THREE.PointLight(0xfff1dc, 9, 7, 1.6); chamberLight.position.set(0, 3.6, 0.9); body.add(chamberLight);
+{
+  const g = new THREE.Group(); g.position.set(0, H - 0.17, D / 2 - 0.22);
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.05, 0.1), ledMat); bar.userData.noGlow = true; g.add(bar);
+  const housing = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.08, 0.14), darkMat); housing.position.y = 0.05; g.add(housing);
+  body.add(g);
+  const halo = haloMesh(new THREE.BoxGeometry(3.5, 0.22, 0.28)); g.add(halo);
+  zone('light', g, new THREE.Vector3(1.2, 0, 0), {}).halo.push(halo);
+}
+
+// Spools: two per side, upper one at the back, lower one at the front.
+function windingsTex() {
+  return canvasTex(16, 512, (c, w, h) => {
+    for (let y = 0; y < h; y += 4) { const v = 200 + Math.floor(Math.random() * 40); c.fillStyle = `rgb(${v},${v},${v})`; c.fillRect(0, y, w, 2); c.fillStyle = `rgb(${v + 15},${v + 15},${v + 15})`; c.fillRect(0, y + 2, w, 2); }
+  });
+}
+SPOOLS.forEach((s) => {
+  const dir = s.side === 'left' ? -1 : 1;
+  const g = new THREE.Group();
+  const y = s.slot === 'upper' ? 3.0 : 1.22, z = s.slot === 'upper' ? -0.82 : 0.86;
+  g.position.set(dir * (W / 2 + 0.47), y, z);
+  const axis = new THREE.Group(); axis.rotation.z = Math.PI / 2; g.add(axis);
+  const flMat = std({ color: '#d8cfba', roughness: 0.88 });
+  // clear plastic flanges: the filament colour shows from the side
+  const clear = phys({ color: '#f2f4f6', roughness: 0.12, clearcoat: 1, transparent: true, opacity: 0.16, depthWrite: false });
+  for (const off of [-0.32, 0.32]) {
+    const fl = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.035, 72), clear); fl.position.y = off; fl.renderOrder = 3; fl.userData.noGlow = true; axis.add(fl);
+    const rimM = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.025, 10, 96), std({ color: '#d9dcdf', roughness: 0.3 })); rimM.rotation.x = Math.PI / 2; rimM.position.y = off; axis.add(rimM);
+  }
+  const ringTex = canvasTex(512, 512, (c, w) => { c.fillStyle = '#fff'; c.fillRect(0, 0, w, w); for (let r = 92; r < 256; r += 2.2) { const v = 205 + Math.random() * 50; c.strokeStyle = `rgb(${v},${v},${v})`; c.lineWidth = 1.2; c.beginPath(); c.arc(256, 256, r, 0, 7); c.stroke(); } });
+  const capMat = phys({ color: s.hex, map: ringTex, roughness: 0.4, clearcoat: 0.4 });
+  const map = windingsTex(); map.wrapS = map.wrapT = THREE.RepeatWrapping; map.repeat.set(1, 1);
+  const fil = new THREE.Mesh(new THREE.CylinderGeometry(0.86, 0.86, 0.6, 96, 1), [phys({ color: s.hex, map, roughness: 0.38, clearcoat: 0.5, clearcoatRoughness: 0.3 }), capMat, capMat]);
+  axis.add(fil);
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.66, 40), flMat); axis.add(core);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.72, 32), std({ color: '#c4c6ca', roughness: 0.4, metalness: 0.3 })); axis.add(hub);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.15, 0.08, 32), darkMat); cap.position.y = dir * 0.38; axis.add(cap);
+  shadowed(g);
+  printer.add(g); g.position.y += FEET;
+  // holder spindle + round recess on the side panel
+  const spindle = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.5, 16), alu); spindle.rotation.z = Math.PI / 2;
+  spindle.position.set(dir * (W / 2 + 0.2), y, z); body.add(spindle);
+  const rec = new THREE.Mesh(new THREE.CylinderGeometry(1.12, 1.12, 0.02, 72), phys({ color: '#e4e4e5', roughness: 0.5 }));
+  rec.rotation.z = Math.PI / 2; rec.position.set(dir * (W / 2 + 0.01), y, z); body.add(rec);
+  const halo = haloMesh(new THREE.CylinderGeometry(1.07, 1.07, 0.8, 72)); halo.rotation.z = Math.PI / 2; g.add(halo);
+  const zz = zone(s.t, g, new THREE.Vector3(0, 1.0, 0), { spool: s });
+  zz.halo.push(halo);
+});
+// PTFE tubes looping over the top (one per head), with the filament inside.
+SPOOLS.forEach((s, i) => {
+  const x = -0.45 + i * 0.3;
+  const curve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(x, H + FEET, -1.2), new THREE.Vector3(x, H + 1.0, -1.15), new THREE.Vector3(x, H + 1.75, -1.0),
+    new THREE.Vector3(x, H + 1.95, -1.32), new THREE.Vector3(x, H + 1.7, -1.62), new THREE.Vector3(x, H + 0.9, -1.7), new THREE.Vector3(x, H + FEET, -1.72)]);
+  const outer = new THREE.Mesh(new THREE.TubeGeometry(curve, 80, 0.045, 12), phys({ color: '#f4f5f6', roughness: 0.15, transparent: true, opacity: 0.55, clearcoat: 1, depthWrite: false }));
+  const inner = new THREE.Mesh(new THREE.TubeGeometry(curve, 80, 0.018, 8), std({ color: s.hex, roughness: 0.5 }));
+  inner.castShadow = true; printer.add(inner, outer);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.1, 16), darkMat); base.position.set(x, H + FEET + 0.03, -1.21); printer.add(base);
+});
+
+// Ground: soft shadow + contact blob.
+{
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: THEME === 'dark' ? 0.45 : 0.16 }));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+  const blob = canvasTex(256, 256, (c, w) => { const g = c.createRadialGradient(128, 128, 20, 128, 128, 128); g.addColorStop(0, 'rgba(0,0,0,0.45)'); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = g; c.fillRect(0, 0, w, w); });
+  const b = new THREE.Mesh(new THREE.PlaneGeometry(8.5, 6.5), new THREE.MeshBasicMaterial({ map: blob, transparent: true, depthWrite: false, opacity: THEME === 'dark' ? 0.9 : 0.55 }));
+  b.rotation.x = -Math.PI / 2; b.position.y = 0.002; scene.add(b);
+}
+body.traverse(o => { if (o.isMesh && !o.userData.isHalo && !(o.material.transparent)) { o.castShadow = true; o.receiveShadow = true; } });
+
+/* ---------------------------------------------------------------- camera */
+const VIEWS = { front: 0.2, left: -1.22, right: 1.22 };
+const cam = { theta: VIEWS.front, phi: 1.4, dist: 18.5, ty: 2.85, offset: 0 };
+const goal = { ...cam };
+function applyCamera() {
+  const { theta, phi, dist, ty } = cam;
+  camera.position.set(Math.sin(phi) * Math.sin(theta) * dist, ty + Math.cos(phi) * dist, Math.sin(phi) * Math.cos(theta) * dist);
+  camera.lookAt(0, ty, 0);
+  const w = stage.clientWidth, h = stage.clientHeight;
+  camera.setViewOffset(w, h, cam.offset, 0, w, h);
+}
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+/* ----------------------------------------------------------- interaction */
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+let hovered = null, selected = null;
+const tip = document.getElementById('tip');
+function pickAt(cx, cy) {
+  const r = canvas.getBoundingClientRect();
+  ptr.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ptr, camera);
+  const hits = ray.intersectObjects(scene.children, true).filter(h => !h.object.userData.isHalo && h.object.visible);
+  for (const h of hits) { let o = h.object; while (o && !o.userData.zone) o = o.parent; if (o) return o.userData.zone; if (h.object.material && !h.object.material.transparent) return null; }
+  return null;
+}
+function label(id) {
+  const z = zones.get(id); if (!z) return ['', ''];
+  if (id === 'bed') return ['Heated bed', `${BED.temp.toFixed(1)} °C${BED.target ? ' → ' + BED.target + ' °C' : ' · off'}`];
+  if (id === 'light') return ['Chamber light', lightOn ? 'On' : 'Off'];
+  const s = z.info.spool;
+  if (id.startsWith('head-')) { const hd = HEADS[z.info.i]; return [`Head ${s.t}`, `${hd.temp.toFixed(1)} °C${hd.target ? ' → ' + hd.target + ' °C' : ''} · ${s.mat}`]; }
+  return [`<i class="swatch" style="background:${s.hex}"></i>${s.t} · ${s.name} ${s.mat}`, `${s.side === 'left' ? 'Left' : 'Right'} side · click to turn and open`];
+}
+function setHover(id) {
+  if (hovered === id) return;
+  hovered = id; stage.classList.toggle('hovering', !!id);
+  document.querySelectorAll('.token').forEach(t => t.classList.toggle('on', t.dataset.id === id || t.dataset.id === selected));
+  const [a, b] = label(id); tip.innerHTML = id ? `<b>${a}</b><span>${b}</span>` : ''; tip.classList.toggle('on', !!id);
+}
+function refreshZones(t) {
+  for (const z of zones.values()) {
+    const on = z.id === hovered || z.id === selected;
+    const strength = 1;
+    for (const h of z.halo) { h.visible = on; h.material.opacity = h.userData.op * strength; }
+    for (const m of z.mats) { m.emissive.setRGB(1, 1, 1); m.emissiveIntensity = z.id === hovered && z.id !== selected ? 0.05 + 0.02 * Math.sin(t * 4) : 0; }
+  }
+  if (hovered) {
+    const z = zones.get(hovered); const p = z.anchor.clone(); z.group.localToWorld(p); p.project(camera);
+    tip.style.left = ((p.x + 1) / 2 * stage.clientWidth) + 'px'; tip.style.top = ((1 - p.y) / 2 * stage.clientHeight) + 'px';
+  }
+}
+let down = null, dragged = false;
+canvas.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY, th: goal.theta, ph: goal.phi }; dragged = false; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', e => {
+  if (down) { const dx = e.clientX - down.x, dy = e.clientY - down.y; if (Math.hypot(dx, dy) > 4) dragged = true;
+    if (dragged) { goal.theta = down.th - dx * 0.006; goal.phi = Math.min(1.5, Math.max(0.95, down.ph - dy * 0.004)); setHover(null); setViewBtn(null); return; } }
+  setHover(pickAt(e.clientX, e.clientY));
+});
+canvas.addEventListener('pointerup', e => { if (!dragged) select(pickAt(e.clientX, e.clientY)); down = null; });
+canvas.addEventListener('pointerleave', () => setHover(null));
+document.getElementById('views').addEventListener('click', e => { const v = e.target.closest('[data-view]'); if (v) { goal.theta = VIEWS[v.dataset.view]; goal.phi = 1.4; setViewBtn(v.dataset.view); } });
+function setViewBtn(v) { document.querySelectorAll('#views .seg-btn').forEach(b => b.classList.toggle('on', b.dataset.view === v)); }
+
+/* --------------------------------------------------------------- panels */
+const insp = document.getElementById('insp');
+const I = {
+  close: '<svg viewBox="0 0 24 24"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg>',
+  chev: '<svg class="chev" viewBox="0 0 24 24"><path d="m9 5.6 1.4-1.4 7.8 7.8-7.8 7.8L9 18.4l6.4-6.4z"/></svg>',
+  down: '<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6z"/></svg>',
+  sliders: '<svg viewBox="0 0 24 24"><path d="M4 6h9v2H4zm13 0h3v2h-3zm-2-2h2v6h-2zM4 16h3v2H4zm7 0h9v2h-9zm-2-2h2v6H9z"/></svg>',
+  box: '<svg viewBox="0 0 24 24"><path d="M12 2.5c4 0 7 1.3 7 3v13c0 1.7-3 3-7 3s-7-1.3-7-3v-13c0-1.7 3-3 7-3"/></svg>',
+  load: '<svg viewBox="0 0 24 24"><path d="M11 3h2v11.2l3.6-3.6L18 12l-6 6-6-6 1.4-1.4 3.6 3.6zM5 19h14v2H5z"/></svg>',
+  unload: '<svg viewBox="0 0 24 24"><path d="M13 21h-2V9.8l-3.6 3.6L6 12l6-6 6 6-1.4 1.4L13 9.8zM5 3h14v2H5z"/></svg>',
+  edit: '<svg viewBox="0 0 24 24"><path d="M4 17.2V20h2.8l8.3-8.3-2.8-2.8zm14.7-7.6a.8.8 0 0 0 0-1.1l-1.2-1.2a.8.8 0 0 0-1.1 0l-1.4 1.4 2.3 2.3z"/></svg>',
+  flame: '<svg viewBox="0 0 24 24"><path d="M12 2s6 5 6 11a6 6 0 0 1-12 0c0-3 2-5 2-5s0 3 2 4c0-5 2-10 2-10"/></svg>',
+};
+const links = (focus, inv) => `<div class="links">
+  <div class="link">${I.sliders}<span>All controls${focus ? ' · ' + focus : ''}</span>${I.chev}</div>
+  ${inv ? `<div class="link">${I.box}<span>View in inventory</span>${I.chev}</div>` : ''}</div>`;
+const head = (title) => `<div class="p-float-head"><span class="p-float-title">${title}</span><button class="x-btn" data-close>${I.close}</button></div>`;
+function tempBlock(cur, target, max, presets, unit = '°C') {
+  const pct = Math.min(100, (target || cur) / max * 100);
+  return `<div class="group">
+    <div class="row"><span class="k">Current<span class="sub">${target ? 'Heating to ' + target + ' ' + unit : 'Heater off'}</span></span><span class="v mono"><b>${cur.toFixed(1)}</b><span class="muted">${unit}</span></span></div>
+    <div class="row"><span class="k">Target</span><span class="v"><span class="select">${target || 'Off'}${target ? ' °C' : ''} ${I.down}</span></span></div>
+    <div class="slider"><i style="width:${pct}%"></i><b style="left:${pct}%"></b></div>
+    <div class="presets">${presets.map(p => `<span class="preset${p === target || (p === 0 && !target) ? ' on' : ''}">${p ? p + '°' : 'Off'}</span>`).join('')}</div>
+  </div>`;
+}
+function spoolPanel(s) {
+  const hd = HEADS[SPOOLS.indexOf(s)], active = PRINTING && s.t === ACTIVE;
+  const pct = Math.round(s.g / 1000 * 100);
+  return head(`<i class="swatch" style="background:${s.hex}"></i>${s.t} · Spool, ${s.side} side`) + `<div class="p-float-body">
+    <div class="group"><div class="hero"><i class="swatch big" style="background:${s.hex}"></i><div><div class="t">${s.name} ${s.mat}</div><div class="s">${s.brand} · ${s.hex.toUpperCase()}${s.rfid ? ' · RFID' : ''}</div></div>${active ? '<span class="tag warn">PRINTING</span>' : '<span class="tag">LOADED</span>'}</div></div>
+    <div class="sec">Filament</div>
+    <div class="group">
+      <div class="row"><span class="k">Material</span><span class="v"><span class="select">${s.mat} ${I.down}</span></span></div>
+      <div class="row"><span class="k">Colour</span><span class="v"><i class="swatch" style="background:${s.hex}"></i>${s.name}<span class="select" style="padding:2px 6px">${I.edit}</span></span></div>
+      <div class="row"><span class="k">Remaining<span class="sub">${s.rfid ? 'From the RFID tag' : 'Estimated'}</span></span><span class="v"><span class="bar" style="width:84px"><i style="width:${pct}%;background:${s.hex === '#f1f1ec' ? '#c9c9c2' : s.hex}"></i></span>${s.g} g</span></div>
+    </div>
+    <div class="sec">Linked head</div>
+    <div class="group">
+      <div class="row"><span class="k">Head ${s.t}<span class="sub">0.4 mm · hardened steel</span></span><span class="v mono"><b>${hd.temp.toFixed(0)}</b><span class="muted">°C</span></span></div>
+    </div>
+    <div class="sec">Actions</div>
+    <div class="btn-row"><button class="btn" data-act="LOAD ${s.t}">${I.load}Load</button><button class="btn" data-act="UNLOAD ${s.t}"${active ? ' disabled style="opacity:.45"' : ''}>${I.unload}Unload</button></div>
+    <button class="btn wide" data-act="edit">${I.edit}Edit colour &amp; material</button>
+    ${links('head ' + s.t, true)}
+  </div>`;
+}
+function headPanel(z) {
+  const s = z.info.spool, hd = HEADS[z.info.i], active = PRINTING && s.t === ACTIVE;
+  return head(`<i class="swatch" style="background:${s.hex}"></i>Head ${s.t}`) + `<div class="p-float-body">
+    <div class="group"><div class="row"><span class="k">${active ? 'Printing · on the carriage' : PRINTING ? 'Docked · standby' : 'Docked'}<span class="sub">${s.name} ${s.mat} · 0.4 mm</span></span><span class="v">${active ? '<span class="tag warn">ACTIVE</span>' : '<span class="tag">IDLE</span>'}</span></div></div>
+    <div class="sec">Nozzle temperature</div>
+    ${tempBlock(hd.temp, hd.target, 300, [0, 170, 220, 245])}
+    <div class="sec">Filament</div>
+    <div class="group"><div class="row"><span class="k"><i class="swatch" style="background:${s.hex};display:inline-block;vertical-align:-2px;margin-right:6px"></i>${s.t} spool · ${s.side} side</span><span class="v muted">${s.g} g</span></div></div>
+    ${links('head ' + s.t, false)}
+  </div>`;
+}
+function bedPanel() {
+  return head('Heated bed') + `<div class="p-float-body">
+    <div class="sec">Bed temperature</div>${tempBlock(BED.temp, BED.target, 110, [0, 55, 65, 80])}
+    <div class="group"><div class="row"><span class="k">Plate<span class="sub">Textured PEI</span></span><span class="v muted">Mesh 2 days ago</span></div></div>
+    ${links('bed', false)}</div>`;
+}
+function lightPanel() {
+  return head('Chamber light') + `<div class="p-float-body">
+    <div class="group"><div class="row"><span class="k">Light<span class="sub">LED bar, top of the chamber</span></span><span class="v"><button class="sw${lightOn ? ' on' : ''}" data-light></button></span></div></div>
+    ${links('', false)}</div>`;
+}
+function select(id) {
+  selected = id || null;
+  if (!id) { insp.classList.remove('open'); goal.offset = 0; return; }
+  setHover(null);
+  const z = zones.get(id);
+  insp.innerHTML = id === 'bed' ? bedPanel() : id === 'light' ? lightPanel() : id.startsWith('head-') ? headPanel(z) : spoolPanel(z.info.spool);
+  insp.classList.add('open');
+  goal.offset = 150;
+  if (z.info.spool && !id.startsWith('head-')) {
+    const left = z.info.spool.side === 'left';
+    goal.theta = left ? VIEWS.left : VIEWS.right; goal.phi = 1.36; setViewBtn(left ? 'left' : 'right');
+  } else { goal.theta = VIEWS.front; goal.phi = 1.4; setViewBtn('front'); }
+  document.querySelectorAll('.token').forEach(t => t.classList.toggle('on', t.dataset.id === id));
+}
+insp.addEventListener('click', e => {
+  if (e.target.closest('[data-close]')) return select(null);
+  const l = e.target.closest('[data-light]'); if (l) { lightOn = !lightOn; l.classList.toggle('on', lightOn); return; }
+  const a = e.target.closest('[data-act], .link'); if (a) toast('Mockup: nothing is sent to the printer');
+});
+const toastEl = document.getElementById('toast'); let tt;
+function toast(m) { toastEl.textContent = m; toastEl.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => toastEl.classList.remove('on'), 1600); }
+
+// Status card (top left) and toolbar pill.
+document.getElementById('status').innerHTML = (PRINTING
+  ? `<div class="p-float-head"><span class="led busy"></span><span class="p-float-title">Printing</span><span>Plate 1</span></div>
+     <div class="p-float-body">
+      <div class="job">Spiral_vase_3colours_PETG.gcode</div>
+      <div class="prog"><span class="pct">62%</span><span class="bar"><i style="width:62%;background:var(--accent)"></i></span></div>
+      <div class="chips"><span class="chip">Layer <b>112 / 180</b></span><span class="chip">Left <b>48 min</b></span><span class="chip">${ACTIVE} <b>245 °C</b></span><span class="chip">Bed <b>80 °C</b></span></div>`
+  : `<div class="p-float-head"><span class="led ok"></span><span class="p-float-title">Ready</span><span>Chamber 24 °C</span></div>
+     <div class="p-float-body">
+      <div class="job" style="font-weight:500;color:var(--text-secondary)">No print in progress</div>`)
+  + `<div class="tokens">${SPOOLS.map(s => `<span class="token" data-id="${s.t}"><i class="swatch" style="background:${s.hex}"></i>${s.t}<span class="m">${s.mat.split(' ')[0]}</span></span>`).join('')}</div></div>`;
+document.getElementById('status').addEventListener('click', e => { const t = e.target.closest('.token'); if (t) select(t.dataset.id); });
+document.getElementById('status').addEventListener('mouseover', e => { const t = e.target.closest('.token'); setHover(t ? t.dataset.id : null); });
+const pill = document.getElementById('tb-pill'); pill.textContent = PRINTING ? 'Printing' : 'Ready'; pill.className = 'pill ' + (PRINTING ? 'busy' : 'ok');
+document.getElementById('side-led').className = 'led ' + (PRINTING ? 'busy' : 'ok');
+document.getElementById('side-prints').textContent = PRINTING ? '1' : '';
+
+/* ----------------------------------------------------------------- loop */
+const clock = new THREE.Clock();
+function frame() {
+  const t = clock.getElapsedTime(), k = INSTANT ? 1 : 0.075;
+  for (const p of ['theta', 'phi', 'dist', 'ty', 'offset']) cam[p] += (goal[p] - cam[p]) * k;
+  applyCamera();
+  ledMat.emissiveIntensity = lightOn ? 2.2 : 0.05; chamberLight.intensity = lightOn ? 9 : 0;
+  for (const g of glows) { const f = 0.85 + 0.15 * Math.sin(t * 3.1); g.sp.material.opacity = f; g.pl.intensity = 2.2 * f; g.nozMat.emissiveIntensity = 1.1 * f; }
+  refreshZones(t);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+if (Q.get('select')) select(Q.get('select'));
+if (Q.get('hover')) setHover(Q.get('hover'));
+applyCamera();
+requestAnimationFrame(frame);
+setTimeout(() => { window.__ready = true; }, INSTANT ? 600 : 2500);
+</script>
+</body>
+</html>

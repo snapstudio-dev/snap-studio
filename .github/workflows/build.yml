@@ -10,6 +10,10 @@
 # Updates: packages are signed with the key from the secrets
 # TAURI_SIGNING_PRIVATE_KEY / TAURI_SIGNING_PRIVATE_KEY_PASSWORD, and the
 # release carries `latest.json`, which the installed app reads.
+#
+# Anonymous usage count (docs/privacy.md): the Aptabase app key, secret
+# APTABASE_APP_KEY, is read at build time by the Build step only. Without it
+# (a fork, a local build) the app sends nothing.
 
 name: Release
 
@@ -54,12 +58,23 @@ jobs:
       matrix:
         include:
           - os: macos-latest
+            name: macos
             args: --target universal-apple-darwin --bundles app,dmg
             rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
           - os: windows-latest
+            name: windows
             args: --bundles nsis
             rust-targets: ""
           - os: ubuntu-22.04
+            name: linux-amd64
+            arch: amd64
+            args: --bundles deb,appimage
+            rust-targets: ""
+          # GitHub's native ARM runner (Raspberry Pi 4/5, ARM laptops). No
+          # slicing engine is published for it yet: the app says so.
+          - os: ubuntu-22.04-arm
+            name: linux-arm64
+            arch: arm64
             args: --bundles deb,appimage
             rust-targets: ""
     runs-on: ${{ matrix.os }}
@@ -95,9 +110,31 @@ jobs:
       # key, stays possible.
       - name: Build
         working-directory: src-tauri
+        env:
+          APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
         run: |
           npx --yes @tauri-apps/cli@^2 build ${{ matrix.args }} \
             --config '{"bundle":{"createUpdaterArtifacts":true}}'
+
+      # The printer simulator is for development builds only (Cargo feature
+      # `sim`, docs/DEVELOPMENT.md): neither its server nor its code may
+      # reach a release.
+      - name: No simulator in the release
+        working-directory: src-tauri
+        run: |
+          if cargo tree -e normal --prefix none | grep -qE '^axum v'; then
+            echo "::error::axum, the simulator's server, is among the release's dependencies"
+            exit 1
+          fi
+          bins=$(find target -type f \( -name snap-studio -o -name snap-studio.exe \) -path '*/release/*' -not -path '*/deps/*' -not -path '*/bundle/*')
+          [ -n "$bins" ] || { echo "::error::no release binary found"; exit 1; }
+          for b in $bins; do
+            if grep -aqE 'sim_status|SIMULATED' "$b"; then
+              echo "::error::$b carries the printer simulator"
+              exit 1
+            fi
+            echo "$b: no simulator"
+          done
 
       - name: Packages (macOS)
         if: runner.os == 'macOS'
@@ -122,7 +159,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           b=src-tauri/target/release/bundle
-          n="Snap-Studio_${VERSION}_amd64"
+          n="Snap-Studio_${VERSION}_${{ matrix.arch }}"
           mkdir -p dist
           cp "$b"/deb/*.deb "dist/$n.deb"
           cp "$b"/appimage/*.AppImage "dist/$n.AppImage"
@@ -130,7 +167,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: snap-studio-${{ runner.os }}
+          name: snap-studio-${{ matrix.name }}
           path: dist/*
           if-no-files-found: error
 
@@ -150,16 +187,25 @@ jobs:
           path: dist
           merge-multiple: true
 
-      # Notes: the commits since the previous release.
+      # Notes: this version's section of CHANGELOG.md (written by
+      # scripts/release.sh); otherwise the commits since the previous
+      # release. notes-app.md is the same as plain text, for the app's
+      # update sheet (latest.json).
       - name: Release notes
         run: |
-          prev=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
-          if [ -n "$prev" ]; then
-            git log "$prev..HEAD" --no-merges --format='- %s' > notes.md
+          if python3 scripts/changelog.py notes "$VERSION" > notes.md; then
+            python3 scripts/changelog.py notes "$VERSION" --plain > notes-app.md
+            printf '\n[Full changelog](https://github.com/%s/blob/v%s/CHANGELOG.md)\n' "${{ github.repository }}" "$VERSION" >> notes.md
           else
-            git log -20 --no-merges --format='- %s' > notes.md
+            prev=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+            if [ -n "$prev" ]; then
+              git log "$prev..HEAD" --no-merges --format='- %s' > notes.md
+            else
+              git log -20 --no-merges --format='- %s' > notes.md
+            fi
+            [ -s notes.md ] || echo "- Rebuild without changes" > notes.md
+            cp notes.md notes-app.md
           fi
-          [ -s notes.md ] || echo "- Reconstruction sans changement" > notes.md
           cat notes.md
 
       # File read by the installed app: one entry per platform, with the
@@ -170,13 +216,15 @@ jobs:
           mac="Snap-Studio_${VERSION}_macos-universal.app.tar.gz"
           win="Snap-Studio_${VERSION}_x64-setup.exe"
           lin="Snap-Studio_${VERSION}_amd64.AppImage"
+          arm="Snap-Studio_${VERSION}_arm64.AppImage"
           jq -n \
             --arg v "$VERSION" \
-            --rawfile notes notes.md \
+            --rawfile notes notes-app.md \
             --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg mu "$base/$mac" --rawfile ms "dist/$mac.sig" \
             --arg wu "$base/$win" --rawfile ws "dist/$win.sig" \
             --arg lu "$base/$lin" --rawfile ls "dist/$lin.sig" \
+            --arg armu "$base/$arm" --rawfile arms "dist/$arm.sig" \
             '{
               version: $v,
               notes: $notes,
@@ -185,7 +233,8 @@ jobs:
                 "darwin-aarch64": { url: $mu, signature: $ms },
                 "darwin-x86_64":  { url: $mu, signature: $ms },
                 "windows-x86_64": { url: $wu, signature: $ws },
-                "linux-x86_64":   { url: $lu, signature: $ls }
+                "linux-x86_64":   { url: $lu, signature: $ls },
+                "linux-aarch64":  { url: $armu, signature: $arms }
               }
             }' > dist/latest.json
           cat dist/latest.json

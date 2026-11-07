@@ -13,7 +13,10 @@ language of the app (LANGS).
 
 Run again when Orca changes:
 
-    python3 scripts/gen-orca-settings.py [path/to/OrcaSlicer]
+    python3 scripts/gen-orca-settings.py [path/to/OrcaSlicer] [--untranslated]
+
+A label Orca's .po leaves untranslated shows in English: `--untranslated`
+lists them per language, to fill the worst gaps in FIXES.
 """
 
 import json
@@ -22,11 +25,25 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-ORCA = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "OrcaSlicer"
+ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
+ORCA = Path(ARGS[0]) if ARGS else ROOT / "OrcaSlicer"
+UNTRANSLATED = "--untranslated" in sys.argv
 OUT = ROOT / "ui" / "assets"
 
 # Languages of the app; English is Orca's source language.
-LANGS = ["en", "fr"]
+LANGS = ["en", "fr", "de", "es", "pt-BR", "it", "ja", "zh-Hans", "ko"]
+
+# Folder of Orca's translation, when its name differs from the app's code.
+PO_DIRS = {"pt-BR": "pt_BR", "zh-Hans": "zh_CN"}
+
+# Texts the .po file leaves untranslated (an empty msgstr), for the settings
+# the app shows: without these the catalog would show English. French only
+# so far; `--untranslated` lists what the other languages lack.
+FIXES = {
+    "fr": {
+        "Aligned back": "Alignée à l'arrière",
+    },
+}
 
 STR = r'"(?:[^"\\]|\\.)*"'
 
@@ -44,6 +61,10 @@ def literals(text):
 
 
 def load_po(path):
+    """msgid → msgstr. Entries marked `#, fuzzy` are kept on purpose: in
+    Orca's catalogs they are tooltips whose English moved a little since
+    they were translated, and their text still says the same thing (checked
+    for v2.4.0: de 12, es 11, fr 10). Dropping them would show English."""
     tr, msgid, msgstr, cur = {}, None, None, None
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
@@ -69,8 +90,10 @@ def translator(lang):
     """Text → its translation in `lang`; the text itself for English."""
     if lang == "en":
         return {}, lambda text: text
-    po = next((ORCA / "localization" / "i18n" / lang).glob("*.po"))
-    table = load_po(po)
+    po = next((ORCA / "localization" / "i18n" / PO_DIRS.get(lang, lang)).glob("*.po"))
+    table = {**load_po(po)}
+    for text, fixed in FIXES.get(lang, {}).items():
+        table.setdefault(text, fixed)
     return table, lambda text: table.get(text, text) if text else text
 
 
@@ -80,6 +103,10 @@ def translator(lang):
 def load_defs(path, tr):
     src = path.read_text(encoding="utf-8")
     keys = {}
+    # `auto def_x = def = this->add("key", …)`: a definition another one
+    # copies its list from (`def->enum_values = def_x->enum_values`).
+    aliases = dict(re.findall(r'auto\s+(\w+)\s*=\s*def\s*=\s*this->add(?:_nullable)?\(\s*"([a-z0-9_]+)"', src))
+    copies = {}
     starts = list(re.finditer(r'def\s*=\s*this->add(?:_nullable)?\(\s*"([a-z0-9_]+)"\s*,\s*co([A-Za-z]+)', src))
     for i, m in enumerate(starts):
         block = src[m.end(): starts[i + 1].start() if i + 1 < len(starts) else len(src)]
@@ -92,6 +119,9 @@ def load_defs(path, tr):
         labels = [literals(v) for v in re.findall(r"def->enum_labels\.(?:push|emplace)_back\(\s*(?:L\()?\s*(" + STR + r")", block)]
         if values:
             info["enum"] = {v: tr(labels[j]) if j < len(labels) else v for j, v in enumerate(values)}
+        copied = re.search(r"def->enum_values\s*=\s*(\w+)->enum_values", block)
+        if copied and copied.group(1) in aliases:
+            copies[m.group(1)] = aliases[copied.group(1)]
         label = info.get("full_label") or info.get("label")
         entry = {"label": tr(label) if label else m.group(1)}
         if info.get("label") and info.get("full_label") and info["label"] != info["full_label"]:
@@ -107,6 +137,9 @@ def load_defs(path, tr):
         # A repeated definition (variants) keeps the most complete one.
         if m.group(1) not in keys or len(entry) > len(keys[m.group(1)]):
             keys[m.group(1)] = entry
+    for key, source in copies.items():
+        if "enum" in keys.get(source, {}) and "enum" not in keys[key]:
+            keys[key]["enum"] = dict(keys[source]["enum"])
     return keys
 
 
@@ -198,6 +231,9 @@ def generate(lang):
     )
     if missing:
         print("  without a definition:", ", ".join(missing))
+    if table and UNTRANSLATED:
+        left = sorted({k["label"] for k in keys.values() if k["label"] and k["label"] not in table.values()})
+        print(f"  {len(left)} labels in English:", "; ".join(left))
 
 
 for lang in LANGS:

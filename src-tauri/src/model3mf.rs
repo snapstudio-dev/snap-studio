@@ -99,8 +99,7 @@ fn score_image(name: &str, pref: ThumbPref) -> i32 {
         return -1;
     }
     // Technical images unusable as previews.
-    if l.contains("pick_") || l.contains("no_light") || l.contains("/top_") || l.starts_with("top_")
-    {
+    if l.contains("pick_") || l.contains("no_light") || l.contains("/top_") || l.starts_with("top_") {
         return -1;
     }
     if l.contains("designercover") || l.contains("profile pictures/") {
@@ -160,19 +159,14 @@ pub fn find_thumbnail(zip: &mut Zip, pref: ThumbPref) -> Option<(String, Vec<u8>
         }
     }
     let (_, name) = best?;
-    let src = if name.to_ascii_lowercase().contains("metadata/") {
-        ThumbSource::Plate
-    } else {
-        ThumbSource::Model
-    };
+    let src = if name.to_ascii_lowercase().contains("metadata/") { ThumbSource::Plate } else { ThumbSource::Model };
     let data = read_entry(zip, &name)?;
     Some((name, data, src))
 }
 
 /// Attribute value with entity references resolved.
 pub fn aval<'a>(a: &quick_xml::events::attributes::Attribute<'a>) -> std::borrow::Cow<'a, str> {
-    a.normalized_value(quick_xml::XmlVersion::Implicit1_0)
-        .unwrap_or_else(|_| a.value.clone())
+    a.normalized_value(quick_xml::XmlVersion::Implicit1_0).unwrap_or_else(|_| a.value.clone())
 }
 
 fn attr_str(e: &quick_xml::events::BytesStart, key: &str) -> Option<String> {
@@ -186,9 +180,7 @@ fn attr_str(e: &quick_xml::events::BytesStart, key: &str) -> Option<String> {
 
 /// Reads the header of 3D/3dmodel.model: metadata + object names (meshes are skipped).
 fn read_model_header(zip: &mut Zip, meta: &mut Meta) -> Result<()> {
-    let f = zip
-        .by_name("3D/3dmodel.model")
-        .map_err(|_| anyhow!("3dmodel.model missing"))?;
+    let f = zip.by_name("3D/3dmodel.model").map_err(|_| anyhow!("3dmodel.model missing"))?;
     let mut reader = quick_xml::Reader::from_reader(BufReader::new(f));
     reader.config_mut().trim_text(true);
     reader.config_mut().check_end_names = false;
@@ -241,12 +233,10 @@ fn read_model_header(zip: &mut Zip, meta: &mut Meta) -> Result<()> {
 
 fn parse_color(s: &str) -> Option<[u8; 3]> {
     let s = s.trim().trim_start_matches('#');
-    if s.len() < 6 {
-        return None;
-    }
-    let r = u8::from_str_radix(&s[0..2], 16).ok()?;
-    let g = u8::from_str_radix(&s[2..4], 16).ok()?;
-    let b = u8::from_str_radix(&s[4..6], 16).ok()?;
+    // `get`: a non-ASCII character at a cut gives None, not a panic.
+    let r = u8::from_str_radix(s.get(0..2)?, 16).ok()?;
+    let g = u8::from_str_radix(s.get(2..4)?, 16).ok()?;
+    let b = u8::from_str_radix(s.get(4..6)?, 16).ok()?;
     Some([r, g, b])
 }
 
@@ -484,10 +474,7 @@ pub fn project_filaments(zip: &mut Zip) -> Vec<ProjectFilament> {
         return Vec::new();
     };
     let list = |k: &str| -> Vec<String> {
-        v.get(k)
-            .and_then(|x| x.as_array())
-            .map(|a| a.iter().filter_map(|s| s.as_str().map(String::from)).collect())
-            .unwrap_or_default()
+        v.get(k).and_then(|x| x.as_array()).map(|a| a.iter().filter_map(|s| s.as_str().map(String::from)).collect()).unwrap_or_default()
     };
     let (types, colors) = (list("filament_type"), list("filament_colour"));
     (0..types.len().max(colors.len()).min(16))
@@ -502,11 +489,21 @@ pub fn project_filaments(zip: &mut Zip) -> Vec<ProjectFilament> {
 /// Full metadata reading of a 3MF file.
 pub fn read_meta(zip: &mut Zip) -> Meta {
     let mut meta = Meta::default();
-    meta.has_embedded_thumb = entry_names(zip)
-        .iter()
-        .any(|n| score_image(n, ThumbPref::Auto) > 0);
+    meta.has_embedded_thumb = entry_names(zip).iter().any(|n| score_image(n, ThumbPref::Auto) > 0);
     let _ = read_model_header(zip, &mut meta);
     read_slice_info(zip, &mut meta);
     read_model_settings(zip, &mut meta);
     meta
+}
+
+#[cfg(test)]
+mod hex_tests {
+    use super::parse_color;
+
+    #[test]
+    fn colours_cut_safely() {
+        assert_eq!(parse_color("#ff8000"), Some([255, 128, 0]));
+        assert_eq!(parse_color("aé0000"), None);
+        assert_eq!(parse_color("aaaaaé"), None);
+    }
 }

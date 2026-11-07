@@ -28,12 +28,7 @@ pub fn scan_dir(root: &Path, recursive: bool) -> Vec<ScannedFile> {
         .max_depth(depth)
         .follow_links(false)
         .into_iter()
-        .filter_entry(|e| {
-            !e.file_name()
-                .to_str()
-                .map(|s| s.starts_with('.') && s != ".")
-                .unwrap_or(false)
-        })
+        .filter_entry(|e| !e.file_name().to_str().map(|s| s.starts_with('.') && s != ".").unwrap_or(false))
         .flatten()
     {
         if !entry.file_type().is_file() {
@@ -48,10 +43,7 @@ pub fn scan_dir(root: &Path, recursive: bool) -> Vec<ScannedFile> {
             Err(_) => continue,
         };
         out.push(ScannedFile {
-            name: path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_default(),
+            name: path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
             size: md.len(),
             modified: md.modified().unwrap_or(SystemTime::UNIX_EPOCH),
             path: path.to_path_buf(),

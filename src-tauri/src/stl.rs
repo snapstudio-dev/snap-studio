@@ -18,7 +18,9 @@ const HEADER: usize = 84;
 /// Normal + 3 vertices + attribute: 12 floats and 2 bytes.
 const RECORD: usize = 50;
 
-/// True if the file size matches the announced count exactly.
+/// True if the file size matches the announced count: exactly, or with a
+/// few trailing bytes (some exporters end with padding or a newline), never
+/// short of a record.
 ///
 /// The word "solid" at the start is not trusted: many exporters put it in the
 /// header of a binary file too.
@@ -27,9 +29,7 @@ fn looks_binary(data: &[u8]) -> bool {
         return false;
     }
     let n = u32::from_le_bytes([data[80], data[81], data[82], data[83]]) as usize;
-    n.checked_mul(RECORD)
-        .map(|body| HEADER + body == data.len())
-        .unwrap_or(false)
+    n > 0 && n.checked_mul(RECORD).and_then(|body| data.len().checked_sub(HEADER + body)).is_some_and(|extra| extra < RECORD)
 }
 
 fn f32_at(data: &[u8], off: usize) -> f32 {
@@ -86,11 +86,7 @@ pub fn read(path: &Path) -> Result<MeshData> {
     if data.len() < 15 {
         return Err(anyhow!(crate::t!("err.stl_empty")));
     }
-    let faces = if looks_binary(&data) {
-        read_binary(&data)
-    } else {
-        read_ascii(&String::from_utf8_lossy(&data))
-    };
+    let faces = if looks_binary(&data) { read_binary(&data) } else { read_ascii(&String::from_utf8_lossy(&data)) };
     if faces.is_empty() {
         return Err(anyhow!(crate::t!("err.stl_no_triangle")));
     }
@@ -105,18 +101,9 @@ pub fn read(path: &Path) -> Result<MeshData> {
                 max[k] = max[k].max(p[k]);
             }
         }
-        tris.push(Tri {
-            v,
-            c: crate::render::DEFAULT_COLOR,
-        });
+        tris.push(Tri { v, c: crate::render::DEFAULT_COLOR });
     }
-    Ok(MeshData {
-        extruders: Vec::new(),
-        tris,
-        min,
-        max,
-        truncated: false,
-    })
+    Ok(MeshData { extruders: Vec::new(), tris, min, max, truncated: false, volumes: Vec::new(), paint: Vec::new() })
 }
 
 /// Unit normal of a triangle; zero if the triangle is degenerate.
@@ -124,6 +111,7 @@ pub fn read(path: &Path) -> Result<MeshData> {
 fn normal(v: &[[f32; 3]; 3]) -> [f32; 3] {
     let u = [v[1][0] - v[0][0], v[1][1] - v[0][1], v[1][2] - v[0][2]];
     let w = [v[2][0] - v[0][0], v[2][1] - v[0][1], v[2][2] - v[0][2]];
+    #[rustfmt::skip]
     let n = [
         u[1] * w[2] - u[2] * w[1],
         u[2] * w[0] - u[0] * w[2],
@@ -174,22 +162,18 @@ pub fn write(path: &Path, tris: &[Tri]) -> Result<()> {
 #[cfg(test)]
 pub fn tests_cube() -> Vec<Tri> {
     // A 10 mm cube resting at the origin, in 12 triangles.
+    #[rustfmt::skip]
     let p = [
         [0., 0., 0.], [10., 0., 0.], [10., 10., 0.], [0., 10., 0.],
         [0., 0., 10.], [10., 0., 10.], [10., 10., 10.], [0., 10., 10.],
     ];
+    #[rustfmt::skip]
     let faces = [
         [0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7],
         [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5],
         [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7],
     ];
-    faces
-        .iter()
-        .map(|f| Tri {
-            v: [p[f[0]], p[f[1]], p[f[2]]],
-            c: crate::render::DEFAULT_COLOR,
-        })
-        .collect()
+    faces.iter().map(|f| Tri { v: [p[f[0]], p[f[1]], p[f[2]]], c: crate::render::DEFAULT_COLOR }).collect()
 }
 
 #[cfg(test)]

@@ -12,7 +12,7 @@ const UP = {
   installing: false,
   /* Status line shown in Settings, as a key and its parameters. */
   status: ["update.never", {}],
-  prefs: { auto: true, last: null, ...JSON.parse(localStorage.getItem("snapstudio.update") || "{}") },
+  prefs: { auto: true, last: null, ...storedObject("snapstudio.update") },
 };
 
 const UP_RELEASES = "https://github.com/kameka22/snap-studio/releases/latest";
@@ -39,10 +39,16 @@ async function upCheck(manual) {
     UP.prefs.last = Date.now();
     upSave();
     UP.found = r;
+    upBadge();
     $("up-check").textContent = tr(r ? "common.show" : "settings.update_check");
     if (r) {
       upStatus("update.available", { version: r.version });
-      upOpen();
+      // On its own, the sheet opens once per version; the badge stays.
+      if (manual || UP.prefs.offered !== r.version) {
+        UP.prefs.offered = r.version;
+        upSave();
+        upOpen();
+      }
     } else {
       upStatus("update.uptodate");
       if (manual) toast(tr("update.uptodate"));
@@ -55,6 +61,17 @@ async function upCheck(manual) {
     $("up-check").disabled = false;
   }
 }
+
+/* Beside Settings: an arrow and the new version, while one is waiting. */
+function upBadge() {
+  const b = $("side-update");
+  b.classList.toggle("hidden", !UP.found);
+  b.querySelector("b").textContent = UP.found?.version || "";
+}
+$("side-update").addEventListener("click", (e) => {
+  e.stopPropagation();
+  upOpen();
+});
 
 function upOpen() {
   const r = UP.found;
@@ -101,6 +118,7 @@ async function upInstall() {
     $("u-later").disabled = false;
     // Rust consumed the update: a new check finds it again.
     UP.found = null;
+    upBadge();
     $("up-check").textContent = tr("settings.update_check");
     upCheck(false);
   }
@@ -155,4 +173,6 @@ window.addEventListener("langchange", () => {
   // Let the app finish starting before going to the network.
   // No update sheet over the welcome assistant.
   if (UP.prefs.auto) setTimeout(() => !W.open && upCheck(false), 3000);
+  // An app left open for days still hears of new versions.
+  setInterval(() => UP.prefs.auto && !W.open && upCheck(false), 6 * 3600 * 1000);
 })();

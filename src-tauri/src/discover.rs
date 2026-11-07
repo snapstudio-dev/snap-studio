@@ -18,10 +18,7 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, State};
 
 const WAKEUP: &str = "_services._dns-sd._udp.local.";
-const SERVICES: &[(&str, &str)] = &[
-    ("_snapmaker._tcp.local.", "snapmaker"),
-    ("_moonraker._tcp.local.", "moonraker"),
-];
+const SERVICES: &[(&str, &str)] = &[("_snapmaker._tcp.local.", "snapmaker"), ("_moonraker._tcp.local.", "moonraker")];
 /// Listening time, as in Orca.
 const LISTEN: Duration = Duration::from_secs(20);
 
@@ -51,20 +48,35 @@ impl Discovery {
     }
 }
 
-/// Starts a search; a previous search is stopped.
+/// Starts a search; a previous search is stopped. `search` is the number
+/// the UI gave this search: every event carries it, so that a stopped
+/// search still winding down (it answers its stop flag within 100 ms, and
+/// may resolve a printer meanwhile) is told from the one that replaced it.
 #[tauri::command]
-pub fn printer_discover_start(app: AppHandle, state: State<'_, Discovery>) -> Result<(), String> {
+pub fn printer_discover_start(app: AppHandle, state: State<'_, Discovery>, search: u64) -> Result<(), String> {
     state.stop();
+    // Simulation: the simulated printers, and nothing is asked of the network.
+    #[cfg(feature = "sim")]
+    if let Some(found) = crate::sim::discovered() {
+        std::thread::spawn(move || {
+            for f in found {
+                std::thread::sleep(Duration::from_millis(400));
+                let _ = app.emit("printer-found", serde_json::json!({ "search": search, "printer": f }));
+            }
+            let _ = app.emit("printer-discover-done", serde_json::json!({ "search": search }));
+        });
+        return Ok(());
+    }
     let daemon = ServiceDaemon::new().map_err(|e| crate::t!("err.discovery", err = e))?;
     let stop = Arc::new(AtomicBool::new(false));
     *state.0.lock().unwrap() = Some(stop.clone());
     std::thread::spawn(move || {
         run(&daemon, &stop, |f| {
             log(&format!("{} — {} ({}, {})", f.service, f.name, f.ip, f.sn.as_deref().unwrap_or("no serial number")));
-            let _ = app.emit("printer-found", f);
+            let _ = app.emit("printer-found", serde_json::json!({ "search": search, "printer": f }));
         });
         let _ = daemon.shutdown();
-        let _ = app.emit("printer-discover-done", ());
+        let _ = app.emit("printer-discover-done", serde_json::json!({ "search": search }));
     });
     Ok(())
 }
@@ -77,8 +89,10 @@ pub fn printer_discover_stop(state: State<'_, Discovery>) {
 /// Listens until the timeout or a stop request.
 fn run(daemon: &ServiceDaemon, stop: &AtomicBool, mut on_found: impl FnMut(Found)) {
     // The answer to the wake-up does not interest us: only the traffic it
-    // triggers matters.
-    let _wake = daemon.browse(WAKEUP);
+    // triggers matters. It must still be read: the daemon waits on a full
+    // listener (10 events), and a home network answers with dozens of service
+    // types — the search froze before the printers had answered.
+    let wake = daemon.browse(WAKEUP).ok();
     let receivers: Vec<_> = SERVICES
         .iter()
         .filter_map(|(ty, kind)| match daemon.browse(ty) {
@@ -92,17 +106,14 @@ fn run(daemon: &ServiceDaemon, stop: &AtomicBool, mut on_found: impl FnMut(Found
     let end = Instant::now() + LISTEN;
     while Instant::now() < end && !stop.load(Ordering::Relaxed) {
         let mut idle = true;
+        if let Some(rx) = &wake {
+            while rx.try_recv().is_ok() {}
+        }
         for (rx, kind) in &receivers {
             while let Ok(ev) = rx.try_recv() {
                 idle = false;
                 if let ServiceEvent::ServiceResolved(s) = ev {
-                    let txt = |k: &str| {
-                        s.txt_properties
-                            .get_property_val_str(k)
-                            .map(str::trim)
-                            .filter(|v| !v.is_empty())
-                            .map(String::from)
-                    };
+                    let txt = |k: &str| s.txt_properties.get_property_val_str(k).map(str::trim).filter(|v| !v.is_empty()).map(String::from);
                     let ips: Vec<_> = s.get_addresses_v4().into_iter().collect();
                     if let Some(f) = found(kind, &s.fullname, &s.host, s.port, &ips, txt) {
                         on_found(f);
@@ -131,28 +142,18 @@ fn found(
 ) -> Option<Found> {
     // The address announced in the TXT record comes before the record's own:
     // it is the one the printer says it uses.
-    let ip = txt("ip")
-        .filter(|v| v.parse::<std::net::Ipv4Addr>().is_ok())
-        .or_else(|| {
-            let mut v: Vec<_> = ips.iter().filter(|a| !a.is_loopback() && !a.is_link_local()).collect();
-            v.sort();
-            v.first().map(|a| a.to_string())
-        })?;
+    let ip = txt("ip").filter(|v| v.parse::<std::net::Ipv4Addr>().is_ok()).or_else(|| {
+        let mut v: Vec<_> = ips.iter().filter(|a| !a.is_loopback() && !a.is_link_local()).collect();
+        v.sort();
+        v.first().map(|a| a.to_string())
+    })?;
     let instance = fullname.split("._").next().unwrap_or("").trim();
     let hostname = host.trim_end_matches('.').trim_end_matches(".local");
     let name = txt("device_name")
         .or_else(|| (!instance.is_empty()).then(|| instance.to_string()))
         .or_else(|| (!hostname.is_empty()).then(|| hostname.to_string()))
         .unwrap_or_else(|| ip.clone());
-    Some(Found {
-        sn: txt("sn"),
-        name,
-        model: txt("machine_type"),
-        ip,
-        port,
-        firmware: txt("version"),
-        service: kind.to_string(),
-    })
+    Some(Found { sn: txt("sn"), name, model: txt("machine_type"), ip, port, firmware: txt("version"), service: kind.to_string() })
 }
 
 fn log(msg: &str) {
@@ -241,6 +242,40 @@ mod tests {
         let _ = t;
         println!("{hits:?}");
         assert!(hits.iter().any(|f| f.sn.as_deref() == Some("SNTEST") && f.name == "Test U1"));
+    }
+
+    /// The wake-up answers must not freeze the search: more service types
+    /// than a listener holds (10) announce themselves first, the U1 two
+    /// seconds later, as on a home network. Depends on the network: run by
+    /// hand.
+    #[test]
+    #[ignore]
+    fn busy_network_does_not_freeze_the_search() {
+        use mdns_sd::ServiceInfo;
+        let host = ServiceDaemon::new().unwrap();
+        let ip = local_ip();
+        for i in 0..15 {
+            let ty = format!("_busy{i}._tcp.local.");
+            let info = ServiceInfo::new(&ty, "busy", "busy-test.local.", ip.as_str(), 9000 + i, None::<HashMap<String, String>>).unwrap();
+            host.register(info).unwrap();
+        }
+
+        let daemon = ServiceDaemon::new().unwrap();
+        let stop = AtomicBool::new(false);
+        let mut hits = Vec::new();
+        std::thread::scope(|sc| {
+            sc.spawn(|| {
+                std::thread::sleep(Duration::from_secs(2));
+                let info =
+                    ServiceInfo::new("_snapmaker._tcp.local.", "U1-BUSY", "u1-busy.local.", ip.as_str(), 8883, &[("sn", "SNBUSY")][..])
+                        .unwrap();
+                host.register(info).unwrap();
+                std::thread::sleep(Duration::from_secs(6));
+                stop.store(true, Ordering::Relaxed);
+            });
+            run(&daemon, &stop, |f| hits.push(f));
+        });
+        assert!(hits.iter().any(|f| f.sn.as_deref() == Some("SNBUSY")), "{hits:?}");
     }
 
     fn local_ip() -> String {

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Camera</title>
+<style>
+  /* The pinned camera over a site (library.rs): a small native view of
+     ours at the interface's pinned window's place, which a site's view
+     would otherwise cover. Same look as that window (style.css .cam-pip). */
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  body { font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: #fff; -webkit-user-select: none; user-select: none; }
+  /* The interface's language (camview.js): its own fonts, as style.css. */
+  :lang(ja) body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Meiryo, "Noto Sans CJK JP", sans-serif; line-break: strict; }
+  :lang(zh-Hans) body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; line-break: strict; }
+  :lang(ko) body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", sans-serif; word-break: keep-all; overflow-wrap: anywhere; }
+  .pip { display: flex; flex-direction: column; height: 100%; border-radius: 12px; overflow: hidden; background: #000; box-sizing: border-box; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+  .head { display: flex; align-items: center; gap: 4px; padding: 5px 6px 5px 10px; background: rgba(28, 28, 30, 0.96); }
+  .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  button { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: rgba(255, 255, 255, 0.8); cursor: default; }
+  button:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 2px #0a84ff; }
+  button svg { width: 15px; height: 15px; fill: currentColor; }
+  .body { position: relative; flex: 1; min-height: 0; cursor: pointer; }
+  img { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .off { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px; background: #111; color: rgba(255, 255, 255, 0.78); text-align: center; }
+  .off svg { width: 26px; height: 26px; fill: currentColor; opacity: 0.7; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+  <div class="pip">
+    <div class="head">
+      <span class="name" id="name"></span>
+      <button id="unpin" data-act="unpin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.3 3.7 3.7 2.3l18 18-1.4 1.4-6.3-6.3-.1.1.5 4.5-1.4 1.4-4-4-4.6 4.6H4v-1.7l4.6-4.6-4-4L6 8.3l1.9.2zM15 3l6 6-2.5 1.2-2.2 2.2-5.6-5.6 2.2-2.2z"/></svg></button>
+      <button id="close" data-act="close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg></button>
+    </div>
+    <div class="body" id="body" data-act="open">
+      <img id="img" alt="" />
+      <div id="off" class="off hidden" role="status"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.3 3.7 3.7 2.3l18 18-1.4 1.4-3.4-3.4H6.5A4.5 4.5 0 0 1 5 10.2a6.9 6.9 0 0 1 1.2-2.6zM12 4a7 7 0 0 1 6.7 5A4.5 4.5 0 0 1 21 17.2l-1.5-1.5A2.5 2.5 0 0 0 18 11h-1l-.3-1A5 5 0 0 0 9.4 6.6L8 5.2A7 7 0 0 1 12 4"/></svg><span id="off-t"></span></div>
+    </div>
+  </div>
+  <script src="scheme.js"></script>
+  <script src="camview.js"></script>
+</body>
+</html>

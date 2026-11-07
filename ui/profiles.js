@@ -31,7 +31,9 @@ const BED_TEMP_KEY = {
 
 async function pdSchema() {
   if (PD.schema?.lang !== LANG) {
-    PD.schema = await fetch(`assets/orca-settings.${LANG}.json`).then((r) => r.json());
+    // A language Orca's settings were not generated for reads them in English.
+    const get = (l) => fetch(`assets/orca-settings.${l}.json`).then((r) => (r.ok ? r.json() : Promise.reject(r.status)));
+    PD.schema = await get(LANG).catch(() => get("en"));
     PD.schema.lang = LANG;
   }
   return PD.schema;
@@ -43,7 +45,7 @@ function pdContext(head) {
   return {
     machine: $("s-machine").value,
     simple: currentSimple(),
-    overrides: $("s-bed").value ? { curr_bed_type: $("s-bed").value } : {},
+    overrides: { ...(typeof advOverrides === "function" ? advOverrides() : {}), ...($("s-bed").value ? { curr_bed_type: $("s-bed").value } : {}) },
     color: slot?.present && slot.color ? slot.color : null,
   };
 }
@@ -254,9 +256,12 @@ async function pdBedLine() {
     }
   }
   if (PD.want !== want) return;
-  // Heads used by the model; failing that, all of them.
+  // Heads used by the model; failing that, all of them. Plus those the
+  // advanced settings send supports, walls or infill to: the engine heats
+  // the plate for every filament the print may use.
   const mapped = [...slUsedSet()].filter((i) => i < heads.length);
-  const used = mapped.length ? mapped : heads.map((_, i) => i);
+  const extra = typeof advHeads === "function" ? Object.values(advHeads()).filter((i) => i < heads.length) : [];
+  const used = mapped.length ? [...new Set([...mapped, ...extra])] : heads.map((_, i) => i);
 
   heads.forEach((name, i) => {
     const el = document.querySelector(`#s-heads [data-temp="${i}"]`);

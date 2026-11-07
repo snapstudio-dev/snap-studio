@@ -12,6 +12,10 @@
 #
 # If the sources' version has not been published yet (first run, or previous
 # build failed), it is reused as is, without a bump.
+#
+# CHANGELOG.md: the Unreleased section becomes this version's (date and
+# compare links included) and goes in the version commit; the release
+# workflow takes its notes from there (scripts/changelog.py).
 set -euo pipefail
 
 yes=false
@@ -107,11 +111,21 @@ else
   bump=true
 fi
 
+# The changelog: this version's section, or what Unreleased will give it.
+if python3 scripts/changelog.py notes "$next" >/dev/null 2>&1; then
+  changelog="section $next already written"
+elif python3 scripts/changelog.py notes Unreleased >/dev/null 2>&1; then
+  changelog="Unreleased becomes $next"
+else
+  changelog="⚠ nothing under Unreleased: the release notes will list the commits"
+fi
+
 echo
 echo "  Sources version          : $current$($published && echo " (published)" || echo " (not published yet)")"
 echo "  Latest published release : ${latest:-none}"
 echo "  Version to publish       : v$next"
 echo "  Branch                   : $ref ($(git log -1 --format='%h %s'))"
+echo "  CHANGELOG.md             : $changelog"
 if $bump; then
   echo "  → a \"Version $next\" commit will be created and pushed to $ref"
 fi
@@ -128,14 +142,24 @@ if ! $yes; then
   esac
 fi
 
+# Unreleased becomes this version's section (nothing to do when it is
+# already written, or when Unreleased is empty).
+python3 scripts/changelog.py release "$next" || true
+changelog_changed=false
+git diff --quiet -- CHANGELOG.md || changelog_changed=true
+
 if $bump; then
   # perl rather than sed -i, whose syntax differs between macOS and Linux.
   perl -0pi -e "s/^  \"version\": \"[^\"]*\",/  \"version\": \"$next\",/m" "$conf"
   perl -0pi -e "s/^version = \"[^\"]*\"/version = \"$next\"/m" src-tauri/Cargo.toml
   perl -0pi -e "s/(name = \"snap-studio\"\nversion = )\"[^\"]*\"/\$1\"$next\"/" src-tauri/Cargo.lock
-  git add "$conf" src-tauri/Cargo.toml src-tauri/Cargo.lock
+  git add "$conf" src-tauri/Cargo.toml src-tauri/Cargo.lock CHANGELOG.md
   git commit -q -m "Version $next"
   echo "Commit \"Version $next\" created."
+elif $changelog_changed; then
+  git add CHANGELOG.md
+  git commit -q -m "Changelog $next"
+  echo "Commit \"Changelog $next\" created."
 fi
 git push -q origin "HEAD:$ref"
 

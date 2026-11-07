@@ -8,7 +8,7 @@
 //! extraction into a temporary folder then rename — a half-installed engine
 //! is never used.
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -50,10 +50,11 @@ struct Manifest {
 fn manifest() -> &'static Manifest {
     static M: OnceLock<Manifest> = OnceLock::new();
     M.get_or_init(|| {
-        serde_json::from_str(include_str!("../engine.json")).unwrap_or(Manifest {
-            version: String::new(),
-            source: String::new(),
-            platforms: HashMap::new(),
+        serde_json::from_str(include_str!("../engine.json")).unwrap_or_else(|e| {
+            // Said in the console: "no engine referenced" alone would hide a
+            // build whose manifest is broken.
+            eprintln!("[engine] engine.json is unreadable: {e}");
+            Manifest { version: String::new(), source: String::new(), platforms: HashMap::new() }
         })
     })
 }
@@ -79,10 +80,7 @@ pub fn referenced() -> bool {
 }
 
 fn root() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("fr.carlini.snapstudio")
-        .join("engine")
+    dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio").join("engine")
 }
 
 fn install_dir() -> PathBuf {
@@ -172,19 +170,29 @@ pub async fn install(app: AppHandle) -> Result<Status> {
     }
     CANCEL.store(false, Ordering::Relaxed);
     let res = install_inner(&app, a).await;
+    // Whatever ended it early (a failure, Cancel) leaves no `.part` behind.
+    if res.is_err() {
+        let _ = std::fs::remove_file(part_path());
+    }
     BUSY.store(false, Ordering::SeqCst);
     res.map(|_| status())
 }
 
-async fn install_inner(app: &AppHandle, a: &Asset) -> Result<()> {
-    use futures_util::StreamExt;
-    let root = root();
-    std::fs::create_dir_all(&root)?;
-    let part = root.join(format!(".download-{}.part", manifest().version));
+fn part_path() -> PathBuf {
+    root().join(format!(".download-{}.part", manifest().version))
+}
 
-    // Streamed download, checksum computed on the way.
+/// Seconds without a byte before the download is given up: a stalled
+/// connection must not keep the install busy for ever.
+const STALL_S: u32 = 30;
+
+/// `a.url` to `part`, its size and checksum verified. Cancel is read every
+/// second, whether bytes come or not.
+async fn download(app: &AppHandle, a: &Asset, part: &Path) -> Result<()> {
+    use futures_util::StreamExt;
     let resp = reqwest::Client::builder()
         .user_agent("Snap-Studio")
+        .connect_timeout(std::time::Duration::from_secs(15))
         .build()?
         .get(&a.url)
         .send()
@@ -193,22 +201,36 @@ async fn install_inner(app: &AppHandle, a: &Asset) -> Result<()> {
         return Err(anyhow!(crate::t!("err.download_refused", status = resp.status())));
     }
     let total = resp.content_length().unwrap_or(a.size);
-    let mut file = std::fs::File::create(&part)?;
+    let mut file = std::fs::File::create(part)?;
     let mut hash = Sha256::new();
     let mut done = 0u64;
     let mut last = 0u64;
+    let mut idle = 0u32;
     let mut stream = resp.bytes_stream();
     emit(app, "download", 0, total);
-    while let Some(chunk) = stream.next().await {
+    loop {
         if CANCEL.load(Ordering::Relaxed) {
-            drop(file);
-            let _ = std::fs::remove_file(&part);
             return Err(anyhow!(crate::t!("err.download_cancelled")));
         }
-        let chunk = chunk?;
+        let chunk = match tokio::time::timeout(std::time::Duration::from_secs(1), stream.next()).await {
+            Err(_) => {
+                idle += 1;
+                if idle >= STALL_S {
+                    return Err(anyhow!(crate::t!("err.download_stalled")));
+                }
+                continue;
+            }
+            Ok(None) => break,
+            Ok(Some(chunk)) => chunk?,
+        };
+        idle = 0;
+        done += chunk.len() as u64;
+        // More than announced: not the file the manifest describes.
+        if done > a.size {
+            return Err(anyhow!(crate::t!("err.download_size", got = done, want = a.size)));
+        }
         file.write_all(&chunk)?;
         hash.update(&chunk);
-        done += chunk.len() as u64;
         // One update per half megabyte is enough for the progress bar.
         if done - last > 512 * 1024 || done == total {
             emit(app, "download", done, total);
@@ -217,13 +239,25 @@ async fn install_inner(app: &AppHandle, a: &Asset) -> Result<()> {
     }
     file.flush()?;
     drop(file);
+    if done != a.size {
+        return Err(anyhow!(crate::t!("err.download_size", got = done, want = a.size)));
+    }
 
     emit(app, "verify", done, total);
     let got = hex(&hash.finalize());
     if !got.eq_ignore_ascii_case(&a.sha256) {
-        let _ = std::fs::remove_file(&part);
         return Err(anyhow!(crate::t!("err.checksum")));
     }
+    Ok(())
+}
+
+async fn install_inner(app: &AppHandle, a: &Asset) -> Result<()> {
+    let root = root();
+    std::fs::create_dir_all(&root).with_context(|| format!("creating {}", root.display()))?;
+    let part = root.join(format!(".download-{}.part", manifest().version));
+
+    // Streamed download, checksum computed on the way.
+    download(app, a, &part).await?;
 
     // Extraction off the async thread, into a temporary folder.
     emit(app, "extract", 0, a.unpacked);
@@ -231,14 +265,12 @@ async fn install_inner(app: &AppHandle, a: &Asset) -> Result<()> {
     let target = install_dir();
     let part2 = part.clone();
     let staging2 = staging.clone();
-    tauri::async_runtime::spawn_blocking(move || extract(&part2, &staging2))
-        .await
-        .map_err(|e| anyhow!("{e}"))??;
+    tauri::async_runtime::spawn_blocking(move || extract(&part2, &staging2)).await.map_err(|e| anyhow!("{e}"))??;
     std::fs::write(staging.join(COMPLETE), manifest().version.as_bytes())?;
     if target.exists() {
-        std::fs::remove_dir_all(&target)?;
+        std::fs::remove_dir_all(&target).with_context(|| format!("removing {}", target.display()))?;
     }
-    std::fs::rename(&staging, &target)?;
+    std::fs::rename(&staging, &target).with_context(|| format!("moving {} to {}", staging.display(), target.display()))?;
     let _ = std::fs::remove_file(&part);
     prune_old(&root, &target);
     emit(app, "done", a.unpacked, a.unpacked);
@@ -252,10 +284,10 @@ fn hex(bytes: &[u8]) -> String {
 /// tar.zst archive → folder; execute permissions and links kept.
 fn extract(archive: &Path, dst: &Path) -> Result<()> {
     if dst.exists() {
-        std::fs::remove_dir_all(dst)?;
+        std::fs::remove_dir_all(dst).with_context(|| format!("removing {}", dst.display()))?;
     }
-    std::fs::create_dir_all(dst)?;
-    let f = std::io::BufReader::new(std::fs::File::open(archive)?);
+    std::fs::create_dir_all(dst).with_context(|| format!("creating {}", dst.display()))?;
+    let f = std::io::BufReader::new(std::fs::File::open(archive).with_context(|| format!("opening {}", archive.display()))?);
     let zst = ruzstd::decoding::StreamingDecoder::new(f).map_err(|e| anyhow!(crate::t!("err.archive", err = e)))?;
     let mut tar = tar::Archive::new(zst);
     tar.set_preserve_permissions(true);
@@ -284,13 +316,15 @@ fn prune_old(root: &Path, keep: &Path) {
 
 /// Deletes the installed engine (Snap Studio's settings and data stay).
 pub fn remove() -> Result<Status> {
-    if BUSY.load(Ordering::Relaxed) {
+    // Taken, not just read: an install starting at the same moment would
+    // otherwise rename its engine into a folder being removed.
+    if BUSY.swap(true, Ordering::SeqCst) {
         return Err(anyhow!(crate::t!("err.engine_busy")));
     }
     let dir = install_dir();
-    if dir.exists() {
-        std::fs::remove_dir_all(&dir)?;
-    }
+    let r: Result<()> = if dir.exists() { std::fs::remove_dir_all(&dir).map_err(anyhow::Error::from) } else { Ok(()) };
+    BUSY.store(false, Ordering::SeqCst);
+    r?;
     Ok(status())
 }
 

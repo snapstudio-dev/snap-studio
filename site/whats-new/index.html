@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>What's new in Snap Studio</title>
+  <meta name="description" content="What's new in Snap Studio, the desktop app for the Snapmaker U1: the highlights of each version.">
+  <meta property="og:title" content="What's new in Snap Studio">
+  <meta property="og:image" content="../assets/library.webp">
+  <link rel="icon" type="image/png" href="../assets/favicon.png">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="stylesheet" href="whats-new.css">
+  <!-- Inside the app (?embed=1) the site's header and footer go away
+       before the first paint. -->
+  <script>if (new URLSearchParams(location.search).get("embed") === "1") document.documentElement.classList.add("embed");</script>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../"><img src="../assets/icon.png" alt="" width="28" height="28"><span>Snap Studio</span></a>
+    <nav class="nav">
+      <a href="../#features" data-i18n="nav.features">Features</a>
+      <a href="../#screens" data-i18n="nav.screens">Screenshots</a>
+      <a href="./" class="here" aria-current="page" data-i18n="nav.whatsnew">What's new</a>
+      <a href="../#download" data-i18n="nav.download">Download</a>
+      <div class="lang" role="group" aria-label="Language" data-i18n-aria="lang.label">
+        <button type="button" data-lang="en" aria-pressed="true">EN</button>
+        <button type="button" data-lang="fr" aria-pressed="false">FR</button>
+      </div>
+    </nav>
+  </header>
+
+  <div class="aurora" aria-hidden="true"></div>
+  <main id="wn" class="wn" aria-busy="true">
+    <p class="wn-status" data-i18n="wn.loading">Loading…</p>
+  </main>
+
+  <footer class="foot">
+    <a href="https://github.com/kameka22/snap-studio" data-i18n="foot.repo">Source code on GitHub</a>
+    <a href="https://github.com/kameka22/snap-studio/blob/main/LICENSE" data-i18n="foot.license">License: GPL-3.0</a>
+    <a href="https://github.com/kameka22/snap-studio/issues/new" data-i18n="foot.bug">Report a bug</a>
+    <p class="fine" data-i18n="foot.trademark">Snap Studio is an independent project, not affiliated with or endorsed by Snapmaker. Snapmaker and U1 are trademarks of their owners.</p>
+  </footer>
+
+  <script src="../i18n.js"></script>
+  <script src="whats-new.js"></script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+# Tests, on every pull request and every push to main: the Rust unit tests,
+# the interface logic scripts and the translation catalogs. The release
+# build (build.yml) only runs by hand, so this is what checks a change.
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust unit tests
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      # Formatting as `rustfmt.toml` sets it: `cargo fmt` before committing.
+      - name: cargo fmt --check
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # Tests that need Snapmaker Orca or the engine skip or are ignored.
+      - name: cargo test --lib
+        working-directory: src-tauri
+        run: cargo test --lib
+
+      # The printer simulator (development builds only, docs/DEVELOPMENT.md)
+      # and the end-to-end tests of the printer code against it; its own
+      # tool builds too.
+      - name: cargo test --lib --features sim
+        working-directory: src-tauri
+        run: |
+          cargo test --lib --features sim
+          cargo check --features sim --bin u1-sim
+
+  interface:
+    name: Interface logic and catalogs
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: scripts/test-*.js
+        run: |
+          for t in scripts/test-*.js; do
+            echo "== $t"
+            node "$t"
+          done
+
+      - name: Translation catalogs
+        run: python3 scripts/check-i18n.py
