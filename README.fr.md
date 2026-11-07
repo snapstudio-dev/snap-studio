@@ -12,7 +12,7 @@
 ![macOS · Windows · Linux](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-lightgrey)
 
 [**Télécharger**](https://github.com/kameka22/snap-studio/releases/latest) ·
-[Fonctions](#fonctions) · [IA](#concevoir-avec-lia) · [FAQ](#faq) ·
+[Fonctions](#fonctions) · [IA](#concevoir-avec-lia) · [Confidentialité](#confidentialité) · [FAQ](#faq) ·
 [Changelog](CHANGELOG.md) · [Feuille de route](#feuille-de-route) · [Contribuer](CONTRIBUTING.fr.md)
 
 [English](README.md) · **Français**
@@ -641,6 +641,42 @@ ferait un terminal.
 **Supprimer** efface le dossier de la conversation et les fichiers de Claude
 pour cette session — jamais vos 3MF enregistrés, jamais une autre session.
 
+## Confidentialité
+
+Snap Studio envoie **un signal anonyme à chaque démarrage**, pour estimer
+combien de personnes l'utilisent, par version, système et langue. Le signal
+part vers [Aptabase](https://aptabase.com), hébergé dans l'Union européenne.
+L'événement s'appelle `app_started`, une fois par lancement. Snap Studio
+n'y joint aucune donnée à lui : le comptage sert à la version, au système
+et à la langue. Le module ajoute aussi l'heure, un numéro de session créé
+pour ce lancement et gardé en mémoire seulement (un nouveau à chaque
+lancement), et la vue web du système. La liste des champs est dans
+[docs/privacy.md](docs/privacy.md) (en anglais).
+
+Vos fichiers, vos modèles et leurs noms, vos imprimantes (adresse, numéro
+de série ou tout autre identifiant d'imprimante), vos conversations et vos
+textes, votre compte ou votre adresse e-mail, et tout identifiant conservé
+d'un lancement à l'autre n'en font pas partie.
+
+Sur les versions officielles publiées sur GitHub et construites avec ce
+comptage configuré, il est **activé par défaut**. Une étape au premier
+lancement vous l'explique, avec un interrupteur pour le désactiver. Si
+vous aviez déjà l'app, cette étape est une fenêtre, après la présentation
+de Snappy quand celle-ci est nouvelle aussi. Rien n'est envoyé avant que
+vous la fermiez. Vous pouvez aussi le désactiver plus tard dans
+**Réglages › Application › Comptage anonyme d'utilisation** : plus rien de
+nouveau n'est envoyé à partir de là.
+
+Une version de développement, une version que vous compilez, ou un fork
+n'a pas de clé pour ce service. Le comptage n'est pas chargé, la fenêtre
+ne s'ouvre pas, et Réglages indique « Non disponible dans cette version ».
+
+Si le signal de ce lancement n'a pas pu partir (pas de réseau, ou une
+erreur d'Aptabase), le module le garde et réessaie jusqu'à ce que vous
+quittiez, même si vous désactivez le comptage entre-temps. Ce nouvel essai
+ne concerne que le signal mis en file pendant que le comptage était activé.
+Les lancements suivants n'envoient rien.
+
 ## FAQ
 
 **Qu'est-ce qui a changé dans les dernières versions ?** Voir le
@@ -657,16 +693,14 @@ profils et les têtes sont ceux de la U1.
 **Qu'est-ce qui sort de mon ordinateur ?** Snap Studio échange avec GitHub
 (vérifier les mises à jour, télécharger le moteur), vos imprimantes sur le
 réseau local, les sites ouverts dans Explorer et, si vous utilisez l'IA,
-Anthropic par Claude Code. Il envoie aussi un signal anonyme au démarrage
-(voir Vie privée ci-dessous).
+Anthropic par Claude Code. Il envoie aussi un signal anonyme au démarrage :
+voir [Confidentialité](#confidentialité).
 
-**Vie privée.** Snap Studio envoie un signal anonyme au démarrage (version,
-système, langue) pour compter ses utilisateurs. Rien d'autre : ni fichiers,
-ni modèles, ni imprimantes, ni conversations, ni identifiant. Une fenêtre le
-dit au premier lancement, avec un interrupteur pour le désactiver ; il est
-aussi dans Réglages › Application. Si le signal de ce lancement n'a pas pu
-partir, il est réessayé jusqu'à ce que vous quittiez l'app, même après avoir
-désactivé le comptage ; les lancements suivants n'envoient rien. Détails :
+**Vie privée.** Un signal anonyme à chaque démarrage, pour compter les
+utilisateurs. Activé par défaut dans les versions officielles, expliqué au
+premier lancement, et désactivable dans
+**Réglages › Application › Comptage anonyme d'utilisation**.
+Voir [Confidentialité](#confidentialité) et
 [docs/privacy.md](docs/privacy.md) (en anglais).
 
 **Pourquoi macOS m'avertit-il au premier lancement ?** L'app n'est pas

@@ -12,7 +12,7 @@
 ![macOS · Windows · Linux](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-lightgrey)
 
 [**Download**](https://github.com/kameka22/snap-studio/releases/latest) ·
-[Features](#features) · [AI](#design-with-ai) · [FAQ](#faq) ·
+[Features](#features) · [AI](#design-with-ai) · [Privacy](#privacy) · [FAQ](#faq) ·
 [Changelog](CHANGELOG.md) · [Roadmap](#roadmap) · [Contributing](CONTRIBUTING.md)
 
 **English** · [Français](README.fr.md)
@@ -584,6 +584,39 @@ rename, duplicate (same files, a fresh Claude session). **Delete** removes the
 conversation's folder and Claude's own files for that session — never your
 saved 3MF files, never another session.
 
+## Privacy
+
+Snap Studio sends **one anonymous signal each time it starts**, to estimate
+how many people use it, by version, system and language. The signal goes to
+[Aptabase](https://aptabase.com), hosted in the European Union. The event is
+`app_started`, once per launch. Snap Studio attaches no data of its own:
+what the count is for is the version, the system and the language. The
+plugin also includes the time, a session number made for that launch and
+kept in memory only (a new one each launch), and the system web view. The
+field list is in [docs/privacy.md](docs/privacy.md).
+
+Your files, models and their names, your printers (address, serial number
+or any other printer identifier), your conversations and prompts, your
+account or email, and any identifier kept from one launch to the next are
+not part of it.
+
+On the official releases published on GitHub and built with this count
+configured, it is **on by default**. A step at first launch explains it,
+with a switch to turn it off. If you already had the app, that step is a
+sheet, after Snappy's introduction when that introduction is new too.
+Nothing is sent before you close it. You can also turn it off later in
+**Settings › Application › Anonymous usage count**: nothing new is sent
+from then on.
+
+A development build, a build of your own, or a fork has no key for this
+service. The count is not loaded, the notice does not open, and Settings
+says "Not available in this build".
+
+If the signal of this launch could not be delivered (no network, or an
+error from Aptabase), the plugin keeps it and tries again until you quit,
+even if you turn the count off in the meantime. That retry is only a signal
+queued while the count was on. Later launches send nothing.
+
 ## FAQ
 
 **What changed in the last versions?** See the [changelog](CHANGELOG.md).
@@ -598,17 +631,13 @@ U1's.
 **What leaves my computer?** Snap Studio talks to GitHub (to check for
 updates and download the engine), to your printers on the local network, to
 the sites you open in Explore, and — if you use the AI — to Anthropic
-through Claude Code. It also sends one anonymous signal at start (see
-Privacy below).
+through Claude Code. It also sends one anonymous signal at start: see
+[Privacy](#privacy).
 
-**Privacy.** Snap Studio sends one anonymous signal at start (version,
-system, language) to count its users. Nothing else: no files, models,
-printers, conversations or identifier. A sheet says so at first launch,
-with a switch to turn it off; it is also in Settings › Application.
-If that launch's signal could not be delivered, it is retried until the
-app quits, even after the count is switched off; later launches send
-nothing.
-Details: [docs/privacy.md](docs/privacy.md).
+**Privacy.** One anonymous signal at each start, to count users. On by
+default in the official releases, explained at first launch, and turned
+off in **Settings › Application › Anonymous usage count**.
+See [Privacy](#privacy) and [docs/privacy.md](docs/privacy.md).
 
 **Why does macOS warn me at the first launch?** The app is not signed with
 an Apple developer certificate yet; the commands above open it anyway.
