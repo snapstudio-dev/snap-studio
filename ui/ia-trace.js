@@ -1,13 +1,14 @@
 "use strict";
-/* Terminal tab of a conversation: what the chat's Claude does, as a
-   terminal shows it.
+/* Terminal tab of a conversation.
 
-   No second Claude: the tab reads the same session as the chat — its past
-   from the conversation's log, then the events as they come — and writes
-   them as terminal text: the messages, each tool called with what it was
-   given, the start of its result, the permissions asked, the end of each
-   turn. Read only; the conversation is written to from the chat, and Stop
-   interrupts the same answer. */
+   No second Claude: while the chat's Claude runs, the tab shows its own
+   terminal (the `ia-screen` event; claude_pty.rs) — a view only, the
+   conversation itself is read from the transcript. When no Claude runs,
+   the tab writes the conversation's past as terminal text: the messages,
+   each tool called with what it was given, the start of its result, the
+   permissions asked, the end of each turn. Read only either way; the
+   conversation is written to from the chat, and Stop interrupts the same
+   answer. */
 
 const TRACE_C = { dim: "\x1b[90m", user: "\x1b[1;36m", tool: "\x1b[33m", bold: "\x1b[1m", ok: "\x1b[32m", err: "\x1b[31m", ask: "\x1b[35m", off: "\x1b[0m" };
 /* Lines of a tool result shown; the rest is counted. */
@@ -116,11 +117,34 @@ if (typeof module !== "undefined") module.exports = { traceEvent, traceToolSumma
 /* ------------------------------------------------------------ the view */
 
 if (typeof document !== "undefined") {
-  /* Shows the conversation's session in its terminal: its past, then
-     what comes. Events that arrive while the past is read are dropped:
-     the past holds them already, or will on the next opening. */
+  const traceBytes = (b64) => {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  };
+
+  /* The conversation whose Terminal tab is shown: only it gets Claude's
+     screen (claude_pty.rs). Null: none. */
+  let traceViewed = null;
+  window.iaTraceView = function iaTraceView(id) {
+    if (traceViewed === id) return;
+    if (traceViewed) invoke("ia_term_view", { id: traceViewed, on: false }).catch(() => {});
+    traceViewed = id;
+    if (id) invoke("ia_term_view", { id, on: true }).catch(() => {});
+  };
+
+  /* The terminal's size follows the tab's (only while it shows Claude's). */
+  const traceResize = (id, t) => {
+    if (t.mode === "pty") invoke("ia_term_resize", { id, cols: t.term.cols, rows: t.term.rows }).catch(() => {});
+  };
+
+  /* Shows the conversation in its terminal: Claude's own screen while it
+     runs, otherwise its past. Events that arrive while the past is read
+     are dropped: the past holds them already, or will on the next opening. */
   window.iaTraceOpen = async function iaTraceOpen(c) {
     const id = c.id;
+    iaTraceView(id);
     const t = iaTerm(id);
     const host = $("ia-term");
     host.innerHTML = "";
@@ -128,11 +152,24 @@ if (typeof document !== "undefined") {
     if (!t.opened) {
       t.term.open(t.el);
       t.opened = true;
+      t.term.onResize(() => traceResize(id, t));
     }
     requestAnimationFrame(() => iaFit(id));
     t.ready = false;
     t.st = {};
     t.term.reset();
+    const running = await invoke("ia_chat_running", { id }).catch(() => false);
+    if (IA.open !== id) return;
+    if (running) {
+      t.mode = "pty";
+      const screen = await invoke("ia_term_screen", { id }).catch(() => "");
+      if (IA.open !== id) return;
+      t.term.write(traceBytes(screen));
+      t.ready = true;
+      traceResize(id, t);
+      return;
+    }
+    t.mode = "trace";
     let past = [];
     try {
       past = (await invoke("ia_chat_history", { id })) || [];
@@ -142,10 +179,24 @@ if (typeof document !== "undefined") {
     t.ready = true;
   };
 
+  /* Claude's screen: a Claude starting while the past is shown takes the
+     terminal over. */
+  listen("ia-screen", (e) => {
+    const { id, b64 } = e.payload;
+    const t = IA.terms.get(id);
+    if (!t || !t.ready) return;
+    if (t.mode !== "pty") {
+      t.mode = "pty";
+      t.term.reset();
+      traceResize(id, t);
+    }
+    t.term.write(traceBytes(b64));
+  });
+
   listen("ia-chat", (e) => {
     const { id, events } = e.payload;
     const t = IA.terms.get(id);
-    if (!t || !t.ready) return;
+    if (!t || !t.ready || t.mode !== "trace") return;
     t.term.write(events.map((ev) => traceEvent(ev, t.st, tr)).join(""));
   });
 }

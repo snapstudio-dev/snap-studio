@@ -30,7 +30,8 @@ SRC = ROOT / "src-tauri" / "src"
 DYNAMIC = (
     "ais.item.", "ais.mode.", "welcome.ai.chosen.", "color.", "engine.phase.", "feature.", "files.sort.", "pd.kind.", "printers.state.",
     "prints.state.", "prints.filter.", "prints.day.", "prints.tl.", "prints.reason.", "settings.history.short.", "slice.pstate.", "slice.stage.", "style.", "maint.t.", "maint.nozzle.", "maint.in.", "maint.late.", "bm.st.", "bm.done.", "bm.f.", "bm.level.", "bm.phase.", "bm.set.level_", "bm.side.", "ctl.st.", "ctl.lock.", "ctl.why.", "ctl.doing.", "ctl.confirm.", "ctl.help.",
-    "snap.site.", "explore.desc.", "slice.vp.", "prepare.tower.why.", "slice.tower.place.", "window.", "plate.why.",
+    "snap.site.", "snappy.tool.", "snappy.plate.", "snappy.ask.print_", "snappy.intro.", "snappy.app.", "snappy.ask.create_", "snappy.ask.maint_",
+    "snappy.ask.mesh_", "snappy.ask.preview_", "snappy.ask.printer_", "snappy.ask.site_", "explore.desc.", "slice.vp.", "prepare.tower.why.", "slice.tower.place.", "window.", "plate.why.",
 )
 
 # French that may legitimately stay in the code (names, data matching).
@@ -51,7 +52,7 @@ def used_keys():
         keys |= set(re.findall(r'"((?:[a-z_]+\.)+[a-z_0-9]+)"', strip_comments(f.read_text())))
     html = (UI / "index.html").read_text()
     keys |= set(re.findall(r'data-i18n(?:-[a-z]+)?="([\w.]+)"', html))
-    for f in SRC.glob("*.rs"):
+    for f in SRC.rglob("*.rs"):
         text = f.read_text()
         keys |= set(re.findall(r'\bt!\(\s*"([\w.]+)"', text))
         # Keys passed around as literals (menu items, lookup tables).

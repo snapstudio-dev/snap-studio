@@ -1,10 +1,11 @@
 "use strict";
 /* AI tab: the conversation view.
 
-   Claude Code runs in its structured mode (src-tauri/src/chat.rs): its events
-   arrive as the "ia-chat" event, already slimmed; the past comes from the
-   conversation's own log (workspace/chat.jsonl) or, for older conversations,
-   from Claude's transcript. This view renders both the same way.
+   Claude Code runs interactively, read from its transcript
+   (src-tauri/src/claude_pty.rs, chat.rs): its events arrive as the
+   "ia-chat" event, already slimmed; the past comes from the conversation's
+   own log (workspace/chat.jsonl) or, for older conversations, from Claude's
+   transcript. This view renders both the same way.
 
    Adapted from claude-chat-panel's page (web/chat.js,
    https://github.com/simscorpbs/claude-chat-panel, MIT License,
@@ -42,11 +43,6 @@ const INTERRUPTED = "[Request interrupted by user]";
 const chatList = $("chat-list");
 
 /* ------------------------------------------------------------ rendering */
-
-marked.setOptions({ gfm: true, breaks: true });
-/* Text can carry what third parties wrote (tool results, web pages):
-   sanitized before it shows. */
-const chatMd = (text) => DOMPurify.sanitize(marked.parse(text || ""));
 
 const chatNearBottom = () => chatList.scrollHeight - chatList.scrollTop - chatList.clientHeight < 80;
 
@@ -92,13 +88,6 @@ function chatDecorate(el) {
     const code = pre.querySelector("code");
     pre.appendChild(chatCopyButton("chat-copy", () => (code || pre).innerText));
   });
-}
-
-function chatWorking() {
-  const w = chatDiv("chat-working");
-  w.setAttribute("aria-label", tr("chat.working"));
-  w.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
-  return w;
 }
 
 /* The working dots always stay last. */

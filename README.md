@@ -494,7 +494,8 @@ Windows: "More info" → "Run anyway".
 What each version brought: [CHANGELOG.md](CHANGELOG.md).
 
 A **welcome assistant** sets everything up: language (nine of them), models folder, the
-printer on your network, the slicing engine and the AI. Afterwards **the
+printer on your network, the slicing engine, the AI and Snappy, the workshop
+assistant. Afterwards **the
 app updates itself** (on Linux, the AppImage).
 
 ## Design with AI

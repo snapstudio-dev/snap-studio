@@ -87,6 +87,13 @@
       <span class="lbl" data-i18n="whatsnew.title">What's new</span>
     </button>
   </div>
+  <!-- The separator, and Snappy at its right end (snappy.js): the line
+       stops before the avatar. -->
+  <div class="side-sep">
+    <button id="snappy-fab" class="snappy-fab hidden" type="button" title="Ask Snappy" data-i18n-title="snappy.open" aria-label="Ask Snappy" data-i18n-aria="snappy.open">
+      <span class="snappy-av" id="snappy-fab-av"></span>
+    </button>
+  </div>
   <div class="side-footer">
     <button class="side-item" data-view="settings">
       <span class="glyph" style="color: #8E8E93"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg></span>
@@ -96,6 +103,9 @@
   </div>
 </aside>
 <main id="content" class="content">
+<!-- Snappy's conversation (snappy-card.js, placed by snappy.js): a card
+     floating beside the sidebar, its bottom level with Snappy's icon. -->
+<section id="snappy" class="snappy-drawer hidden" aria-label="Snappy"></section>
 <!-- The printer camera at full size, over the content area, and where its box
      waits when nothing shows it (camera.js camPlace). -->
 <div id="cam-full" class="cam-full hidden"></div>
@@ -1165,6 +1175,35 @@
         <button type="button" id="set-ai-builtin-go" class="w-link" data-i18n="settings.ai.builtin_use">Use built-in</button>
       </div>
     </div>
+    <div class="set-section" translate="no">Snappy</div>
+    <div class="group" id="set-snappy">
+      <label class="grow-row">
+        <span class="k"><span data-i18n="settings.snappy.on">Turn on Snappy</span>
+          <span class="sub" id="set-snappy-sub" data-i18n="settings.snappy.on.sub">The workshop assistant, under its icon at the bottom of the sidebar</span>
+        </span>
+        <input type="checkbox" id="set-snappy-on" class="sw" role="switch" checked />
+      </label>
+      <div class="grow-row snappy-more">
+        <span class="k"><span data-i18n="settings.snappy.model">Snappy's model</span>
+          <span class="sub" data-i18n="settings.snappy.model.sub">The Claude model of the workshop assistant</span>
+        </span>
+        <select id="set-snappy-model"></select>
+      </div>
+      <div class="grow-row snappy-use snappy-more">
+        <span class="k"><span data-i18n="settings.snappy.context">Conversation</span>
+          <span class="sub" data-i18n="settings.snappy.context.sub">How full Snappy's context is. Near the limit, Claude summarizes the conversation by itself and goes on; a new conversation forgets everything but its memory.</span>
+          <span class="snappy-meter" id="snappy-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-label="Context used" data-i18n-aria="settings.snappy.context_aria"><i></i></span>
+          <span class="snappy-meter-text" id="snappy-meter-text"></span>
+        </span>
+        <button type="button" id="snappy-reset" class="btn small" data-i18n="settings.snappy.reset">New Conversation</button>
+      </div>
+      <div class="grow-row snappy-more">
+        <span class="k"><span data-i18n="settings.snappy.memory">Memory</span>
+          <span class="sub" id="snappy-mem-sub" data-i18n="settings.snappy.memory.sub">What Snappy remembers from one conversation to the next</span>
+        </span>
+        <button type="button" id="snappy-mem-open" class="btn small" data-i18n="settings.snappy.memory_open">View and Edit…</button>
+      </div>
+    </div>
     <div class="set-section" data-i18n="settings.ai.components">Components</div>
     <div class="group set-ai">
       <div id="set-ai-checks"></div>
@@ -1414,6 +1453,22 @@
     </div>
   </div>
 </div>
+<!-- Snappy's memory, to read, edit or clear (snappy.js). -->
+<div id="snappymem" class="modal hidden">
+  <div class="modal-box snappy-mem-box">
+    <h3 data-i18n="settings.snappy.memory_title">Snappy's Memory</h3>
+    <div class="det-sub" data-i18n="settings.snappy.memory_hint">Snappy writes it itself and reads it with each message. Never serial numbers, addresses or file paths: they are removed.</div>
+    <textarea id="snappymem-text" class="field snappy-mem-text" spellcheck="false"></textarea>
+    <div id="snappymem-count" class="pf-test"></div>
+    <div class="modal-actions">
+      <button id="snappymem-clear" class="btn danger" data-i18n="settings.snappy.memory_clear">Clear</button>
+      <span class="spacer"></span>
+      <button id="snappymem-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="snappymem-save" class="btn primary" data-i18n="common.save">Save</button>
+    </div>
+  </div>
+</div>
+
 <div id="advsave" class="modal hidden">
   <div class="modal-box">
     <h3 data-i18n="slice.adv.save.title">Save as Custom Profile</h3>
@@ -1552,20 +1607,15 @@
 <div id="toasts" class="toasts"></div>
 
 <!-- The anonymous usage count, at first launch (analytics.js). -->
-<div id="anmodal" class="modal hidden">
-  <div class="modal-box an-box" role="dialog" aria-labelledby="an-title">
-    <h3 id="an-title" data-i18n="an.title">A small anonymous count</h3>
-    <p class="an-p" data-i18n="an.why">To know how many people use Snap Studio and keep working on it, the app sends one anonymous signal each time it starts.</p>
-    <p class="an-p"><b data-i18n="an.sent_k">What is sent:</b> <span data-i18n="an.sent">the app's version, your system and its language (for example macOS 15, French), and a random number that changes at each launch. That's all.</span></p>
-    <p class="an-p"><b data-i18n="an.never_k">Never sent:</b> <span data-i18n="an.never">your files, your models, your printers, your AI conversations, your account or any identifier that points to you.</span></p>
-    <p class="an-p sub" data-i18n="an.where">It goes through Aptabase, an open-source, privacy-first service. You can change your mind anytime in Settings › Application.</p>
-    <label class="grow-row an-row">
-      <span class="k" data-i18n="an.switch">Send the anonymous count</span>
-      <input type="checkbox" id="an-switch" class="sw" role="switch" checked />
-    </label>
-    <div class="modal-actions">
-      <a href="#" class="btn left link" data-an-doc data-i18n="an.more">What exactly is sent?</a>
-      <button id="an-ok" class="btn primary" data-i18n="an.ok">Got it</button>
+<!-- First-launch notice (intros.js launchNotices): the feature
+     introductions not seen yet, as the welcome assistant's steps. -->
+<div id="ntmodal" class="modal nt-modal hidden">
+  <div class="modal-box w-card nt-card" role="dialog">
+    <div class="w-viewport"><div id="nt-track" class="w-track"></div></div>
+    <div class="w-nav">
+      <button id="nt-back" class="btn" data-i18n="common.back">Back</button>
+      <div id="nt-dots" class="w-dots"></div>
+      <button id="nt-ok" class="btn primary">Got it</button>
     </div>
   </div>
 </div>
@@ -2193,6 +2243,9 @@
           </div>
         </section>
 
+        <!-- Here go the feature introductions (intros.js INTROS), added by
+             welcome.js. -->
+
         <section class="w-step">
           <div class="w-final">
             <canvas id="w-confetti"></canvas>
@@ -2210,7 +2263,7 @@
     </div>
     <div class="w-nav">
       <button id="w-back" class="btn" data-i18n="common.back">Back</button>
-      <div id="w-dots" class="w-dots"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div id="w-dots" class="w-dots"></div>
       <button id="w-next" class="btn primary" data-i18n="common.continue">Continue</button>
     </div>
   </div>
@@ -2312,6 +2365,7 @@
 <script src="vendor/xterm.js"></script>
 <script src="vendor/marked.js"></script>
 <script src="vendor/purify.js"></script>
+<script src="chat-render.js"></script>
 <script src="vendor/xterm-addon-fit.js"></script>
 <script src="attach-logic.js"></script>
 <script src="ai-logic.js"></script>
@@ -2321,12 +2375,19 @@
 <script src="ia-chat.js"></script>
 <script src="ia-trace.js"></script>
 <script src="auth.js"></script>
+<script src="snappy-logic.js"></script>
+<script src="snappy-avatar.js"></script>
+<script src="snappy-card.js"></script>
+<script src="snappy.js"></script>
+<script src="snappy-actions.js"></script>
 <script src="settings.js"></script>
 <script src="window-controls.js"></script>
 <script src="update.js"></script>
 <script src="whatsnew-logic.js"></script>
 <script src="whatsnew.js"></script>
 <script src="analytics.js"></script>
+<script src="intros-logic.js"></script>
+<script src="intros.js"></script>
 <script src="welcome.js"></script>
 </body>
 </html>

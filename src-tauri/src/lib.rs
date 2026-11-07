@@ -3,6 +3,7 @@ mod analytics;
 mod auth;
 mod bedmesh;
 mod chat;
+mod claude_pty;
 mod control;
 mod discover;
 mod engine;
@@ -26,6 +27,7 @@ mod plate;
 mod presets;
 mod printer_files;
 mod printers;
+mod privacy;
 mod pty;
 mod render;
 mod scan;
@@ -36,6 +38,10 @@ mod share;
 pub mod sim;
 mod slice;
 mod slicers;
+mod snappy;
+mod snappy_eyes;
+mod snappy_mcp;
+mod snappy_tools;
 mod stl;
 mod support_hint;
 mod thumbs;
@@ -290,7 +296,23 @@ fn lib_nav(app: tauri::AppHandle, what: String) -> Result<(), String> {
 /// shown. Async: a web view is created off the main thread (see lib_open).
 #[tauri::command]
 async fn cam_view_set(app: tauri::AppHandle, rect: Option<library::Rect>, setup: String) {
-    library::set_cam(&app, rect, setup);
+    library::CAM.set(&app, rect, setup);
+}
+
+/// Snappy's conversation over a site (library.rs): where the card is, or
+/// None, and the page's settings (language, the context its messages
+/// carry).
+#[tauri::command]
+async fn snappy_view_set(app: tauri::AppHandle, rect: Option<library::Rect>, setup: String) {
+    library::SNAPPY.set(&app, rect, setup);
+}
+
+/// The buttons of Snappy's view over a site (close, widen, sign in):
+/// passed on to the interface, which owns the card.
+#[tauri::command]
+fn snappy_view_action(app: tauri::AppHandle, action: serde_json::Value) {
+    use tauri::Emitter;
+    let _ = app.emit("snappy-view-action", action);
 }
 
 /// The camera view's buttons (open the printer, unpin, close): passed on
@@ -1559,10 +1581,31 @@ fn ia_chat_answer(id: String, request_id: String, allow: bool, always: bool, inp
     chat::answer(&id, &request_id, allow, always, input).map_err(ui_err)
 }
 
-/// Claude model of the conversation; none: the account's default.
+/// Claude model of the conversation; none: the account's default. An idle
+/// Claude closes to resume with it: off the main thread.
 #[tauri::command]
-fn ia_chat_model(id: String, model: Option<String>) -> Result<(), String> {
-    chat::set_model(&id, model.as_deref()).map_err(ui_err)
+async fn ia_chat_model(id: String, model: Option<String>) -> Result<(), String> {
+    off_main(move || chat::set_model(&id, model.as_deref()).map_err(ui_err)).await
+}
+
+/// What the conversation's terminal showed so far (base64), for its
+/// Terminal tab; the rest arrives as `ia-screen` events.
+#[tauri::command]
+fn ia_term_screen(id: String) -> String {
+    chat::screen(&id)
+}
+
+/// The conversation's Terminal tab shown or left: its terminal's bytes come
+/// as `ia-screen` events only while it is shown.
+#[tauri::command]
+fn ia_term_view(id: String, on: bool) {
+    chat::set_viewed(&id, on);
+}
+
+/// The Terminal tab's size, for the conversation's terminal.
+#[tauri::command]
+fn ia_term_resize(id: String, cols: u16, rows: u16) -> Result<(), String> {
+    chat::resize(&id, cols, rows).map_err(ui_err)
 }
 
 /// True while Claude runs for this conversation in chat mode.
@@ -1574,6 +1617,129 @@ fn ia_chat_running(id: String) -> bool {
 #[tauri::command]
 async fn ia_chat_close(id: String) {
     let _ = tauri::async_runtime::spawn_blocking(move || chat::close(&id)).await;
+}
+
+// ---------------------------------------------------------------- Snappy
+
+/// Snappy's conversation so far.
+#[tauri::command]
+fn snappy_history() -> Vec<serde_json::Value> {
+    snappy::history()
+}
+
+/// Sends a message to Snappy with the app's current context (view,
+/// printer, Prepare); starts its Claude when needed.
+#[tauri::command]
+async fn snappy_send(text: String, context: serde_json::Value, images: Option<Vec<chat::Attachment>>) -> Result<(), String> {
+    off_main(move || snappy::send(&text, &context, &images.unwrap_or_default()).map_err(ui_err)).await
+}
+
+/// An image attached to a message to Snappy, for its card (a data URL).
+#[tauri::command]
+fn snappy_attachment(name: String) -> Result<String, String> {
+    snappy_eyes::attachment_url(&name).map_err(ui_err)
+}
+
+/// Snappy's memory as saved (Settings › AI › Snappy).
+#[tauri::command]
+fn snappy_memory() -> String {
+    snappy::memory_raw()
+}
+
+/// Saves Snappy's memory as edited by the user (filtered, within its limits).
+#[tauri::command]
+fn snappy_memory_set(content: String) -> Result<(), String> {
+    snappy::set_memory(&content).map_err(ui_err)
+}
+
+/// Forgets everything Snappy remembers.
+#[tauri::command]
+fn snappy_memory_clear() -> Result<(), String> {
+    snappy::clear_memory().map_err(ui_err)
+}
+
+#[tauri::command]
+fn snappy_stop() -> Result<(), String> {
+    snappy::stop().map_err(ui_err)
+}
+
+/// True while Snappy answers.
+#[tauri::command]
+fn snappy_busy() -> bool {
+    snappy::is_busy()
+}
+
+/// Whether Snappy is on (Settings › AI).
+#[tauri::command]
+fn snappy_enabled() -> bool {
+    snappy::enabled()
+}
+
+/// Switches Snappy on or off; off, its Claude stops: off the main thread.
+#[tauri::command]
+async fn snappy_set_enabled(on: bool) -> Result<(), String> {
+    off_main(move || {
+        snappy::set_enabled(on);
+        Ok(())
+    })
+    .await
+}
+
+/// Snappy's model (Settings › AI); none: the account's default.
+#[tauri::command]
+fn snappy_model() -> Option<String> {
+    snappy::model()
+}
+
+/// Sets Snappy's model; an idle Snappy closes to resume with it: off the
+/// main thread.
+#[tauri::command]
+async fn snappy_set_model(model: Option<String>) -> Result<(), String> {
+    off_main(move || snappy::set_model(model.as_deref().filter(|m| !m.is_empty())).map_err(ui_err)).await
+}
+
+/// How full Snappy's conversation is (Settings › AI).
+#[tauri::command]
+fn snappy_usage() -> snappy::Usage {
+    snappy::usage()
+}
+
+/// A new conversation: the current one is deleted, the memory stays.
+#[tauri::command]
+async fn snappy_reset() -> Result<(), String> {
+    off_main(|| snappy::reset().map_err(ui_err)).await
+}
+
+/// The drawer opened or closed: closed, what waits for approval is refused.
+#[tauri::command]
+fn snappy_drawer(open: bool) {
+    snappy_tools::set_drawer(open);
+}
+
+/// What waits for the user now (cards and questions), for a card drawn
+/// again.
+#[tauri::command]
+fn snappy_waiting() -> Vec<serde_json::Value> {
+    snappy_tools::waiting_shown()
+}
+
+/// The user's answer to an approval card.
+#[tauri::command]
+fn snappy_approve(id: String, yes: bool) {
+    snappy_tools::answer(&id, yes);
+}
+
+/// The user's answer to Snappy's question (None: skipped).
+#[tauri::command]
+fn snappy_reply(id: String, answer: Option<String>) {
+    snappy_tools::reply(&id, answer);
+}
+
+/// The UI's answer to a question from a tool (Prepare's state, the Files
+/// view).
+#[tauri::command]
+fn snappy_ui_reply(id: String, result: serde_json::Value) {
+    snappy_tools::ui_reply(&id, result);
 }
 
 // ---------------------------------------------------------------- Claude sign-in
@@ -1882,6 +2048,14 @@ fn analytics_status() -> analytics::Status {
     analytics::status()
 }
 
+/// Development builds only: `SNAP_PREVIEW_NOTICES=1` shows the first-launch
+/// notice at every start with all its steps, answering nothing (to see it
+/// without a fresh profile or an Aptabase key). Always off in a release.
+#[tauri::command]
+fn notices_preview() -> bool {
+    cfg!(debug_assertions) && std::env::var_os("SNAP_PREVIEW_NOTICES").is_some_and(|v| v == "1")
+}
+
 /// The first-launch notice answered, with the switch as left.
 #[tauri::command]
 fn analytics_answer(app: tauri::AppHandle, enabled: bool) -> Result<analytics::Status, String> {
@@ -1982,6 +2156,8 @@ pub fn run() {
         .setup(|app| {
             // This launch's count, if the notice was answered with it on.
             analytics::start(app.handle());
+            // Snappy's events and tools reach the window through it.
+            snappy::init(app.handle());
             use tauri::Manager;
             // Background tracking of prints: end of print, queue.
             jobs::start(app.handle().clone());
@@ -2113,6 +2289,10 @@ pub fn run() {
             lib_nav,
             cam_view_set,
             cam_view_action,
+            snappy_view_set,
+            notices_preview,
+            snappy_reply,
+            snappy_view_action,
             lib_favicon,
             lib_open,
             lib_close,
@@ -2145,6 +2325,27 @@ pub fn run() {
             ia_chat_model,
             ia_chat_running,
             ia_chat_close,
+            ia_term_screen,
+            ia_term_resize,
+            ia_term_view,
+            snappy_history,
+            snappy_send,
+            snappy_attachment,
+            snappy_memory,
+            snappy_memory_set,
+            snappy_memory_clear,
+            snappy_stop,
+            snappy_busy,
+            snappy_enabled,
+            snappy_set_enabled,
+            snappy_usage,
+            snappy_reset,
+            snappy_model,
+            snappy_set_model,
+            snappy_drawer,
+            snappy_approve,
+            snappy_waiting,
+            snappy_ui_reply,
             auth_status,
             auth_verify,
             auth_sandbox_present,
