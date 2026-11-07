@@ -242,7 +242,12 @@ fn project_slug(ws: &Path) -> String {
 /// Where Claude Code stores the session of a working folder: in the first
 /// configuration folder that has it, otherwise where a new one would go.
 pub fn session_file(id: &str) -> PathBuf {
-    let rel = Path::new("projects").join(project_slug(&workspace(id))).join(format!("{id}.jsonl"));
+    session_file_in(&workspace(id), id)
+}
+
+/// Where Claude Code stores session `id` of a working folder.
+pub fn session_file_in(dir: &Path, id: &str) -> PathBuf {
+    let rel = Path::new("projects").join(project_slug(dir)).join(format!("{id}.jsonl"));
     let roots = claude_roots();
     roots.iter().map(|r| r.join(&rel)).find(|p| p.is_file()).unwrap_or_else(|| roots[0].join(&rel))
 }
@@ -410,7 +415,7 @@ pub fn duplicate(id: &str) -> Result<Conversation> {
     let c = get(id)?;
     let new_id = uuid::Uuid::new_v4().to_string();
     let (from, to) = (workspace(id), workspace(&new_id));
-    let skip = [crate::chat::log_path(&from), crate::chat::attachments_dir(&from)];
+    let skip = [crate::chat::log_path(&from), crate::chat::attachments_dir(&from), crate::chat::run_dir(&from)];
     if let Err(e) = copy_plain(&from, &to, &skip) {
         let _ = std::fs::remove_dir_all(dir(&new_id));
         return Err(e.into());
@@ -1573,7 +1578,9 @@ mod essai_reel {
     use super::*;
 
     /// A real Claude in the sandbox designs a two-color part, following the
-    /// instructions and the skill alone. Long (image, model):
+    /// instructions and the skill alone, launched as Create launches it (the
+    /// shared engine, container mode). Long (image, model; Docker or
+    /// Podman and yolobox needed):
     /// `IA_REAL=1 cargo test --lib real_container_multicolor -- --ignored --nocapture`
     #[test]
     #[ignore]
@@ -1592,26 +1599,30 @@ mod essai_reel {
         )
         .unwrap();
         let ws = workspace(&c.id);
-        let argv = [
-            "claude".to_string(),
-            "--claude-config".into(),
-            "--customize-file".into(),
-            dockerfile().to_string_lossy().to_string(),
-            "-p".into(),
-            c.prompt.clone(),
-            "--output-format".into(),
-            "json".into(),
-        ];
-        let mut cmd = std::process::Command::new(crate::util::which("yolobox").expect("yolobox"));
-        cmd.args(&argv).current_dir(&ws).stdin(std::process::Stdio::null());
-        for (k, v) in crate::auth::sandbox_env("container") {
-            cmd.env(k, v);
+        // As Create's conversations run: the shared engine, interactive
+        // Claude in yolobox, the turn ended by the engine's proof, its answer
+        // read from the transcript (never `claude -p`, never stdout).
+        refresh_workspace(&c.id);
+        crate::claude_pty::pretrust(&ws).unwrap();
+        let l = crate::chat::launch(&c, &crate::pty::Tools::detect(), false, c.prompt.clone()).unwrap();
+        let got: std::sync::Arc<std::sync::Mutex<Vec<serde_json::Value>>> = Default::default();
+        let sink = got.clone();
+        crate::claude_pty::start(l, std::sync::Arc::new(move |e| sink.lock().unwrap().push(e)), None).unwrap();
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(30 * 60);
+        while !got.lock().unwrap().iter().any(|e| e["type"] == "result" || e["type"] == "exited") && std::time::Instant::now() < end {
+            std::thread::sleep(std::time::Duration::from_millis(500));
         }
-        let out = cmd.output().unwrap();
-        let text = String::from_utf8_lossy(&out.stdout);
-        let start = text.find('{').unwrap_or(0);
-        let v: serde_json::Value = serde_json::from_str(text[start..].trim()).unwrap_or_default();
-        println!("claude: {}", v["result"].as_str().unwrap_or(&text));
+        crate::claude_pty::close(&c.id);
+        let events = got.lock().unwrap().clone();
+        let said: String = events
+            .iter()
+            .filter(|e| e["type"] == "assistant")
+            .flat_map(|e| e["message"]["content"].as_array().cloned().unwrap_or_default())
+            .filter_map(|b| b["text"].as_str().map(String::from))
+            .collect();
+        println!("claude: {said}");
+        let result = events.iter().find(|e| e["type"] == "result").cloned().unwrap_or_default();
+        assert_eq!(result["is_error"], false, "the turn ended well: {result}");
         let parts = parts_of_3mf(&current(&c.id)).expect("out/current.3mf");
         let summary = Summary::of(&parts);
         println!("{}", summary.describe());

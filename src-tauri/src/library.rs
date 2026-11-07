@@ -239,97 +239,131 @@ fn start_tone_reading(app: &AppHandle) {
     });
 }
 
-/// The pinned camera over a site (`camview.html`). The interface's pinned
-/// window is HTML, so a site's native view covers it; while a site is
-/// shown, this small native view of ours takes its place, on top — made
-/// again after each site's view, as the navigation. The interface asks
-/// for it (where, which printer) and is told when it shows, to stop its
-/// own frames meanwhile: one stream at a time.
-#[derive(Clone)]
-struct CamView {
-    rect: Rect,
-    /// The page's settings: printer, name, texts (a JSON object).
-    setup: String,
+/// A view of ours floating over a site: the pinned camera
+/// (`camview.html`) and Snappy's conversation (`snappy-view.html`). The
+/// interface draws them in HTML, so a site's native view covers them;
+/// while a site is shown, a small native view of ours takes their place,
+/// on top, made again after each site's view, as the navigation. The
+/// interface asks for one (where, with what settings) and is told when it
+/// shows: the camera stops its own frames meanwhile, Snappy's card stops
+/// being the one used.
+pub struct Floater {
+    /// Its views' labels: `<prefix><n>`.
+    prefix: &'static str,
+    page: &'static str,
+    /// The script run before the page's, from its settings.
+    init: fn(&str) -> String,
+    /// Told to the interface: `{ "shown": bool }`.
+    event: &'static str,
+    state: Mutex<FloaterState>,
 }
 
-fn cam_req() -> &'static Mutex<Option<CamView>> {
-    static R: OnceLock<Mutex<Option<CamView>>> = OnceLock::new();
-    R.get_or_init(Default::default)
+struct FloaterState {
+    /// Where, and the page's settings (a JSON object); None: not wanted.
+    req: Option<(Rect, String)>,
+    label: String,
+    n: u64,
 }
 
-fn cam_label() -> &'static Mutex<String> {
-    static L: OnceLock<Mutex<String>> = OnceLock::new();
-    L.get_or_init(|| Mutex::new(String::new()))
-}
+/// The camera's settings: printer, name, texts.
+pub static CAM: Floater = Floater {
+    prefix: "lib-cam-",
+    page: "camview.html",
+    init: |setup| format!("window.__CAM__ = {setup};"),
+    event: "cam-view",
+    state: Mutex::new(FloaterState { req: None, label: String::new(), n: 0 }),
+};
 
-/// A camera view's label: `lib-cam-<n>` (the `cam` protocol answers it).
+/// Snappy's conversation: its settings are the language and the context
+/// its messages carry; the catalogs come with them.
+pub static SNAPPY: Floater = Floater {
+    prefix: "lib-snappy-",
+    page: "snappy-view.html",
+    init: |setup| format!("{}window.__SNAPPY__ = {setup};", crate::i18n::init_script()),
+    event: "snappy-view",
+    state: Mutex::new(FloaterState { req: None, label: String::new(), n: 0 }),
+};
+
+const FLOATERS: [&Floater; 2] = [&CAM, &SNAPPY];
+
+/// A camera view's label (the `cam` protocol answers it).
 pub fn is_cam_view(label: &str) -> bool {
-    label.starts_with("lib-cam-")
+    label.starts_with(CAM.prefix)
 }
 
-/// The interface's pinned camera: where it is and what it shows, or None.
-pub fn set_cam(app: &AppHandle, rect: Option<Rect>, setup: String) {
-    let want = rect.map(|rect| CamView { rect, setup });
-    let changed = {
-        let mut r = cam_req().lock().unwrap();
-        let changed = r.as_ref().map(|c| &c.setup) != want.as_ref().map(|c| &c.setup);
-        *r = want.clone();
-        changed
-    };
-    if want.is_none() {
-        let old = std::mem::take(&mut *cam_label().lock().unwrap());
+impl Floater {
+    fn owns(&self, label: &str) -> bool {
+        label.starts_with(self.prefix)
+    }
+
+    /// Where it goes and with what, or None to remove it.
+    pub fn set(&self, app: &AppHandle, rect: Option<Rect>, setup: String) {
+        let want = rect.map(|rect| (rect, setup));
+        let (changed, label) = {
+            let mut st = self.state.lock().unwrap();
+            let changed = st.req.as_ref().map(|r| &r.1) != want.as_ref().map(|r| &r.1);
+            st.req = want.clone();
+            (changed, st.label.clone())
+        };
+        if want.is_none() {
+            let old = std::mem::take(&mut self.state.lock().unwrap().label);
+            if let Some(wv) = app.get_webview(&old) {
+                let _ = wv.close();
+            }
+        } else if changed || app.get_webview(&label).is_none() {
+            if let Err(e) = self.ensure(app) {
+                eprintln!("[lib] {}: {e}", self.page);
+            }
+        }
+        self.sync(app);
+    }
+
+    /// Made (again), on top of every view made before it.
+    fn ensure(&self, app: &AppHandle) -> Result<()> {
+        let (req, old, lbl) = {
+            let mut st = self.state.lock().unwrap();
+            let Some(req) = st.req.clone() else { return Ok(()) };
+            st.n += 1;
+            (req, st.label.clone(), format!("{}{}", self.prefix, st.n))
+        };
+        let window = app.get_window("main").ok_or_else(|| anyhow!("main window not found"))?;
+        let builder = tauri::WebviewBuilder::new(&lbl, WebviewUrl::App(self.page.into()))
+            .initialization_script((self.init)(&req.1))
+            .transparent(true);
+        let r = req.0;
+        let dy = title_offset(&window);
+        let _view = window.add_child(builder, LogicalPosition::new(r.x, r.y + dy), LogicalSize::new(r.w, r.h))?;
+        #[cfg(target_os = "linux")]
+        gtk_layer::adopt(app, &_view);
+        self.state.lock().unwrap().label = lbl;
         if let Some(wv) = app.get_webview(&old) {
             let _ = wv.close();
         }
-    } else if changed || app.get_webview(&cam_label().lock().unwrap().clone()).is_none() {
-        if let Err(e) = ensure_cam(app) {
-            eprintln!("[lib] camera view: {e}");
-        }
+        Ok(())
     }
-    sync_cam(app);
-}
 
-fn ensure_cam(app: &AppHandle) -> Result<()> {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static N: AtomicU64 = AtomicU64::new(1);
-    let Some(req) = cam_req().lock().unwrap().clone() else { return Ok(()) };
-    let old = cam_label().lock().unwrap().clone();
-    let lbl = format!("lib-cam-{}", N.fetch_add(1, Ordering::Relaxed));
-    let window = app.get_window("main").ok_or_else(|| anyhow!("main window not found"))?;
-    let builder = tauri::WebviewBuilder::new(&lbl, WebviewUrl::App("camview.html".into()))
-        .initialization_script(&format!("window.__CAM__ = {};", req.setup))
-        .transparent(true);
-    let r = req.rect;
-    let dy = title_offset(&window);
-    let _view = window.add_child(builder, LogicalPosition::new(r.x, r.y + dy), LogicalSize::new(r.w, r.h))?;
-    #[cfg(target_os = "linux")]
-    gtk_layer::adopt(app, &_view);
-    *cam_label().lock().unwrap() = lbl;
-    if let Some(wv) = app.get_webview(&old) {
-        let _ = wv.close();
+    /// Shown while a site is (and it is wanted), at its place; the
+    /// interface told whether it shows.
+    fn sync(&self, app: &AppHandle) {
+        let (req, lbl) = {
+            let st = self.state.lock().unwrap();
+            (st.req.clone(), st.label.clone())
+        };
+        let site = visible_tab().lock().unwrap().is_some();
+        let shown = match (app.get_webview(&lbl), &req) {
+            (Some(wv), Some((rect, _))) if site => {
+                place(&wv, *rect);
+                let _ = wv.show();
+                true
+            }
+            (Some(wv), _) => {
+                let _ = wv.hide();
+                false
+            }
+            _ => false,
+        };
+        let _ = app.emit(self.event, serde_json::json!({ "shown": shown }));
     }
-    Ok(())
-}
-
-/// Shown while a site is (and the camera pinned), at the pinned window's
-/// place; the interface told whether it shows.
-fn sync_cam(app: &AppHandle) {
-    let req = cam_req().lock().unwrap().clone();
-    let site = visible_tab().lock().unwrap().is_some();
-    let lbl = cam_label().lock().unwrap().clone();
-    let shown = match (app.get_webview(&lbl), &req) {
-        (Some(wv), Some(c)) if site => {
-            place(&wv, c.rect);
-            let _ = wv.show();
-            true
-        }
-        (Some(wv), _) => {
-            let _ = wv.hide();
-            false
-        }
-        _ => false,
-    };
-    let _ = app.emit("cam-view", serde_json::json!({ "shown": shown }));
 }
 
 /// Back, forward or reload on the tab shown (the floating navigation).
@@ -504,14 +538,16 @@ pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
     // Linux: Tauri stacked the view under ours; it goes over the main view.
     #[cfg(target_os = "linux")]
     gtk_layer::adopt(app, &_view);
-    // The floating navigation and the pinned camera, made again so that
-    // they sit above this view.
+    // The floating navigation and the views floating over sites, made
+    // again so that they sit above this view.
     if let Err(e) = ensure_nav(app) {
         eprintln!("[lib] floating navigation: {e}");
     }
-    if cam_req().lock().unwrap().is_some() {
-        if let Err(e) = ensure_cam(app) {
-            eprintln!("[lib] camera view: {e}");
+    for f in FLOATERS {
+        if f.state.lock().unwrap().req.is_some() {
+            if let Err(e) = f.ensure(app) {
+                eprintln!("[lib] {}: {e}", f.page);
+            }
         }
     }
     start_tone_reading(app);
@@ -737,8 +773,8 @@ pub fn show_only(app: &AppHandle, id: Option<&str>) {
         if !lbl.starts_with("lib-") {
             continue;
         }
-        // The pinned camera: its own rule (sync_cam, below).
-        if is_cam_view(&lbl) {
+        // The views floating over a site: their own rule (below).
+        if FLOATERS.iter().any(|f| f.owns(&lbl)) {
             continue;
         }
         // The floating navigation goes with the site shown.
@@ -758,7 +794,9 @@ pub fn show_only(app: &AppHandle, id: Option<&str>) {
             let _ = wv.hide();
         }
     }
-    sync_cam(app);
+    for f in FLOATERS {
+        f.sync(app);
+    }
     // The tab now shown tells its own tone.
     read_tone(app);
 }

@@ -1030,7 +1030,12 @@ body:has(#view-prepare:not(.hidden)) .toast.out { transform: translateY(-12px); 
 .sidebar.inactive .side-item.on .count { color: var(--text-secondary); opacity: 1; }
 .side-add { color: var(--text-secondary); }
 .side-add:hover { color: var(--text); background: transparent; }
-.side-footer { padding: 8px 10px 12px; border-top: 1px solid var(--separator); }
+.side-footer { padding: 8px 10px 12px; }
+/* The separator above Settings, with Snappy's avatar at its right end: the
+   line stops short of it (and runs full width when Snappy is off). */
+.side-sep { position: relative; flex: none; height: 1px; margin: 0 12px; }
+.side-sep::before { content: ""; position: absolute; left: -12px; right: 54px; top: 0; height: 1px; background: var(--separator); }
+.side-sep:has(.snappy-fab.hidden)::before { right: -12px; }
 
 /* What's new, above the separator: a card while the installed version's
    page is unopened, then a plain line like the others. */
@@ -5426,14 +5431,208 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .p-obj.on .p-chip.p-choose { color: var(--accent-text); border-color: var(--accent-text); }
 
 /* The anonymous usage count's notice (analytics.js). */
-.an-box { width: min(460px, calc(100vw - 48px)); }
-.an-p { margin: 0 0 10px; font-size: 13px; line-height: 1.45; }
-.an-p.sub { color: var(--text-secondary); font-size: 12.5px; }
-.an-row { margin: 4px 0 2px; padding: 8px 10px; border-radius: 10px; background: var(--control-bg); }
+/* The first-launch notice (intros.js launchNotices): the welcome
+   assistant's card, steps, track and buttons, in a sheet. */
+.modal.nt-modal { align-items: center; padding-top: 0; }
+.modal-box.nt-card { width: 560px; max-width: calc(100vw - 40px); height: min(600px, calc(100vh - 40px)); max-height: none; padding: 0; gap: 0; overflow: hidden; }
+.nt-card .w-step { padding: 26px 36px 10px; gap: 10px; }
+.nt-card .w-step h1 { font-size: 21px; }
+.nt-card .w-badge { width: 56px; height: 56px; }
+/* "New", above Snappy's title in the notice. */
+.snappy-kicker { margin-bottom: -6px; padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-size: 11px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+/* Snappy's avatar as a step's badge. */
+.snappy-intro-badge { background: none; }
+.snappy-intro-badge .snappy-av { width: 100%; height: 100%; }
+/* A step's choice on one line: the app's switch (Settings' rows). */
+.w-switch { width: 100%; max-width: 460px; padding: 8px 12px; border-radius: 10px; background: var(--control-bg); text-align: left; }
+.w-switch .k small { display: block; color: var(--text-secondary); font-size: 11.5px; font-weight: 400; }
+/* What a step brings, a line each with its icon (Snappy's, the count's). */
+.w-features { width: 100%; max-width: 460px; margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; text-align: left; }
+.w-features li { display: flex; align-items: flex-start; gap: 10px; padding: 6px 11px; border-radius: 9px; background: var(--control-bg); font-size: 12.5px; line-height: 1.35; }
+.w-features svg { flex: none; width: 18px; height: 18px; margin-top: 1px; fill: var(--accent); }
+.w-note { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
 .an-details summary { cursor: default; font-size: 12.5px; color: var(--text-secondary); }
 .an-details p { margin: 6px 0 0; font-size: 12px; color: var(--text-secondary); line-height: 1.45; }
 .an-details a { display: inline-block; margin-top: 6px; font-size: 12px; }
 .modal-actions .btn.link { background: none; border-color: transparent; box-shadow: none; color: var(--accent); }
+
+/* ---------- Snappy (snappy.js) ---------- */
+/* The icon: only the avatar, no plate, at the right end of the sidebar's
+   separator, centered on its line. */
+.snappy-fab {
+  position: absolute;
+  right: 0;
+  top: 0;
+  translate: 0 -50%;
+  z-index: 2;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  transition: transform 160ms ease;
+}
+.snappy-fab .snv { filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.22)); }
+.snappy-fab:hover { transform: scale(1.06); }
+.snappy-fab:active { transform: scale(0.97); }
+.snappy-fab:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 12px; }
+
+/* The avatar (snappy-avatar.js), in CSS 3D: 1 em is one unit of its
+   100-unit box. The ring is stacked in slices for its volume; the front
+   carries the white face and the eyes, the back a plain face. */
+.snappy-av { display: block; width: 100%; height: 100%; }
+.snv { position: relative; display: block; width: 100%; height: 100%; perspective: 450em; }
+.snv-body { position: absolute; inset: 0; transform-style: preserve-3d; transform-origin: 50% 60%; will-change: transform; }
+.snv-slice, .snv-front, .snv-back, .snv-eyes { position: absolute; inset: 0; }
+.snv-front, .snv-back, .snv-eyes { -webkit-backface-visibility: hidden; backface-visibility: hidden; }
+.snv-ring, .snv-slice {
+  position: absolute;
+  inset: 1.5%;
+  border-radius: 31%;
+  background: conic-gradient(from -20deg, #ff3b30, #af52de 45deg, #0a84ff 80deg, #30d158 135deg, #30d158 150deg, #0a84ff 190deg, #af52de 215deg, #ff3b30 245deg, #ffcc00 290deg, #ffcc00 305deg, #ff3b30);
+}
+/* The sides: the ring's colors, shaded. */
+.snv-slice { filter: brightness(0.78) saturate(1.1); }
+.snv-face { position: absolute; inset: 6.3%; border-radius: 27%; background: #fff; }
+.snv-back .snv-face { background: #f2f2f4; }
+.snv-eyes svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+
+/* Settings › AI › Snappy: off, only its switch shows. */
+#set-snappy.off .snappy-more { display: none; }
+/* Snappy's memory sheet. */
+.snappy-mem-box { width: min(640px, 92vw); }
+.snappy-mem-text { width: 100%; min-height: 300px; margin-top: 10px; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; resize: vertical; }
+.snappy-mem-box .modal-actions .spacer { flex: 1; }
+/* Settings › AI › Snappy: how full the conversation's context is. */
+.snappy-use .k { flex: 1; min-width: 0; }
+.snappy-meter { display: block; height: 6px; margin: 8px 0 4px; border-radius: 3px; background: var(--card-border); overflow: hidden; }
+.snappy-meter i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--success); transition: width 300ms ease, background-color 300ms ease; }
+.snappy-meter.mid i { background: #ff9f0a; }
+.snappy-meter.high i { background: var(--danger); }
+.snappy-meter-text { display: block; font-size: 11px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* The conversation: a card floating beside the sidebar, apart from it,
+   its bottom level with the icon (set by snappy.js) and a tail pointing at
+   it; its corner buttons over the messages. Twice as wide on demand. */
+.snappy-drawer {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  top: 14px;
+  z-index: 72;
+  width: min(380px, calc(100% - 28px));
+  display: flex;
+  flex-direction: column;
+  background: var(--content-bg);
+  border: 1px solid var(--separator);
+  border-radius: 16px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.12);
+  opacity: 0;
+  transform: translateX(-8px) scale(0.97);
+  transform-origin: 0 calc(100% - 20px);
+  transition: opacity 160ms ease, transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), width 220ms ease;
+}
+.snappy-drawer.wide { width: min(760px, calc(100% - 28px)); }
+.snappy-drawer::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  bottom: 13px;
+  width: 14px;
+  height: 14px;
+  background: var(--content-bg);
+  border-left: 1px solid var(--separator);
+  border-bottom: 1px solid var(--separator);
+  transform: rotate(45deg);
+}
+.snappy-drawer.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .snappy-fab, .snappy-drawer { transition: none; }
+}
+/* Over a site of Explore (snappy-view.html): the card fills the native
+   view laid at its place, its tail in the strip left of it. */
+.snappy-view-page .snappy-floating { position: absolute; inset: 0 0 0 10px; width: auto; transition: none; }
+.snappy-view-page .snappy-floating.wide { width: auto; }
+
+/* Over a sheet (snappy.js snappyDock): the icon at the sheet's bottom
+   left corner, the conversation above it, beside the sheet, both above the
+   blur; the sheet moves aside, narrower if the window is. */
+.modal.with-snappy { gap: 10px; }
+.modal.with-snappy > .modal-box { max-width: calc(100vw - 40px - 60px); }
+.modal.with-snappy:has(.snappy-drawer:not(.hidden)) > .modal-box { max-width: calc(100vw - 40px - 400px); }
+.snappy-dock { flex: none; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px; animation: sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.modal.closing .snappy-dock { animation: sheet-out 150ms ease forwards; }
+.snappy-dock .snappy-fab { position: relative; flex: none; translate: none; }
+.snappy-dock .snappy-drawer { position: relative; inset: auto; flex: none; width: 360px; transform-origin: 20px 100%; }
+.snappy-dock .snappy-drawer.wide { width: min(560px, calc(100vw - 40px - 460px)); }
+.snappy-dock .snappy-drawer::before { left: 13px; bottom: -8px; transform: rotate(-45deg); }
+.snappy-corner { position: absolute; top: 8px; right: 8px; z-index: 1; display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: color-mix(in srgb, var(--content-bg) 82%, transparent); }
+.snappy-x { width: 26px; height: 26px; border: 0; border-radius: 7px; background: none; color: var(--text-secondary); display: grid; place-items: center; cursor: pointer; }
+.snappy-x:hover { background: var(--card-bg); color: var(--text); }
+.snappy-x .narrow, .snappy-drawer.wide .snappy-x .widen { display: none; }
+.snappy-drawer.wide .snappy-x .narrow { display: block; }
+.snappy-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 44px 14px 14px; }
+.snappy-empty { margin: auto 10px; text-align: center; color: var(--text-secondary); font-size: 12.5px; }
+.snappy-msg { max-width: 88%; padding: 8px 12px; border-radius: 14px; overflow-wrap: anywhere; line-height: 1.4; }
+.snappy-msg.user { align-self: flex-end; border-bottom-right-radius: 4px; background: var(--accent); color: var(--accent-text, #fff); white-space: pre-wrap; }
+.snappy-msg.assistant { align-self: flex-start; border-bottom-left-radius: 4px; background: var(--card-bg); }
+.snappy-msg.assistant > :first-child { margin-top: 0; }
+.snappy-msg.assistant > :last-child { margin-bottom: 0; }
+.snappy-msg.assistant p { margin: 0 0 6px; }
+.snappy-msg.assistant ul, .snappy-msg.assistant ol { margin: 0 0 6px; padding-left: 20px; }
+.snappy-msg.assistant code { font-family: var(--font-mono); font-size: 12px; }
+.snappy-msg.assistant a { color: var(--accent); }
+.snappy-tool { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--text-secondary); }
+.snappy-tool .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary); }
+.snappy-tool.done .dot { background: var(--success); }
+.snappy-tool.error .dot { background: var(--danger); }
+.snappy-note { font-size: 12px; color: var(--text-secondary); text-align: center; }
+.snappy-note.error { color: var(--danger); text-align: left; white-space: pre-wrap; }
+.snappy-note .btn { margin-left: 8px; }
+.snappy-cards { display: flex; flex-direction: column; gap: 8px; padding: 0 14px; }
+.snappy-cards:not(:empty) { padding-bottom: 10px; }
+.snappy-card { padding: 10px 12px; border: 1px solid var(--card-border); border-radius: 12px; background: var(--card-bg); box-shadow: var(--card-shadow); }
+.snappy-card .title { font-weight: 600; }
+.snappy-card .what { margin: 4px 0 8px; color: var(--text-secondary); overflow-wrap: anywhere; }
+/* A card listing several changes: one per line. */
+.snappy-card .what { white-space: pre-line; }
+/* Snappy's question: its text first, answers as buttons, another answer typed. */
+.snappy-card.question .what { margin-top: 0; color: var(--text); }
+.snappy-card .row.wrap { flex-wrap: wrap; margin-bottom: 6px; }
+.snappy-card .row input { flex: 1; min-width: 0; }
+.snappy-note .btn { margin-left: 8px; }
+/* A setting Snappy just changed on a sheet: briefly outlined. */
+.snappy-hl { animation: snappy-hl 2.4s ease; border-radius: 8px; }
+@keyframes snappy-hl { 0%, 60% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
+.snappy-card .row { display: flex; gap: 6px; }
+.snappy-images { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.snappy-images img { max-width: 160px; max-height: 120px; border-radius: 8px; object-fit: cover; display: block; }
+.snappy-msg.user .snappy-images:last-child { margin-bottom: 0; }
+.snappy-attach { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 14px 0; border-top: 1px solid var(--separator); }
+.snappy-attach + .snappy-foot { border-top: 0; }
+.snappy-thumb { position: relative; }
+.snappy-thumb img { width: 52px; height: 52px; border-radius: 8px; object-fit: cover; border: 1px solid var(--card-border); display: block; }
+.snappy-thumb button { position: absolute; top: -5px; right: -5px; width: 18px; height: 18px; border: 0; border-radius: 50%; background: var(--text); color: var(--content-bg); font-size: 10px; cursor: pointer; }
+.snappy-add { width: 34px; height: 34px; flex: none; }
+.snappy-foot { display: flex; align-items: flex-end; gap: 8px; padding: 10px 14px 12px; border-top: 1px solid var(--separator); }
+.snappy-foot textarea {
+  flex: 1;
+  min-height: 34px;
+  max-height: 160px;
+  padding: 8px 14px;
+  border: 1px solid var(--card-border);
+  border-radius: 17px;
+  background: var(--card-bg);
+  color: var(--text);
+  font: inherit;
+  resize: none;
+  outline: none;
+}
+.snappy-foot textarea:focus { border-color: var(--accent); }
+.snappy-send { width: 34px; height: 34px; flex: none; border: 0; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--accent-text, #fff); cursor: pointer; }
+.snappy-send:disabled { opacity: 0.35; cursor: default; }
+.snappy-send.stop { background: var(--text); color: var(--content-bg); }
 
 /* ======================================================================
    macOS theme (macOS 26 Tahoe, Liquid Glass). Structure, not only colors:
@@ -5510,6 +5709,7 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 }
 :root[data-theme="macos"] .sidebar.inactive .side-item.on { background: color-mix(in srgb, var(--text) 9%, transparent); }
 :root[data-theme="macos"] .side-footer { border-top: 0; }
+:root[data-theme="macos"] .side-sep::before { display: none; }
 
 /* Toolbar: no bar; its groups float as glass capsules. */
 :root[data-theme="macos"] .toolbar { border-bottom: 0; padding-left: 18px; }
@@ -5625,3 +5825,4 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 
 :root[data-theme="macos"] .p3d-views, :root[data-theme="macos"] .p3d-quick { border-radius: 999px; background: var(--mt-glass-strong); -webkit-backdrop-filter: var(--mt-blur); backdrop-filter: var(--mt-blur); box-shadow: var(--mt-edge), var(--mt-shadow); }
 :root[data-theme="macos"] .p3d { border-radius: var(--mt-radius); }
+

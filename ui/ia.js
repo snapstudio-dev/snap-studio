@@ -1092,14 +1092,10 @@ async function iaHint(c) {
     el.classList.remove("hidden");
     return;
   }
+  // A new conversation has nothing to resume. Its folder is trusted by the
+  // app (claude_pty.rs): no prompt to warn about.
   if (!c.started) {
-    // Only the terminal asks whether to trust the folder; the chat never does.
-    if (IA.view === "term") {
-      el.innerHTML = tr("ia.hint.first");
-      el.classList.remove("hidden");
-    } else {
-      el.classList.add("hidden");
-    }
+    el.classList.add("hidden");
     return;
   }
   let resumable = true;
@@ -1132,6 +1128,7 @@ async function iaOpen(id) {
   // One Claude per conversation, the chat's: the terminal shows it.
   chatOpen(c);
   if (IA.view === "term") iaTraceOpen(c);
+  else iaTraceView(null);
 }
 
 /* Why a conversation is read-only. */
@@ -1156,6 +1153,7 @@ function iaSetVisible(on) {
 function iaBack() {
   iaUndock();
   IA.open = null;
+  iaTraceView(null);
   chatLeave();
   // The element goes back in reserve: the terminal history is kept.
   const host = $("ia-term");
@@ -1580,7 +1578,7 @@ listen("ia-mesh", async (e) => {
 });
 
 /* Chat or terminal: two views of the same session. Nothing is closed or
-   started; the terminal reads what the chat's Claude does. */
+   started; the terminal shows the chat's Claude. */
 function iaSwitchView(view) {
   if (view === IA.view) return;
   IA.view = view;
@@ -1590,7 +1588,10 @@ function iaSwitchView(view) {
   $("ia-left").dataset.mode = view;
   document.querySelectorAll("#ia-views [data-iaview]").forEach((b) => b.classList.toggle("on", b.dataset.iaview === view));
   if (view === "term") iaTraceOpen(c);
-  else requestAnimationFrame(() => $("chat-input").focus());
+  else {
+    iaTraceView(null);
+    requestAnimationFrame(() => $("chat-input").focus());
+  }
 }
 
 $("ia-views").addEventListener("click", (e) => {

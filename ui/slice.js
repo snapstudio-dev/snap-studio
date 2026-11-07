@@ -973,17 +973,19 @@ function setSendBusy(busy) {
   renderSendPrinters();
 }
 
+/* Returns how it ended, for Snappy (snappy.js): { sent, job }, { cancelled }
+   or { error }. */
 async function sendPrint(queue = SL.sendMode === "queue") {
   if (SL.remote) return sendRemote(queue);
   const pv = SL.preview, p = sendPrinter();
-  if (!pv || !p || (!queue && $("snd-go").disabled)) return;
+  if (!pv || !p || (!queue && $("snd-go").disabled)) return { error: "not ready to send" };
   const r = SL.request || {};
   const tools = pv.stats.tools?.length ? pv.stats.tools : [0];
   // Spools checked when the print starts now; a queued job is checked when
   // it starts from the queue.
   let map = [];
   if (!queue) {
-    if (SL.checking) return;
+    if (SL.checking) return { error: "a check is already running" };
     SL.checking = true;
     // The plate is still the one in Prepare: it can be sliced again there.
     const print = { thumb: thumbSrc(pv.gcode, 240, 0), name: pv.source.name, printer: p.name || p.host };
@@ -992,15 +994,15 @@ async function sendPrint(queue = SL.sendMode === "queue") {
       ok = await spCheckBeforeStart(p, { tools, profile: r, stats: pv.stats, canEdit: true, print });
     } catch (e) {
       setSendMessage(String(e.message || e), "err");
-      return;
+      return { error: String(e.message || e) };
     } finally {
       SL.checking = false;
     }
-    if (!ok) return;
+    if (!ok) return { cancelled: true };
     if (ok.edit) {
       closeSheet($("sendmodal"));
       editInPrepare(p.id);
-      return;
+      return { cancelled: true };
     }
     map = ok.map;
   }
@@ -1051,10 +1053,12 @@ async function sendPrint(queue = SL.sendMode === "queue") {
       toast(tr("send.queued", { name: p.name }) + (pos ? ` (${tr("prints.position", { n: pos })})` : ""));
       pjShow("job:" + id);
     }
+    return { sent: true, job: id };
   } catch (e) {
     setSendBusy(false);
     setSendProgress(null);
     setSendMessage(String(e), "err");
+    return { error: String(e) };
   }
 }
 
@@ -1166,11 +1170,13 @@ window.addEventListener("langchange", () => {
 $("s-printer").addEventListener("change", onPrinterChange);
 $("s-machine").addEventListener("change", () => onMachineChange(null));
 // Changing profile (height, style) applies its values, except for the
-// adjustments the user already touched in this sheet.
-$("s-process").addEventListener("change", () => {
+// adjustments the user already touched in this sheet. Snappy waits for it
+// (snappy.js) before changing anything else.
+function slProcessChanged() {
   const cur = currentSimple();
-  loadDefaults(Object.fromEntries([...(SL.touched || [])].map((k) => [k, cur[k]]))).then(advRefreshDefaults);
-});
+  return loadDefaults(Object.fromEntries([...(SL.touched || [])].map((k) => [k, cur[k]]))).then(advRefreshDefaults);
+}
+$("s-process").addEventListener("change", slProcessChanged);
 $("s-go").addEventListener("click", startSlice);
 $("s-cancel").addEventListener("click", () => closeSheet($("smodal")));
 $("s-stop").addEventListener("click", () => {
