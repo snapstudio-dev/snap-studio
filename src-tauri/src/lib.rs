@@ -2017,6 +2017,14 @@ fn analytics_status() -> analytics::Status {
     analytics::status()
 }
 
+/// Development builds only: `SNAP_PREVIEW_NOTICES=1` shows the first-launch
+/// notice at every start with all its steps, answering nothing (to see it
+/// without a fresh profile or an Aptabase key). Always off in a release.
+#[tauri::command]
+fn notices_preview() -> bool {
+    cfg!(debug_assertions) && std::env::var_os("SNAP_PREVIEW_NOTICES").is_some_and(|v| v == "1")
+}
+
 /// The first-launch notice answered, with the switch as left.
 #[tauri::command]
 fn analytics_answer(app: tauri::AppHandle, enabled: bool) -> Result<analytics::Status, String> {
@@ -2251,6 +2259,7 @@ pub fn run() {
             cam_view_set,
             cam_view_action,
             snappy_view_set,
+            notices_preview,
             snappy_reply,
             snappy_view_action,
             lib_favicon,

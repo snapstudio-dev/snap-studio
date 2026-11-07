@@ -3,7 +3,9 @@
 
    Steps: welcome (with the language), models folder, printer (network search
    or manual entry), slicing engine, AI (how to use it, then what it needs),
-   summary and "Get Started". It opens on
+   the feature introductions (intros.js INTROS: Snappy, the anonymous
+   count…, those not available passed), summary and "Get Started". A new
+   user answers everything here: no first-launch notice follows. It opens on
    first launch — no folder nor printer known — then on demand (Settings, Help
    menu). Finished or "Skip": it never comes back on its own. */
 
@@ -15,10 +17,17 @@ const W = {
   confetti: 0,
   /* AI step: the questions ("ask"), then the checks ("result"). */
   ai: { phase: "ask", use: "yes", mode: "container" },
+  /* The introductions shown, by id: applied when the assistant closes. */
+  intros: new Set(),
 };
-const W_STEPS = 6;
-/* Steps: 0 welcome, 1 models, 2 printer, 3 engine, 4 AI, 5 ready. */
+/* Steps: 0 welcome, 1 models, 2 printer, 3 engine, 4 AI, then one per
+   feature introduction, then ready. */
 const W_AI = 4;
+const W_INTRO = W_AI + 1;
+const W_STEPS = W_INTRO + INTROS.length + 1;
+/* The introduction a step shows, if any. */
+const wIntroAt = (n) => (n >= W_INTRO && n < W_INTRO + INTROS.length ? INTROS[n - W_INTRO] : null);
+const wIntroHost = (entry) => $("w-" + entry.id);
 const W_KEY = "snapstudio.welcome";
 const W_ORCA = "https://github.com/Snapmaker/OrcaSlicer/releases/latest";
 
@@ -33,6 +42,11 @@ function welcomeOpen() {
   W.step = 0;
   W.dir = null;
   W.added = [];
+  W.intros.clear();
+  for (const entry of INTROS) {
+    wIntroHost(entry).innerHTML = "";
+    delete wIntroHost(entry).dataset.entered;
+  }
   $("w-folder").classList.add("hidden");
   $("w-added").classList.add("hidden");
   $("w-form").classList.add("hidden");
@@ -44,19 +58,29 @@ function welcomeOpen() {
 
 function wGo(n) {
   const from = W.step;
-  W.step = Math.max(0, Math.min(W_STEPS - 1, n));
+  // An introduction without a place now (a build that cannot send has no
+  // count to ask about) is passed.
+  W.step = introsLand(n, from, W_STEPS - 1, (k) => wIntroAt(k) && !wIntroAt(k).available());
   // The network search only runs on the Printer step.
   if (from === 2 && W.step !== 2) discoverStop();
   if (W.step === 2 && (from !== 2 || !DISC.view)) discoveryList($("w-disc"), wPick);
   if (W.step === 3) wEngine();
   if (W.step === W_AI && from !== W_AI) wAiEnter();
+  const intro = wIntroAt(W.step);
+  if (intro && from !== W.step) {
+    introShow(intro, wIntroHost(intro));
+    W.intros.add(intro.id);
+  }
   if (W.step === W_STEPS - 1) wSummary();
   $("w-track").style.transform = `translateX(${-100 * W.step}%)`;
   document.querySelectorAll("#welcome .w-step").forEach((el, i) => {
     el.classList.toggle("on", i === W.step);
     el.inert = i !== W.step;
   });
-  document.querySelectorAll("#w-dots i").forEach((d, i) => d.classList.toggle("on", i === W.step));
+  document.querySelectorAll("#w-dots i").forEach((d, i) => {
+    d.classList.toggle("on", i === W.step);
+    d.classList.toggle("hidden", !!wIntroAt(i) && !wIntroAt(i).available());
+  });
   wNav();
 }
 
@@ -86,8 +110,8 @@ function welcomeClose() {
   const el = $("welcome");
   el.classList.add("closing");
   setTimeout(() => el.classList.add("hidden"), 260);
-  // The anonymous count's notice, once the assistant is out of the way.
-  setTimeout(() => typeof analyticsNotice === "function" && analyticsNotice(), 400);
+  // The introductions shown: their choices apply.
+  for (const entry of INTROS) if (W.intros.has(entry.id)) entry.apply(wIntroHost(entry));
 }
 
 /* "Get Started": the app opens on what was just set up. */
@@ -260,10 +284,25 @@ async function wSummary() {
         ? row(true, ai, esc(tr("ais.head.ready", { modes: allowed.map((m) => tr("ais.mode." + m)).join(" · ") })))
         : row(false, ai, esc(tr("welcome.sum.ai.todo")))
   );
+  // The introductions shown, as chosen on their steps.
+  for (const entry of INTROS) {
+    if (!W.intros.has(entry.id) || !entry.summary) continue;
+    const [ok, title, sub] = entry.summary(wIntroHost(entry));
+    ul.insertAdjacentHTML("beforeend", row(ok, esc(title), esc(sub)));
+  }
   $("w-orca")?.addEventListener("click", () =>
     invoke("plugin:opener|open_url", { url: W_ORCA }).catch((e) => toast(String(e), true))
   );
   wConfetti();
+}
+
+/* ------------------------------------------------------------ introductions */
+
+/* Their steps (intros.js), before the last one, and a dot per step. */
+{
+  const ready = $("w-track").lastElementChild;
+  for (const entry of INTROS) $("w-track").insertBefore(introSection(entry, "w"), ready);
+  $("w-dots").innerHTML = "<i></i>".repeat(W_STEPS);
 }
 
 /* ------------------------------------------------------------ AI */
@@ -440,6 +479,8 @@ window.addEventListener("langchange", () => {
   wNav();
   wRenderPlaces().then(() => W.dir && wSetDir(W.dir));
   if (W.step === W_AI) wAiRender();
+  const intro = wIntroAt(W.step);
+  if (intro) intro.build(wIntroHost(intro), { notice: false });
   if (W.step === W_STEPS - 1) wSummary();
 });
 onMenu("welcome", welcomeOpen);
@@ -464,12 +505,12 @@ document.addEventListener("keydown", (e) => {
 /* First launch: nothing is set up yet. An existing user (or one carried
    over from 3MF Studio) already has a folder or a printer. */
 (async () => {
-  // No assistant: the anonymous count's notice, if never answered.
-  if (localStorage.getItem(W_KEY)) return typeof analyticsNotice === "function" && analyticsNotice();
+  // No assistant: the first-launch notice, with what was never answered.
+  if (localStorage.getItem(W_KEY)) return typeof launchNotices === "function" && launchNotices();
   const printers = await invoke("printers_list").catch(() => []);
   if (state.dir || state.recents.length || printers.length) {
     localStorage.setItem(W_KEY, JSON.stringify({ done: true, existing: true }));
-    if (typeof analyticsNotice === "function") analyticsNotice();
+    if (typeof launchNotices === "function") launchNotices();
     return;
   }
   welcomeOpen();

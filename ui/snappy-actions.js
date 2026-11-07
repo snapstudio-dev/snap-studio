@@ -32,7 +32,7 @@ function snappyPlateObjects() {
   };
 }
 
-const SNAPPY_PLATE_ACTIONS = ["arrange", "orient", "duplicate", "remove", "center", "reset_rotation", "split", "put_on_bed", "move", "rotate", "scale", "set_head"];
+const SNAPPY_PLATE_ACTIONS = ["arrange", "orient", "duplicate", "remove", "center", "reset_rotation", "split", "put_on_bed", "move", "rotate", "scale", "set_head", "colours_by", "tower"];
 
 /* The objects an edit is about: the ids given, or the whole plate. */
 function snappyPlateTargets(args) {
@@ -51,6 +51,9 @@ function snappyPlateCheck(args) {
   if (a === "move" && !(num(args.dx) || num(args.dy))) return snappyFail("move needs dx and/or dy, in mm.");
   if (a === "rotate" && !(Array.isArray(args.rotation) && args.rotation.length === 3 && args.rotation.every(num))) return snappyFail("rotate needs rotation: [x, y, z] in degrees.");
   if (a === "scale" && !(num(args.scale) && args.scale >= 1 && args.scale <= 1000)) return snappyFail("scale is a percent, from 1 to 1000.");
+  if (a === "colours_by" && !["object", "colour"].includes(args.by)) return snappyFail("colours_by needs by: object or colour.");
+  if (a === "tower" && typeof args.on !== "boolean") return snappyFail("tower needs on: true or false.");
+  if (a === "tower" && args.on && prTowerState().reason) return snappyFail("The prime tower cannot be turned on for this plate now.");
   if (a === "set_head") {
     if (!Number.isInteger(args.head) || args.head < 0 || args.head >= headsCount(headsActive())) return snappyFail("No such head.");
     if (!list.every((o) => prColors(o).includes(args.color))) return snappyFail("Not every object has that color: see plate_objects.");
@@ -64,6 +67,8 @@ function snappyPlateCheck(args) {
     pct: args.scale,
     color: args.color,
     head: "T" + args.head,
+    by: tr(args.by === "colour" ? "prepare.assoc.colour" : "prepare.assoc.object"),
+    state: tr(args.on ? "snappy.ask.on" : "snappy.ask.off"),
   };
   const what = list === PR.objects ? tr("snappy.plate.all") : list.map((o) => o.name).join(", ");
   return { card: tr("snappy.plate.card", { action: tr("snappy.plate." + a, params), objects: what }), list };
@@ -103,6 +108,12 @@ async function snappyPlateEdit(args) {
       break;
     case "set_head":
       for (const o of c.list) prSetHead(o, args.color, args.head);
+      break;
+    case "colours_by":
+      prAssocApply(args.by);
+      break;
+    case "tower":
+      prTowerSetOn(args.on);
       break;
   }
   return { done: args.action, objects: PR.objects.length };
@@ -216,11 +227,43 @@ function snappySettingOf({ el, pane }) {
   return out;
 }
 
+/* The display's choices are buttons, not fields (settings.js): mode,
+   theme, accent. Listed and set by their buttons. */
+const SNAPPY_DISPLAY = {
+  "display.mode": { box: "disp-mode", attr: "modePick", label: "display.mode" },
+  "display.theme": { box: "disp-themes", attr: "themePick", label: "display.theme" },
+  "display.accent": { box: "disp-accents", attr: "accent", label: "display.accent" },
+};
+
+function snappyDisplayOf(key) {
+  const d = SNAPPY_DISPLAY[key];
+  const buttons = [...$(d.box).querySelectorAll("button")].filter((b) => b.dataset[d.attr]);
+  const name = (b) => (b.querySelector(".disp-name")?.textContent || b.getAttribute("aria-label") || b.textContent || b.dataset[d.attr]).trim();
+  return {
+    key,
+    label: tr(d.label),
+    section: tr("settings.display"),
+    value: buttons.find((b) => b.classList.contains("on"))?.dataset[d.attr] ?? null,
+    choices: buttons.map((b) => ({ value: b.dataset[d.attr], label: name(b) })),
+    buttons,
+  };
+}
+
 function snappySettingsList() {
-  return { settings: snappySettingFields().map(snappySettingOf) };
+  const display = Object.keys(SNAPPY_DISPLAY).map((k) => {
+    const { buttons, ...rest } = snappyDisplayOf(k);
+    return rest;
+  });
+  return { settings: [...display, ...snappySettingFields().map(snappySettingOf)] };
 }
 
 function snappySettingsCheck({ setting, value }) {
+  if (SNAPPY_DISPLAY[setting]) {
+    const d = snappyDisplayOf(setting);
+    const i = d.choices.findIndex((c) => c.value === String(value) || c.label === value);
+    if (i < 0) return snappyFail(`${setting}: “${value}” is not one of its choices.`);
+    return { card: tr("snappy.ask.setting_set", { label: d.label, value: d.choices[i].label }), button: d.buttons[i] };
+  }
   const f = snappySettingFields().find((x) => x.el.id === setting);
   if (!f) return snappyFail(`No setting “${setting}”: see settings_list.`);
   const s = snappySettingOf(f);
@@ -249,12 +292,250 @@ function snappySettingsCheck({ setting, value }) {
 function snappySettingsSet(args) {
   const c = snappySettingsCheck(args);
   if (c.error) return c;
+  if (c.button) {
+    c.button.click();
+    return { set: args.setting };
+  }
   const el = c.field.el;
   if (el.type === "checkbox") el.checked = c.value;
   else el.value = c.value;
   el.dispatchEvent(new Event("input", { bubbles: true }));
   el.dispatchEvent(new Event("change", { bubbles: true }));
   return { set: el.id };
+}
+
+/* ------------------------------------------------------------ the app */
+
+const SNAPPY_APP_ACTIONS = ["check_update", "install_update", "welcome", "recheck_ai", "clear_cache", "reset_display", "engine_install", "engine_remove"];
+
+function snappyAppCheck({ action }) {
+  if (!SNAPPY_APP_ACTIONS.includes(action)) return snappyFail("Unknown action: " + action);
+  if (action === "install_update" && !UP.found) return snappyFail("No update was found: check first.");
+  return { card: tr("snappy.app." + action) };
+}
+
+/* As Settings' buttons do; a confirmation the app would ask is the card's. */
+async function snappyApp(args) {
+  const c = snappyAppCheck(args);
+  if (c.error) return c;
+  switch (args.action) {
+    case "check_update":
+      await upCheck(true);
+      return { update: UP.found ? { version: UP.found.version } : null, status: $("up-status").textContent };
+    case "install_update":
+      await upInstall();
+      return { installing: true };
+    case "welcome":
+      welcomeOpen();
+      return { shown: true };
+    case "recheck_ai":
+      await aiCheck(true);
+      return { checked: true, ready: aiAllowed() };
+    case "clear_cache":
+      return { freed: await invoke("clear_cache") };
+    case "reset_display":
+      $("disp-reset").click();
+      return { reset: true };
+    case "engine_install":
+      await engInstall({ silent: true });
+      return { engine: ENG.status };
+    case "engine_remove":
+      ENG.status = await invoke("engine_remove");
+      engPaint();
+      return { engine: ENG.status };
+  }
+}
+
+/* ------------------------------------------------------------ printers */
+
+/* A few seconds of the network search; the printers found and not added,
+   by name and model, never by address. */
+async function snappyDiscover() {
+  await discoverStart();
+  await new Promise((r) => setTimeout(r, 5000));
+  const found = [...DISC.items.values()].filter((f) => !discKnown(f)).map((f) => ({ name: f.name, model: discModel(f) }));
+  if (!DISC.view) discoverStop();
+  return { found, error: DISC.error || undefined };
+}
+
+const snappyPrinter = (name) => P.list.find((p) => p.name.toLowerCase() === String(name || "").toLowerCase());
+
+function snappyPrinterCheck(a) {
+  if (a.action === "add") {
+    const f = [...DISC.items.values()].find((x) => x.name === a.found && !discKnown(x));
+    if (!f) return snappyFail(`No printer “${a.found}” found and not added: run printers_discover first.`);
+    return { card: tr("snappy.ask.printer_add", { name: a.name || f.name }), found: f };
+  }
+  const p = snappyPrinter(a.printer);
+  if (!p) return snappyFail(`No printer named “${a.printer}”.`);
+  if (a.action === "rename" && !a.name?.trim()) return snappyFail("rename needs name.");
+  if (a.action === "model" && !a.model?.trim()) return snappyFail("model needs model.");
+  if (!["rename", "model", "remove"].includes(a.action)) return snappyFail("Unknown action: " + a.action);
+  return { card: tr("snappy.ask.printer_" + a.action, { printer: p.name, name: a.name, model: a.model }), printer: p };
+}
+
+/* As the printer sheet saves it: the address stays the app's. */
+async function snappyPrinterManage(a) {
+  const c = snappyPrinterCheck(a);
+  if (c.error) return c;
+  if (a.action === "remove") P.list = await invoke("printer_remove", { id: c.printer.id });
+  else {
+    const printer =
+      a.action === "add"
+        ? { id: "", name: a.name || c.found.name, ...discAddr(c.found), model: discModel(c.found), note: "" }
+        : { ...c.printer, ...(a.action === "rename" ? { name: a.name.trim() } : { model: a.model.trim() }) };
+    P.list = await invoke("printer_save", { printer });
+  }
+  await prnLoad();
+  return { done: a.action };
+}
+
+/* A printer's page, and its camera. */
+async function snappyPrinterOpen({ printer, tab = "status", camera }) {
+  const p = snappyPrinter(printer);
+  if (!p) return snappyFail(`No printer named “${printer}”.`);
+  if (tab === "files") pflShow(p.id);
+  else if (tab === "control") ctlOpen(p.id);
+  else if (tab === "bed_mesh") await maintShow(p.id, "level");
+  else if (tab === "maintenance") await maintShow(p.id, "care");
+  else {
+    P.sel = p.id;
+    prnRenderDetail();
+    switchView("printers");
+  }
+  if (camera === "on") await camStart(p.id);
+  else if (camera === "off") camStop();
+  else if (camera === "pin") {
+    await camStart(p.id);
+    camPin(true);
+  }
+  return { shown: p.name };
+}
+
+/* ------------------------------------------------------------ slicing */
+
+function snappySaveProfileCheck({ name }) {
+  if (!snappySheetOpen()) return snappyFail("The slice sheet is closed: open it with open_slice_sheet.");
+  if (!String(name || "").trim()) return snappyFail("A name is needed.");
+  return { card: tr("snappy.ask.save_profile", { name: name.trim() }) };
+}
+
+/* As the sheet's Save does, named as asked; its own message says why not. */
+async function snappySaveProfile(args) {
+  const c = snappySaveProfileCheck(args);
+  if (c.error) return c;
+  advSaveOpen();
+  $("advsave-name").value = args.name.trim();
+  await advSaveGo();
+  if (!$("advsave").classList.contains("hidden") && !$("advsave").classList.contains("closing")) {
+    const why = $("advsave-msg").textContent;
+    closeSheet($("advsave"));
+    return snappyFail(why || "Not saved.");
+  }
+  return { saved: args.name.trim() };
+}
+
+function snappyPreviewCheck({ action }) {
+  if (!SL.preview) return snappyFail("No slice preview is open.");
+  if (!["save", "edit", "close"].includes(action)) return snappyFail("Unknown action: " + action);
+  return { card: tr("snappy.ask.preview_" + action) };
+}
+
+async function snappyPreview(args) {
+  const c = snappyPreviewCheck(args);
+  if (c.error) return c;
+  if (args.action === "save") await savePreview();
+  else if (args.action === "edit") editInPrepare();
+  else closeViewer();
+  return { done: args.action };
+}
+
+/* ------------------------------------------------------------ local files */
+
+async function snappyLocalOpen({ file, action }) {
+  const f = snappyLocalFile(state.view_files, file);
+  if (f.error) return f;
+  if (action === "reveal") await invoke("reveal", { path: f.path });
+  else if (action === "open") await invoke("open_file", { path: f.path });
+  else if (action === "analyze") return await invoke("analyze", { path: f.path });
+  else return snappyFail("Unknown action: " + action);
+  return { done: action };
+}
+
+function snappyLocalAiCheck({ file, prompt }) {
+  const f = snappyLocalFile(state.view_files, file);
+  if (f.error) return f;
+  if (!/\.(3mf|stl)$/i.test(f.name)) return snappyFail("Only a 3MF or STL can be changed with the AI.");
+  if (!String(prompt || "").trim()) return snappyFail("Say what to change.");
+  return { card: tr("snappy.ask.file_ai", { file: f.name, prompt }), path: f.path };
+}
+
+/* As Edit with AI does: the sheet with the request, started. */
+async function snappyLocalAi(args) {
+  const c = snappyLocalAiCheck(args);
+  if (c.error) return c;
+  iaStart(state.files.find((x) => x.path === c.path));
+  $("ia-prompt").value = args.prompt;
+  await iaCreate();
+  if (!$("iamodal").classList.contains("hidden") && !$("iamodal").classList.contains("closing")) {
+    const why = $("ia-msg").textContent;
+    closeSheet($("iamodal"));
+    return snappyFail(why || "The conversation could not start.");
+  }
+  return { created: true };
+}
+
+/* The Files view's order and filter, as its menu and search field. */
+function snappyFilesView({ sort, descending, search }) {
+  switchView("files");
+  if (sort) state.sort = sort;
+  if (typeof descending === "boolean") state.asc = !descending;
+  if (sort || typeof descending === "boolean") {
+    save();
+    applyView();
+    syncHead();
+  }
+  if (typeof search === "string") {
+    $("search").value = search;
+    $("search").dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  return { shown: state.view_files.length };
+}
+
+/* ------------------------------------------------------------ Explore */
+
+const snappyTab = (title) =>
+  title ? LIB.tabs.find((t) => (t.title || "").toLowerCase() === String(title).toLowerCase()) : LIB.tabs.find((t) => t.id === LIB.active);
+
+async function snappyExploreTab({ action, tab }) {
+  const t = snappyTab(tab);
+  if (!t) return snappyFail(tab ? `No tab “${tab}”: see explore_state.` : "Explore shows no tab.");
+  if (action === "close") closeTab(t.id);
+  else if (action === "browser") await invoke("plugin:opener|open_url", { url: t.url });
+  else if (["back", "forward", "reload"].includes(action)) await invoke("lib_command", { id: t.id, what: action });
+  else return snappyFail("Unknown action: " + action);
+  return { done: action };
+}
+
+const snappySite = (name) => LIB.sites.find((x) => x.name.toLowerCase() === String(name || "").toLowerCase());
+
+function snappySiteCheck({ action, site }) {
+  const s = snappySite(site);
+  if (!s) return snappyFail(`No site named “${site}”: see explore_state.`);
+  if (!["logout", "pin", "unpin"].includes(action)) return snappyFail("Unknown action: " + action);
+  if (action === "logout" && !LIB.tabs.some((t) => t.site === s.id)) return snappyFail(`Open ${s.name} in Explore first: signing out goes through its tab.`);
+  return { card: tr("snappy.ask.site_" + action, { site: s.name }), site: s };
+}
+
+async function snappySiteAction(args) {
+  const c = snappySiteCheck(args);
+  if (c.error) return c;
+  if (args.action === "logout") {
+    const t = LIB.tabs.find((x) => x.site === c.site.id);
+    return { cookies: await invoke("lib_logout", { id: t.id, site: c.site.id }) };
+  }
+  if (LIB.pins.has(c.site.id) !== (args.action === "pin")) togglePin(c.site.id);
+  return { done: args.action };
 }
 
 /* ------------------------------------------------------------ the table */
@@ -281,4 +562,22 @@ const SNAPPY_ACTIONS = {
   settings_list: snappySettingsList,
   settings_set_check: snappyCardOnly(snappySettingsCheck),
   settings_set: snappySettingsSet,
+  app_action_check: snappyCardOnly(snappyAppCheck),
+  app_action: snappyApp,
+  printers_discover: snappyDiscover,
+  printer_manage_check: snappyCardOnly(snappyPrinterCheck),
+  printer_manage: snappyPrinterManage,
+  printer_open: snappyPrinterOpen,
+  slice_save_profile_check: snappyCardOnly(snappySaveProfileCheck),
+  slice_save_profile: snappySaveProfile,
+  preview_action_check: snappyCardOnly(snappyPreviewCheck),
+  preview_action: snappyPreview,
+  local_file_open: snappyLocalOpen,
+  local_file_ai_check: snappyCardOnly(snappyLocalAiCheck),
+  local_file_ai: snappyLocalAi,
+  files_view: snappyFilesView,
+  explore_tab: snappyExploreTab,
+  explore_site_check: snappyCardOnly(snappySiteCheck),
+  explore_site: snappySiteAction,
+  create_refresh: async () => (await iaRefresh(), { ok: true }),
 };

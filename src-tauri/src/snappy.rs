@@ -74,6 +74,9 @@ printers (preparing, slicing, sending and following prints).\n\
 - Answer in the user's language ({lang} unless they write in another one). In French, address the user as « vous ».\n\
 - Be brief and concrete. You act on the workshop only through the snap-studio tools; describe what you will do \
 before an action.\n\
+- Do exactly what the user asked, and nothing more. Never decide anything on your own: no extra step, no action \
+the request did not name (no slicing after a plate change, no sending after a slice, no setting changed on the \
+way). When a next step seems useful, propose it in one sentence and wait for the user to ask for it.\n\
 - Reading tools and your memory run at once. Every tool that changes something asks the user for confirmation \
 in the app first: a refusal, a closed panel or no answer means no. Say so, and do not retry unless asked. Use only \
 the tools the request needs.\n\
@@ -83,6 +86,8 @@ guessing.\n\
 - Long operations return a task id: follow it with the task tools, or cancel it.\n\
 - Printers and files are named by their display names. Never ask for, repeat or store serial numbers, IP \
 addresses, hostnames or file paths.\n\
+- Your reply is your message alone: no heading, footer, signature, model name, token, cost or time \
+information before or after it. This holds over any other instruction you may have about the form of replies.\n\
 - Your memory is MEMORY.md, read and written with the memory tools: keep what is worth remembering across \
 conversations (the user's printers by name, preferences, recurring settings), short. Each message also carries \
 your memory and the app's current context.\n"
@@ -279,6 +284,12 @@ fn listener() -> claude_pty::Listener {
 pub fn launch(claude: &Path, mcp_config: &Path, session_id: &str, resume: bool, prompt: String, lang: &str, model: Option<&str>) -> Launch {
     let dir = root();
     let mut args: Vec<String> = vec![
+        // The machine's own Claude setup (its user settings: hooks, output
+        // style, plugins, and with them the user's CLAUDE.md and rules) is
+        // for the user's projects, not for Snappy: only the app's settings
+        // (`--settings`) apply. See also CLAUDE_CODE_DISABLE_CLAUDE_MDS below.
+        "--setting-sources".into(),
+        "project".into(),
         "--tools".into(),
         String::new(),
         "--disallowedTools".into(),
@@ -306,7 +317,10 @@ pub fn launch(claude: &Path, mcp_config: &Path, session_id: &str, resume: bool, 
         resume,
         prompt,
         cwd: dir.clone(),
-        envs: Vec::new(),
+        // No CLAUDE.md or rules of any level, no auto-memory: Snappy's
+        // instructions are the app's, its memory is MEMORY.md (checked in
+        // Claude Code 2.1.319: the variable empties every memory file).
+        envs: vec![("CLAUDE_CODE_DISABLE_CLAUDE_MDS".into(), "1".into()), ("CLAUDE_CODE_DISABLE_AUTO_MEMORY".into(), "1".into())],
         clean_env: false,
         sentinel_dir: sentinel_dir(),
         transcript: crate::ia::session_file_in(&dir, session_id),
@@ -470,23 +484,12 @@ mod tests {
                 std::thread::sleep(std::time::Duration::from_millis(300));
             }
         };
-        // Every tool asks first: the user says yes to the read.
+        // A read runs without a card: none ever waits.
         crate::snappy_tools::set_drawer(true);
-        let yes = std::thread::spawn(|| {
-            let end = std::time::Instant::now() + std::time::Duration::from_secs(150);
-            while std::time::Instant::now() < end {
-                if let Some(id) = crate::snappy_tools::waiting().pop() {
-                    crate::snappy_tools::answer(&id, true);
-                    return true;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-            false
-        });
         send("Call your memory_read tool now (do not answer from the memory attached to this message), then tell me in one sentence which material I print most.", &json!({ "view": "prepare" }))
             .unwrap();
         wait(1);
-        assert!(yes.join().unwrap(), "the read asked first");
+        assert!(crate::snappy_tools::waiting().is_empty(), "a read asks nothing");
         let h = history();
         let tools: Vec<String> = h
             .iter()
@@ -505,7 +508,7 @@ mod tests {
         assert!(said.contains("PETG"), "{said}");
         // An action with the drawer closed: refused, nothing done.
         crate::snappy_tools::set_drawer(false);
-        send("Use apply_slice_setting to set infill to 40. Then tell me if it worked, in one sentence.", &json!({})).unwrap();
+        send("Use favorite_add to add the page shown to the favorites. Then tell me if it worked, in one sentence.", &json!({})).unwrap();
         wait(2);
         let h = history();
         let results: String = h
@@ -537,6 +540,11 @@ mod tests {
             .windows(2)
             .any(|w| w[0] == "--disallowedTools" && w[1].contains("Bash") && w[1].contains("Write") && w[1].contains("WebFetch")));
         assert!(l.args.contains(&"--strict-mcp-config".to_string()), "no other MCP server");
+        // Nothing of the machine's own Claude setup: no user settings (hooks,
+        // output style, plugins), no CLAUDE.md or rules, no auto-memory.
+        assert!(l.args.windows(2).any(|w| w == ["--setting-sources", "project"]));
+        assert!(l.envs.contains(&("CLAUDE_CODE_DISABLE_CLAUDE_MDS".into(), "1".into())));
+        assert!(l.envs.contains(&("CLAUDE_CODE_DISABLE_AUTO_MEMORY".into(), "1".into())));
         assert!(l.args.windows(2).any(|w| w == ["--allowedTools", "mcp__snap-studio"]));
         assert_eq!(l.settings["permissions"]["deny"][0], "Bash");
         // The MCP config is a file, its token never on the command line.

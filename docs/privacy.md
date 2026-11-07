@@ -52,8 +52,10 @@ for up to 5 years.
 
 ## Turning it off
 
-- **At first launch**: a sheet explains the count, with a switch to turn it
-  off. Nothing is sent before you close it; switched off there, nothing is
+- **At first launch**: a step of the welcome assistant explains the count,
+  with a switch to turn it off; for a user who had the app before it, a
+  sheet does, at the first launch of a version that has it (after a step
+  introducing Snappy, if that is new too). Nothing is sent before you close it; switched off there, nothing is
   ever sent.
 - **At any time**: Settings › Application › Anonymous usage count. It takes
   effect at once: nothing new is sent. One exception: if this launch's
@@ -73,7 +75,8 @@ the sheet never opens, and Settings says "Not available in this build".
 
 - [`src-tauri/src/analytics.rs`](../src-tauri/src/analytics.rs): when the
   event is sent, and the only event.
-- [`ui/analytics.js`](../ui/analytics.js): the first-launch sheet and the
+- [`ui/analytics.js`](../ui/analytics.js): the count's step (shown by the welcome
+  assistant or the first-launch sheet, [`ui/intros.js`](../ui/intros.js)) and the
   Settings switch.
 - [`.github/workflows/build.yml`](../.github/workflows/build.yml): the app
   key, given to the release build only.

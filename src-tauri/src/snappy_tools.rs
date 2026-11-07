@@ -176,10 +176,10 @@ pub static TOOLS: &[Tool] = &[
     },
     Tool {
         name: "slice_run",
-        description: "Slices the plate with the open sheet's settings, as its Slice button does; the preview opens when it is done. Answers with a task id; its result gives the estimates.",
+        description: "Slices the plate with the open sheet's settings, as its Slice button does; the preview opens when it is done. Only when the user asked to slice. The user confirms it. Answers with a task id; its result gives the estimates.",
         params: no_params,
-        access: Access::Harmless,
-        ask: None,
+        access: Access::Write,
+        ask: Some(ask_slice_run),
         run: slice_run,
     },
     Tool {
@@ -256,8 +256,8 @@ pub static TOOLS: &[Tool] = &[
     },
     Tool {
         name: "download_printer_file",
-        description: "Downloads a print file from a printer to the user's Downloads folder. The user confirms it.",
-        params: crate::snappy_actions::file_params,
+        description: "Downloads a print file, or a timelapse video (`timelapse`), from a printer to the user's Downloads folder. The user confirms it.",
+        params: crate::snappy_actions::download_params,
         access: Access::Write,
         ask: Some(crate::snappy_actions::ask_download),
         run: crate::snappy_actions::download,
@@ -405,6 +405,150 @@ pub static TOOLS: &[Tool] = &[
         access: Access::Write,
         ask: Some(crate::snappy_actions::ask_settings_set),
         run: crate::snappy_actions::settings_set,
+    },
+    Tool {
+        name: "app_action",
+        description: "One of Snap Studio's own actions: check for an update, install the one found, open the welcome assistant again, check again what the AI needs, clear the thumbnail cache, reset the display settings, install or remove the slicing engine. The user confirms it.",
+        params: crate::snappy_actions::app_action_params,
+        access: Access::Write,
+        ask: Some(crate::snappy_actions::ask_app_action),
+        run: crate::snappy_actions::app_action,
+    },
+    Tool {
+        name: "printers_discover",
+        description: "Searches the network for printers for a few seconds: their names and models, those not added yet. Never their addresses.",
+        params: crate::snappy_actions::no_params_value,
+        access: Access::Read,
+        ask: None,
+        run: crate::snappy_actions::printers_discover,
+    },
+    Tool {
+        name: "printer_manage",
+        description: "Adds a printer found by printers_discover, renames a printer, changes its model, or removes it from Snap Studio. The user confirms it.",
+        params: crate::snappy_actions::printer_manage_params,
+        access: Access::Write,
+        ask: Some(crate::snappy_actions::ask_printer_manage),
+        run: crate::snappy_actions::printer_manage,
+    },
+    Tool {
+        name: "printer_open",
+        description: "Shows one of a printer's pages (status, control, files, bed mesh, maintenance), and turns its camera on, off, or pins it over the app.",
+        params: crate::snappy_actions::printer_open_params,
+        access: Access::Harmless,
+        ask: None,
+        run: crate::snappy_actions::printer_open,
+    },
+    Tool {
+        name: "bed_mesh",
+        description: "A printer's bed meshes kept, newest first: when, profile, how flat (spread in mm).",
+        params: crate::snappy_actions::printer_details_params,
+        access: Access::Read,
+        ask: None,
+        run: crate::snappy_actions::bed_mesh,
+    },
+    Tool {
+        name: "bed_mesh_action",
+        description: "Measures a printer's bed (a task id answers; it heats the bed first), stops or aborts a measure, keeps only the newest meshes, or removes one. The user confirms it.",
+        params: crate::snappy_actions::bed_mesh_action_params,
+        access: Access::Write,
+        ask: Some(crate::snappy_actions::ask_bed_mesh_action),
+        run: crate::snappy_actions::bed_mesh_action,
+    },
+    Tool {
+        name: "maintenance",
+        description: "Logs a maintenance task as done now on a printer (with its counters), or removes a log entry made by mistake. The user confirms it.",
+        params: crate::snappy_actions::maintenance_params,
+        access: Access::Write,
+        ask: Some(crate::snappy_actions::ask_maintenance),
+        run: crate::snappy_actions::maintenance,
+    },
+    Tool {
+        name: "print_history",
+        description: "Puts a finished print back in the queue, notes how a print came out, or hides a printer's queue reminder. The user confirms it.",
+        params: crate::snappy_actions::history_params,
+        access: Access::Write,
+        ask: Some(crate::snappy_actions::ask_history),
+        run: crate::snappy_actions::history,
+    },
+    Tool {
+        name: "timelapses",
+        description: "A printer's timelapse videos, newest first: name, size, date. download_printer_file downloads one.",
+        params: crate::snappy_actions::printer_details_params,
+        access: Access::Read,
+        ask: None,
+        run: crate::snappy_actions::timelapses,
+    },
+    Tool {
+        name: "slice_save_profile",
+        description: "Saves the open slice sheet's settings as a new quality profile, under the name given. The user confirms it.",
+        params: crate::snappy_actions::name_params,
+        access: Access::Write,
+        ask: Some(crate::snappy_actions::ask_slice_save_profile),
+        run: crate::snappy_actions::slice_save_profile,
+    },
+    Tool {
+        name: "preview_action",
+        description: "On the slice's preview: save the G-code next to the models, go back to Prepare to edit the plate, or close it. The user confirms it.",
+        params: crate::snappy_actions::preview_params,
+        access: Access::Write,
+        ask: Some(crate::snappy_actions::ask_preview_action),
+        run: crate::snappy_actions::preview_action,
+    },
+    Tool {
+        name: "local_file_open",
+        description: "Shows a file of the Files view in the system's file manager, opens it with its app, or reads its size and triangle count.",
+        params: crate::snappy_actions::local_file_open_params,
+        access: Access::Harmless,
+        ask: None,
+        run: crate::snappy_actions::local_file_open,
+    },
+    Tool {
+        name: "local_file_ai",
+        description: "Starts a Create conversation that changes a model of the Files view, as its Edit with AI does. The user confirms it.",
+        params: crate::snappy_actions::local_file_ai_params,
+        access: Access::Write,
+        ask: Some(crate::snappy_actions::ask_local_file_ai),
+        run: crate::snappy_actions::local_file_ai,
+    },
+    Tool {
+        name: "files_view",
+        description: "Sorts the Files view, or filters it by a text in the names.",
+        params: crate::snappy_actions::files_view_params,
+        access: Access::Harmless,
+        ask: None,
+        run: crate::snappy_actions::files_view,
+    },
+    Tool {
+        name: "create_versions",
+        description: "The saved versions of one of Create's objects: number, when, size.",
+        params: crate::snappy_actions::create_open_params,
+        access: Access::Read,
+        ask: None,
+        run: crate::snappy_actions::create_versions,
+    },
+    Tool {
+        name: "create_manage",
+        description: "On one of Create's conversations: rename, duplicate, delete, go back to a version, stop its answer, or choose its model. The user confirms it.",
+        params: crate::snappy_actions::create_manage_params,
+        access: Access::Write,
+        ask: Some(crate::snappy_actions::ask_create_manage),
+        run: crate::snappy_actions::create_manage,
+    },
+    Tool {
+        name: "explore_tab",
+        description: "On a tab of Explore: back, forward, reload, close, or open its page in the system's browser.",
+        params: crate::snappy_actions::explore_tab_params,
+        access: Access::Harmless,
+        ask: None,
+        run: crate::snappy_actions::explore_tab,
+    },
+    Tool {
+        name: "explore_site",
+        description: "Signs out of a site of Explore (its cookies only), or pins it in the sidebar, or unpins it. The user confirms it.",
+        params: crate::snappy_actions::explore_site_params,
+        access: Access::Write,
+        ask: Some(crate::snappy_actions::ask_explore_site),
+        run: crate::snappy_actions::explore_site,
     },
 ];
 
@@ -616,7 +760,7 @@ fn tasks() -> &'static Mutex<HashMap<String, Task>> {
 }
 
 /// Runs a long operation in the background; its id answers at once.
-fn spawn_task(label: String, work: impl std::future::Future<Output = Result<Value, String>> + Send + 'static) -> Value {
+pub(crate) fn spawn_task(label: String, work: impl std::future::Future<Output = Result<Value, String>> + Send + 'static) -> Value {
     let id = format!("task-{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
     tasks().lock().unwrap().insert(id.clone(), Task { label: label.clone(), state: "running", result: Value::Null, handle: None });
     let tid = id.clone();
@@ -886,6 +1030,10 @@ fn slice_set(args: &Value) -> Result<Value> {
     ui_call_within("slice_set", json!({ "changes": args["changes"] }), SHEET_TIMEOUT)
 }
 
+fn ask_slice_run(_: &Value) -> Result<String> {
+    Ok(crate::t!("snappy.ask.slice_run"))
+}
+
 fn slice_run(_: &Value) -> Result<Value> {
     Ok(spawn_task(crate::t!("snappy.task.slice"), async {
         tauri::async_runtime::spawn_blocking(|| ui_call_within("slice_run", json!({}), SLICE_TIMEOUT))
@@ -1103,6 +1251,7 @@ mod tests {
             [
                 "task_cancel",
                 "slice_set",
+                "slice_run",
                 "start_queued_print",
                 "print_printer_file",
                 "delete_printer_file",
@@ -1122,6 +1271,16 @@ mod tests {
                 "plate_edit",
                 "plate_add",
                 "settings_set",
+                "app_action",
+                "printer_manage",
+                "bed_mesh_action",
+                "maintenance",
+                "print_history",
+                "slice_save_profile",
+                "preview_action",
+                "local_file_ai",
+                "create_manage",
+                "explore_site",
             ]
         );
         for t in TOOLS {

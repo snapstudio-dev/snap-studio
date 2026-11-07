@@ -1179,7 +1179,7 @@
     <div class="group" id="set-snappy">
       <label class="grow-row">
         <span class="k"><span data-i18n="settings.snappy.on">Turn on Snappy</span>
-          <span class="sub" data-i18n="settings.snappy.on.sub">The workshop assistant, under its icon at the bottom of the sidebar</span>
+          <span class="sub" id="set-snappy-sub" data-i18n="settings.snappy.on.sub">The workshop assistant, under its icon at the bottom of the sidebar</span>
         </span>
         <input type="checkbox" id="set-snappy-on" class="sw" role="switch" checked />
       </label>
@@ -1585,20 +1585,15 @@
 <div id="toasts" class="toasts"></div>
 
 <!-- The anonymous usage count, at first launch (analytics.js). -->
-<div id="anmodal" class="modal hidden">
-  <div class="modal-box an-box" role="dialog" aria-labelledby="an-title">
-    <h3 id="an-title" data-i18n="an.title">A small anonymous count</h3>
-    <p class="an-p" data-i18n="an.why">To know how many people use Snap Studio and keep working on it, the app sends one anonymous signal each time it starts.</p>
-    <p class="an-p"><b data-i18n="an.sent_k">What is sent:</b> <span data-i18n="an.sent">the app's version, your system and its language (for example macOS 15, French), and a random number that changes at each launch. That's all.</span></p>
-    <p class="an-p"><b data-i18n="an.never_k">Never sent:</b> <span data-i18n="an.never">your files, your models, your printers, your AI conversations, your account or any identifier that points to you.</span></p>
-    <p class="an-p sub" data-i18n="an.where">It goes through Aptabase, an open-source, privacy-first service. You can change your mind anytime in Settings › Application.</p>
-    <label class="grow-row an-row">
-      <span class="k" data-i18n="an.switch">Send the anonymous count</span>
-      <input type="checkbox" id="an-switch" class="sw" role="switch" checked />
-    </label>
-    <div class="modal-actions">
-      <a href="#" class="btn left link" data-an-doc data-i18n="an.more">What exactly is sent?</a>
-      <button id="an-ok" class="btn primary" data-i18n="an.ok">Got it</button>
+<!-- First-launch notice (intros.js launchNotices): the feature
+     introductions not seen yet, as the welcome assistant's steps. -->
+<div id="ntmodal" class="modal nt-modal hidden">
+  <div class="modal-box w-card nt-card" role="dialog">
+    <div class="w-viewport"><div id="nt-track" class="w-track"></div></div>
+    <div class="w-nav">
+      <button id="nt-back" class="btn" data-i18n="common.back">Back</button>
+      <div id="nt-dots" class="w-dots"></div>
+      <button id="nt-ok" class="btn primary">Got it</button>
     </div>
   </div>
 </div>
@@ -2226,6 +2221,9 @@
           </div>
         </section>
 
+        <!-- Here go the feature introductions (intros.js INTROS), added by
+             welcome.js. -->
+
         <section class="w-step">
           <div class="w-final">
             <canvas id="w-confetti"></canvas>
@@ -2243,7 +2241,7 @@
     </div>
     <div class="w-nav">
       <button id="w-back" class="btn" data-i18n="common.back">Back</button>
-      <div id="w-dots" class="w-dots"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div id="w-dots" class="w-dots"></div>
       <button id="w-next" class="btn primary" data-i18n="common.continue">Continue</button>
     </div>
   </div>
@@ -2366,6 +2364,8 @@
 <script src="whatsnew-logic.js"></script>
 <script src="whatsnew.js"></script>
 <script src="analytics.js"></script>
+<script src="intros-logic.js"></script>
+<script src="intros.js"></script>
 <script src="welcome.js"></script>
 </body>
 </html>

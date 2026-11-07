@@ -82,8 +82,8 @@ document.addEventListener(
   true
 );
 
-/* Over a sheet: the app behind it is dimmed and blurred, so Snappy goes
-   to the sheet, above the blur. Its icon stands at the sheet's bottom left
+/* Over the slice sheet: the app behind it is dimmed and blurred, so Snappy
+   goes to the sheet, above the blur. Its icon stands at the sheet's bottom left
    corner, its conversation opens as a panel above the icon, beside the
    sheet, and the sheet moves aside to make room. Back home when the sheet
    goes. */
@@ -93,10 +93,12 @@ const snappyDockEl = snappyDiv("snappy-dock");
    stays level with its bottom. */
 const snappyDockFit = new ResizeObserver(() => snappyPlace());
 
+/* Only the slice sheet (owner's decision, 2026-11-06): Snappy sets slices
+   up there. Over any other sheet it stays home, under the blur. */
 function snappyTopSheet() {
-  if (!snappyAvailable()) return null;
-  const open = [...document.querySelectorAll(".modal")].filter((m) => !m.classList.contains("hidden") && !m.classList.contains("closing"));
-  return open.pop() || null;
+  const m = $("smodal");
+  if (!snappyAvailable() || m.classList.contains("hidden") || m.classList.contains("closing")) return null;
+  return m;
 }
 
 function snappyDock() {
@@ -526,14 +528,82 @@ window.addEventListener("langchange", snappyUsageFill);
    Claude stops; its memory and conversation stay. */
 function snappyEnabledShow(on) {
   SNAP.enabled = on;
-  $("set-snappy-on").checked = on;
-  $("set-snappy").classList.toggle("off", !on);
   if (!on) snappyClose();
+  snappyLock();
   snappyFabState();
 }
-$("set-snappy-on").addEventListener("change", (e) => {
-  const on = e.target.checked;
+
+/* Snappy needs the AI: with the AI off ("Do not use the AI"), its switch
+   is locked, shown off, and says why; its own setting stays for when the
+   AI comes back. */
+function snappyLock() {
+  const noAi = typeof aiChoice === "function" && aiChoice() === "off";
+  const sw = $("set-snappy-on");
+  sw.disabled = noAi;
+  sw.checked = SNAP.enabled && !noAi;
+  // Its other rows (model, conversation) go with it.
+  $("set-snappy").classList.toggle("off", !sw.checked);
+  const sub = $("set-snappy-sub");
+  sub.dataset.i18n = noAi ? "snappy.intro.needs_ai" : "settings.snappy.on.sub";
+  sub.textContent = tr(sub.dataset.i18n);
+}
+window.addEventListener("aichange", snappyLock);
+/* Snappy on or off, as its switch does (Settings, the welcome assistant,
+   the first-launch notice). */
+function snappySetEnabled(on) {
   snappyEnabledShow(on);
   invoke("snappy_set_enabled", { on }).catch((err) => toast(String(err), true));
-});
+}
+$("set-snappy-on").addEventListener("change", (e) => snappySetEnabled(e.target.checked));
+
+/* ------------------------------------------------------------ introducing it */
+
+/* Introduced once, by the welcome assistant or, for a user who had the app
+   before Snappy, by the first-launch notice (intros.js). */
+const SNAPPY_INTRO_KEY = "snapstudio.snappy.intro";
+const snappyIntroduced = () => !!localStorage.getItem(SNAPPY_INTRO_KEY);
+const snappyIntroDone = () => localStorage.setItem(SNAPPY_INTRO_KEY, "1");
+
+/* Snappy introduced, as a step of the welcome assistant's (its badge,
+   title, lead, what it does, and its switch): one build for the assistant
+   and the first-launch notice. `kicker` puts "New" above the title. */
+const SNAPPY_INTRO_ICONS = {
+  ask: '<svg viewBox="0 0 24 24"><path d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2m2 4v2h12V8zm0 4v2h8v-2z"/></svg>',
+  act: '<svg viewBox="0 0 24 24"><path d="M7.5 5.6 10 7 8.6 4.5 10 2 7.5 3.4 5 2l1.4 2.5L5 7zm12 9.8L17 14l1.4 2.5L17 19l2.5-1.4L22 19l-1.4-2.5L22 14zM22 2l-2.5 1.4L17 2l1.4 2.5L17 7l2.5-1.4L22 7l-1.4-2.5zm-7.6 5.3a1 1 0 0 0-1.4 0L1.3 18.9a1 1 0 0 0 0 1.4l2.3 2.3a1 1 0 0 0 1.4 0l11.7-11.6a1 1 0 0 0 0-1.4zm-1.1 5.5-2.1-2.1 2.4-2.5 2.1 2.1z"/></svg>',
+  asks: '<svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.6 3.8 10.7 9 12 5.2-1.3 9-6.4 9-12V5zm-2 16-4-4 1.4-1.4 2.6 2.6 6.6-6.6L18 9z"/></svg>',
+  privacy: '<svg viewBox="0 0 24 24"><path d="M18 8h-1V6A5 5 0 0 0 7 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2m-6 9a2 2 0 1 1 0-4 2 2 0 0 1 0 4m3.1-9H8.9V6a3.1 3.1 0 0 1 6.2 0z"/></svg>',
+};
+
+function snappyIntroBuild(host, { kicker = false, titleId = "" } = {}) {
+  let badge = host.querySelector(".snappy-intro-badge");
+  if (!badge) {
+    badge = document.createElement("div");
+    badge.className = "w-badge snappy-intro-badge";
+    badge.innerHTML = '<span class="snappy-av"></span>';
+    snappyAvatar(badge.firstChild);
+  }
+  const prev = host.querySelector("[data-snappy-on]");
+  const was = prev && { on: prev.checked, locked: prev.disabled };
+  host.innerHTML = `
+    ${kicker ? `<span class="snappy-kicker">${esc(tr("snappy.intro.kicker"))}</span>` : ""}
+    <h1${titleId ? ` id="${titleId}"` : ""}>${esc(tr("snappy.intro.title"))}</h1>
+    <p class="w-lead">${esc(tr("snappy.intro.lead"))}</p>
+    <ul class="w-features">${["ask", "act", "asks", "privacy"].map((k) => `<li>${SNAPPY_INTRO_ICONS[k]}<span>${esc(tr("snappy.intro." + k))}</span></li>`).join("")}</ul>
+    <label class="grow-row w-switch">
+      <span class="k">${esc(tr("settings.snappy.on"))}<small data-snappy-needs class="hidden">${esc(tr("snappy.intro.needs_ai"))}</small></span>
+      <input type="checkbox" class="sw" role="switch" data-snappy-on />
+    </label>`;
+  host.prepend(badge);
+  if (was) snappyIntroSet(host, was.on, was.locked);
+}
+
+/* The switch shown: `on`, and greyed out without the AI (which it needs),
+   saying so. */
+function snappyIntroSet(host, on, noAi) {
+  const sw = host.querySelector("[data-snappy-on]");
+  sw.checked = on;
+  sw.disabled = noAi;
+  host.querySelector("[data-snappy-needs]").classList.toggle("hidden", !noAi);
+}
+
 invoke("snappy_enabled").then((on) => snappyEnabledShow(on !== false)).catch(() => {});

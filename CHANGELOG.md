@@ -24,8 +24,17 @@ with its packages for macOS, Windows and Linux. What comes next:
   confirmation (shown on the sheet, with an undo) and slice; and drive
   the rest of the app: the plate in Prepare, the printers' controls and
   prints, their files, the queue, Create's conversations, Explore and
-  its favorites, the Files view's folders and the settings. Over a
-  sheet it sits beside it, above the blur, and it stays visible over
+  its favorites, the Files view's folders and the settings (the display's
+  theme included), add and manage printers, measure the bed, log
+  maintenance, note how a print came out, download timelapses, save a
+  slice profile, and manage Create's objects and their versions. It only does
+  what you ask (it proposes a next step rather than taking it), and it
+  ignores the Claude Code rules, hooks and reply styles set up on the
+  computer for other projects. The welcome assistant introduces it, with
+  the choice to turn it on; if you had the app before, a sheet does at the
+  first launch, before the anonymous count's. It needs the AI: with the AI
+  off, its switch is locked. Over the
+  slice sheet it sits beside it, above the blur, and it stays visible over
   the sites of Explore. Its model is
   set in Settings › AI. It uses the Claude already set up for the AI,
   with none of Claude's own tools, and never sends serial numbers,

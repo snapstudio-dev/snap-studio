@@ -542,7 +542,8 @@ Windows : « Informations complémentaires » → « Exécuter quand même ».
 Ce que chaque version a apporté : [CHANGELOG.md](CHANGELOG.md) (en anglais).
 
 Un **assistant de bienvenue** règle tout : langue (parmi neuf), dossier de modèles,
-imprimante sur le réseau, moteur de découpe et IA. Ensuite, **l'app se met
+imprimante sur le réseau, moteur de découpe, IA et Snappy, l'assistant
+d'atelier. Ensuite, **l'app se met
 à jour toute seule** (sous Linux, l'AppImage).
 
 ## Concevoir avec l'IA

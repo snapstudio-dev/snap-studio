@@ -5431,10 +5431,26 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .p-obj.on .p-chip.p-choose { color: var(--accent-text); border-color: var(--accent-text); }
 
 /* The anonymous usage count's notice (analytics.js). */
-.an-box { width: min(460px, calc(100vw - 48px)); }
-.an-p { margin: 0 0 10px; font-size: 13px; line-height: 1.45; }
-.an-p.sub { color: var(--text-secondary); font-size: 12.5px; }
-.an-row { margin: 4px 0 2px; padding: 8px 10px; border-radius: 10px; background: var(--control-bg); }
+/* The first-launch notice (intros.js launchNotices): the welcome
+   assistant's card, steps, track and buttons, in a sheet. */
+.modal.nt-modal { align-items: center; padding-top: 0; }
+.modal-box.nt-card { width: 560px; max-width: calc(100vw - 40px); height: min(600px, calc(100vh - 40px)); max-height: none; padding: 0; gap: 0; overflow: hidden; }
+.nt-card .w-step { padding: 26px 36px 10px; gap: 10px; }
+.nt-card .w-step h1 { font-size: 21px; }
+.nt-card .w-badge { width: 56px; height: 56px; }
+/* "New", above Snappy's title in the notice. */
+.snappy-kicker { margin-bottom: -6px; padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-size: 11px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+/* Snappy's avatar as a step's badge. */
+.snappy-intro-badge { background: none; }
+.snappy-intro-badge .snappy-av { width: 100%; height: 100%; }
+/* A step's choice on one line: the app's switch (Settings' rows). */
+.w-switch { width: 100%; max-width: 460px; padding: 8px 12px; border-radius: 10px; background: var(--control-bg); text-align: left; }
+.w-switch .k small { display: block; color: var(--text-secondary); font-size: 11.5px; font-weight: 400; }
+/* What a step brings, a line each with its icon (Snappy's, the count's). */
+.w-features { width: 100%; max-width: 460px; margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; text-align: left; }
+.w-features li { display: flex; align-items: flex-start; gap: 10px; padding: 6px 11px; border-radius: 9px; background: var(--control-bg); font-size: 12.5px; line-height: 1.35; }
+.w-features svg { flex: none; width: 18px; height: 18px; margin-top: 1px; fill: var(--accent); }
+.w-note { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
 .an-details summary { cursor: default; font-size: 12.5px; color: var(--text-secondary); }
 .an-details p { margin: 6px 0 0; font-size: 12px; color: var(--text-secondary); line-height: 1.45; }
 .an-details a { display: inline-block; margin-top: 6px; font-size: 12px; }

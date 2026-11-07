@@ -12,6 +12,22 @@ cargo tauri build --bundles app    # local build
 python3 scripts/build-icons.py     # icons (Pillow, numpy; Xcode 26+ for macOS)
 ```
 
+### Feature introductions
+
+What a version brings that needs a word and a choice (Snappy, the anonymous
+count) is one entry of `INTROS` in [`ui/intros.js`](../ui/intros.js): its
+`available()`, `seen()`, `build(host)`, `enter(host)`, `apply(host)` and
+optional `summary(host)`, described there. A new user meets every entry in
+the welcome assistant, as steps after the AI; a user who had the app before
+meets those not seen yet in the first-launch notice, at the first launch of
+the version. Adding one is its entry and its texts: the assistant's steps
+and dots and the notice follow. Which entries show where is
+`ui/intros-logic.js` (tested by `scripts/test-intros.js`).
+
+`SNAP_PREVIEW_NOTICES=1 cargo tauri dev` opens the first-launch notice at
+every start with every entry, even without an Aptabase key; it applies
+nothing. Debug builds only.
+
 The app icon is built from one image, the original artwork
 `src-tauri/icons/source/snap-s-original.png` (1024 px, on Apple's icon grid):
 `scripts/build-icons.py` derives the macOS `.icns` (Apple's grid, transparent

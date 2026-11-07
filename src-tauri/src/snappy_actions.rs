@@ -181,27 +181,242 @@ pub fn rename(args: &Value) -> Result<Value> {
     Ok(json!({ "renamed": new_path.rsplit('/').next().unwrap_or_default() }))
 }
 
-pub fn file_params() -> Value {
+pub fn download_params() -> Value {
     json!({
         "type": "object",
-        "properties": { "printer": { "type": "string" }, "file": { "type": "string", "description": "Its name, from printer_files." } },
+        "properties": {
+            "printer": { "type": "string" },
+            "file": { "type": "string", "description": "Its name, from printer_files, or from timelapses with `timelapse`." },
+            "timelapse": { "type": "boolean", "description": "A timelapse video rather than a print file." },
+        },
         "required": ["printer", "file"],
     })
 }
 
-pub fn ask_download(args: &Value) -> Result<String> {
+/// The file asked: a print file, or a timelapse video.
+fn download_file(args: &Value) -> Result<(crate::printers::Printer, crate::printer_files::RemoteFile)> {
     let p = printer_named(str_arg(args, "printer")?)?;
-    let file = str_arg(args, "file")?;
-    printer_file(&p, file)?;
-    Ok(crate::t!("snappy.ask.download_file", file = file, printer = p.name))
+    let name = str_arg(args, "file")?;
+    if !args["timelapse"].as_bool().unwrap_or(false) {
+        let f = printer_file(&p, name)?;
+        return Ok((p, f));
+    }
+    let v = block_on(crate::pf_videos(p.id.clone())).map_err(|e| anyhow!(e))?;
+    let f = v
+        .into_iter()
+        .find(|f| f.path.rsplit('/').next() == Some(name))
+        .ok_or_else(|| anyhow!("no timelapse named “{name}” on {}", p.name))?;
+    Ok((p, f))
+}
+
+pub fn ask_download(args: &Value) -> Result<String> {
+    let (p, _) = download_file(args)?;
+    Ok(crate::t!("snappy.ask.download_file", file = str_arg(args, "file")?, printer = p.name))
 }
 
 /// To the user's Downloads folder, as Printer files' Download does.
 pub fn download(args: &Value) -> Result<Value> {
-    let p = printer_named(str_arg(args, "printer")?)?;
-    let f = printer_file(&p, str_arg(args, "file")?)?;
-    let saved = block_on(crate::pf_download(p.id, "gcodes".into(), vec![f.path], None)).map_err(|e| anyhow!(e))?;
+    let (p, f) = download_file(args)?;
+    let saved = block_on(crate::pf_download(p.id, f.root, vec![f.path], None)).map_err(|e| anyhow!(e))?;
     Ok(json!({ "downloaded": saved.len() }))
+}
+
+// ------------------------------------------------------------ bed mesh and maintenance
+
+/// The meshes kept for a printer, newest first, each summed up: when, its
+/// profile, how flat (the spread between its highest and lowest points).
+pub fn bed_mesh(args: &Value) -> Result<Value> {
+    let p = printer_named(str_arg(args, "printer")?)?;
+    let mut list: Vec<Value> = crate::bed_mesh_history(p.id.clone())
+        .into_iter()
+        .map(|m| {
+            let z = m.points.iter().flatten().copied();
+            let (lo, hi) = z.fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), v| (a.min(v), b.max(v)));
+            json!({ "at": m.at, "profile": m.profile, "spread_mm": ((hi - lo) * 1000.0).round() / 1000.0, "partial": m.partial, "by_app": m.by_app })
+        })
+        .collect();
+    list.reverse();
+    Ok(json!({ "printer": p.name, "meshes": list }))
+}
+
+pub fn bed_mesh_action_params() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "printer": { "type": "string" },
+            "action": { "type": "string", "enum": ["measure", "stop", "abort", "keep", "remove"] },
+            "temp": { "type": "number", "description": "measure: the bed temperature, °C (60 by default)." },
+            "count": { "type": "integer", "description": "keep: how many of the newest meshes to keep." },
+            "at": { "type": "integer", "description": "remove: the mesh's `at`, from bed_mesh." },
+        },
+        "required": ["printer", "action"],
+    })
+}
+
+pub fn ask_bed_mesh_action(args: &Value) -> Result<String> {
+    let p = printer_named(str_arg(args, "printer")?)?;
+    let a = str_arg(args, "action")?;
+    Ok(match a {
+        "measure" => crate::t!("snappy.ask.mesh_measure", printer = p.name, temp = args["temp"].as_f64().unwrap_or(60.0)),
+        "stop" | "abort" => crate::t!(&format!("snappy.ask.mesh_{a}"), printer = p.name),
+        "keep" => {
+            crate::t!("snappy.ask.mesh_keep", printer = p.name, n = args["count"].as_u64().ok_or_else(|| anyhow!("keep needs `count`"))?)
+        }
+        "remove" => crate::t!(
+            "snappy.ask.mesh_remove",
+            printer = p.name,
+            date = ymd(args["at"].as_u64().ok_or_else(|| anyhow!("remove needs `at`"))?)
+        ),
+        _ => return Err(anyhow!("invalid action: {a}")),
+    })
+}
+
+/// A Unix time as its UTC day, "2026-11-06", for a card (Howard Hinnant's
+/// civil-from-days).
+fn ymd(at: u64) -> String {
+    let z = (at / 86_400) as i64 + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+/// Measuring takes minutes: it answers with a task id.
+pub fn bed_mesh_action(args: &Value) -> Result<Value> {
+    let p = printer_named(str_arg(args, "printer")?)?;
+    let e = |e: String| anyhow!(e);
+    match str_arg(args, "action")? {
+        "measure" => {
+            let temp = args["temp"].as_f64().unwrap_or(60.0);
+            let (id, name) = (p.id.clone(), p.name.clone());
+            Ok(crate::snappy_tools::spawn_task(format!("bed mesh on {name}"), async move {
+                crate::bed_mesh_measure(id, temp).await.map(|_| json!({ "measured": true }))
+            }))
+        }
+        "stop" => block_on(crate::bed_mesh_stop(p.id)).map(|_| json!({ "stopped": true })).map_err(e),
+        "abort" => block_on(crate::bed_mesh_abort(p.id)).map(|_| json!({ "aborted": true })).map_err(e),
+        "keep" => crate::bed_mesh_keep(p.id, args["count"].as_u64().unwrap_or(0) as usize).map(|l| json!({ "kept": l.len() })).map_err(e),
+        "remove" => crate::bed_mesh_remove(p.id, args["at"].as_u64().unwrap_or(0)).map(|l| json!({ "left": l.len() })).map_err(e),
+        a => Err(anyhow!("invalid action: {a}")),
+    }
+}
+
+/// Maintenance tasks: the same ids as `ui/maint.js` MT_TASKS (a second list,
+/// for the tool's schema; the page holds their intervals).
+const MAINT_TASKS: [&str; 6] = ["contacts", "docking", "rails", "zscrews", "nozzles", "plate"];
+
+pub fn maintenance_params() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "printer": { "type": "string" },
+            "action": { "type": "string", "enum": ["done", "remove"] },
+            "task": { "type": "string", "enum": MAINT_TASKS },
+            "at": { "type": "integer", "description": "remove: the log entry's `at`, from printer_details." },
+        },
+        "required": ["printer", "action", "task"],
+    })
+}
+
+fn maint_of(args: &Value) -> Result<(crate::printers::Printer, &str, &str)> {
+    let p = printer_named(str_arg(args, "printer")?)?;
+    let task = str_arg(args, "task")?;
+    if !MAINT_TASKS.contains(&task) {
+        return Err(anyhow!("unknown task: {task}"));
+    }
+    let action = str_arg(args, "action")?;
+    if !matches!(action, "done" | "remove") {
+        return Err(anyhow!("invalid action: {action}"));
+    }
+    Ok((p, task, action))
+}
+
+pub fn ask_maintenance(args: &Value) -> Result<String> {
+    let (p, task, action) = maint_of(args)?;
+    Ok(crate::t!(&format!("snappy.ask.maint_{action}"), printer = p.name, task = crate::t!(&format!("maint.t.{task}"))))
+}
+
+/// Logged done with the printer's counters now, as Maintenance does.
+pub fn maintenance(args: &Value) -> Result<Value> {
+    let (p, task, action) = maint_of(args)?;
+    let e = |e: String| anyhow!(e);
+    if action == "remove" {
+        let at = args["at"].as_u64().ok_or_else(|| anyhow!("remove needs `at`"))?;
+        return crate::maintenance_remove(p.id, task.into(), at).map(|l| json!({ "entries": l.len() })).map_err(e);
+    }
+    let u = block_on(crate::printer_maintenance(p.host.clone(), p.port)).map_err(e)?;
+    let swaps = u.heads.iter().map(|h| h.switch_count).collect();
+    crate::maintenance_done(p.id, task.into(), u.print_hours, swaps).map(|l| json!({ "entries": l.len() })).map_err(e)
+}
+
+// ------------------------------------------------------------ prints
+
+pub fn history_params() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "action": { "type": "string", "enum": ["requeue", "result", "dismiss"] },
+            "job": { "type": "string", "description": "requeue, result: the print's id, from print_queue." },
+            "success": { "type": "boolean", "description": "result: whether it came out well." },
+            "note": { "type": "string", "description": "result: a note, optional." },
+            "printer": { "type": "string", "description": "dismiss: the printer whose queue reminder to hide." },
+        },
+        "required": ["action"],
+    })
+}
+
+pub fn ask_history(args: &Value) -> Result<String> {
+    match str_arg(args, "action")? {
+        "requeue" => Ok(crate::t!("snappy.ask.hist_requeue", name = job_of(args)?.0.name)),
+        "result" => {
+            let ok = args["success"].as_bool().ok_or_else(|| anyhow!("result needs `success`"))?;
+            Ok(crate::t!(if ok { "snappy.ask.hist_ok" } else { "snappy.ask.hist_failed" }, name = job_of(args)?.0.name))
+        }
+        "dismiss" => Ok(crate::t!("snappy.ask.hist_dismiss", printer = printer_named(str_arg(args, "printer")?)?.name)),
+        a => Err(anyhow!("invalid action: {a}")),
+    }
+}
+
+pub fn history(args: &Value) -> Result<Value> {
+    let e = |e: String| anyhow!(e);
+    match str_arg(args, "action")? {
+        "requeue" => {
+            let (job, _) = job_of(args)?;
+            block_on(crate::job_requeue(app()?, job.id)).map(|j| json!({ "queued": j.name })).map_err(e)
+        }
+        "result" => {
+            let (job, _) = job_of(args)?;
+            let result = crate::jobs::PrintResult {
+                success: args["success"].as_bool(),
+                reason: None,
+                note: args["note"].as_str().unwrap_or_default().to_string(),
+                at: 0,
+            };
+            crate::job_set_result(job.id, Some(result)).map(|_| json!({ "noted": job.name })).map_err(e)
+        }
+        "dismiss" => {
+            crate::queue_dismiss(printer_named(str_arg(args, "printer")?)?.id);
+            Ok(json!({ "dismissed": true }))
+        }
+        a => Err(anyhow!("invalid action: {a}")),
+    }
+}
+
+/// A printer's timelapse videos, newest first.
+pub fn timelapses(args: &Value) -> Result<Value> {
+    let p = printer_named(str_arg(args, "printer")?)?;
+    let mut v = block_on(crate::pf_videos(p.id)).map_err(|e| anyhow!(e))?;
+    v.sort_by(|a, b| b.modified.total_cmp(&a.modified));
+    let list: Vec<Value> = v
+        .iter()
+        .map(|f| json!({ "name": f.path.rsplit('/').next().unwrap_or_default(), "size": f.size, "modified": f.modified as u64 }))
+        .collect();
+    Ok(json!({ "printer": p.name, "videos": list }))
 }
 
 // ------------------------------------------------------------ the queue
@@ -369,6 +584,68 @@ pub fn create_new(args: &Value) -> Result<Value> {
     ui_call_within("create_new", json!({ "prompt": str_arg(args, "prompt")? }), SHEET_TIMEOUT)
 }
 
+/// A conversation's saved versions: number, when, size.
+pub fn create_versions(args: &Value) -> Result<Value> {
+    let c = conversation(args)?;
+    Ok(json!({ "conversation": c.title, "versions": crate::ia_versions(c.id) }))
+}
+
+pub fn create_manage_params() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "conversation": { "type": "string", "description": "Its id or title, from create_list." },
+            "action": { "type": "string", "enum": ["rename", "duplicate", "delete", "revert", "stop", "model"] },
+            "title": { "type": "string", "description": "rename: the new title." },
+            "version": { "type": "integer", "description": "revert: the version's number, from create_versions." },
+            "model": { "type": "string", "description": "model: a Claude model id, or empty for the account's default." },
+        },
+        "required": ["conversation", "action"],
+    })
+}
+
+pub fn ask_create_manage(args: &Value) -> Result<String> {
+    let c = conversation(args)?;
+    let a = str_arg(args, "action")?;
+    Ok(match a {
+        "rename" => crate::t!("snappy.ask.create_rename", title = c.title, name = str_arg(args, "title")?),
+        "revert" => crate::t!(
+            "snappy.ask.create_revert",
+            title = c.title,
+            n = args["version"].as_u64().ok_or_else(|| anyhow!("revert needs `version`"))?
+        ),
+        "model" => crate::t!(
+            "snappy.ask.create_model",
+            title = c.title,
+            model = args["model"].as_str().filter(|m| !m.is_empty()).unwrap_or("default")
+        ),
+        "duplicate" | "delete" | "stop" => crate::t!(&format!("snappy.ask.create_{a}"), title = c.title),
+        _ => return Err(anyhow!("invalid action: {a}")),
+    })
+}
+
+pub fn create_manage(args: &Value) -> Result<Value> {
+    let c = conversation(args)?;
+    let e = |e: String| anyhow!(e);
+    let r = match str_arg(args, "action")? {
+        "rename" => crate::ia_rename(c.id, str_arg(args, "title")?.into()).map(|x| json!({ "renamed": x.title })).map_err(e)?,
+        "duplicate" => block_on(crate::ia_duplicate(c.id)).map(|x| json!({ "copy": x.title })).map_err(e)?,
+        "delete" => block_on(crate::ia_delete(c.id)).map(|_| json!({ "deleted": c.title })).map_err(e)?,
+        "revert" => block_on(crate::ia_revert(c.id, args["version"].as_u64().unwrap_or(0) as u32))
+            .map(|_| json!({ "reverted": true }))
+            .map_err(e)?,
+        "stop" => crate::ia_chat_stop(c.id).map(|_| json!({ "stopped": true })).map_err(e)?,
+        "model" => {
+            let m = args["model"].as_str().filter(|m| !m.is_empty()).map(String::from);
+            block_on(crate::ia_chat_model(c.id, m)).map(|_| json!({ "model": true })).map_err(e)?
+        }
+        a => return Err(anyhow!("invalid action: {a}")),
+    };
+    // Create's list shows the change.
+    let _ = ui_call("create_refresh", json!({}));
+    Ok(r)
+}
+
 // ------------------------------------------------------------ Explore
 
 pub fn explore_state(_: &Value) -> Result<Value> {
@@ -450,8 +727,10 @@ pub fn plate_edit_params() -> Value {
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["arrange", "orient", "duplicate", "remove", "center", "reset_rotation", "split", "put_on_bed", "move", "rotate", "scale", "set_head"],
+                "enum": ["arrange", "orient", "duplicate", "remove", "center", "reset_rotation", "split", "put_on_bed", "move", "rotate", "scale", "set_head", "colours_by", "tower"],
             },
+            "by": { "type": "string", "enum": ["object", "colour"], "description": "colours_by: heads chosen per object, or once per colour for the whole plate." },
+            "on": { "type": "boolean", "description": "tower: the prime tower on or off." },
             "objects": { "type": "array", "items": { "type": "integer" }, "description": "Ids from plate_objects; omitted: every object (arrange, orient, remove: the whole plate)." },
             "dx": { "type": "number", "description": "move: mm along X." },
             "dy": { "type": "number", "description": "move: mm along Y." },
@@ -520,6 +799,132 @@ pub fn settings_set(args: &Value) -> Result<Value> {
     page_run("settings_set", args)
 }
 
+// ------------------------------------------------------------ more of the page's own
+
+/// Tools the page answers whole: `<name>_check` words the card of those that
+/// change something, `<name>` does it.
+macro_rules! page_tool {
+    ($run:ident, $ask:ident, $method:literal) => {
+        pub fn $ask(args: &Value) -> Result<String> {
+            page_ask($method, args)
+        }
+        pub fn $run(args: &Value) -> Result<Value> {
+            page_run($method, args)
+        }
+    };
+    ($run:ident, $method:literal) => {
+        pub fn $run(args: &Value) -> Result<Value> {
+            page_run($method, args)
+        }
+    };
+}
+
+page_tool!(app_action, ask_app_action, "app_action");
+page_tool!(printer_manage, ask_printer_manage, "printer_manage");
+page_tool!(slice_save_profile, ask_slice_save_profile, "slice_save_profile");
+page_tool!(preview_action, ask_preview_action, "preview_action");
+page_tool!(local_file_ai, ask_local_file_ai, "local_file_ai");
+page_tool!(explore_site, ask_explore_site, "explore_site");
+page_tool!(printers_discover, "printers_discover");
+page_tool!(printer_open, "printer_open");
+page_tool!(local_file_open, "local_file_open");
+page_tool!(files_view, "files_view");
+page_tool!(explore_tab, "explore_tab");
+
+pub fn app_action_params() -> Value {
+    json!({
+        "type": "object",
+        "properties": { "action": { "type": "string", "enum": ["check_update", "install_update", "welcome", "recheck_ai", "clear_cache", "reset_display", "engine_install", "engine_remove"] } },
+        "required": ["action"],
+    })
+}
+
+pub fn printer_manage_params() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "action": { "type": "string", "enum": ["add", "rename", "model", "remove"] },
+            "found": { "type": "string", "description": "add: a printer's name from printers_discover." },
+            "printer": { "type": "string", "description": "rename, model, remove: a saved printer's display name." },
+            "name": { "type": "string", "description": "add (optional), rename: the display name." },
+            "model": { "type": "string", "description": "model: the printer's model, as printers_discover or printers name them." },
+        },
+        "required": ["action"],
+    })
+}
+
+pub fn printer_open_params() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "printer": { "type": "string" },
+            "tab": { "type": "string", "enum": ["status", "control", "files", "bed_mesh", "maintenance"], "description": "Which of its pages (status by default)." },
+            "camera": { "type": "string", "enum": ["on", "off", "pin"], "description": "Its camera, optional." },
+        },
+        "required": ["printer"],
+    })
+}
+
+pub fn name_params() -> Value {
+    json!({ "type": "object", "properties": { "name": { "type": "string", "description": "The new profile's name." } }, "required": ["name"] })
+}
+
+pub fn preview_params() -> Value {
+    json!({ "type": "object", "properties": { "action": { "type": "string", "enum": ["save", "edit", "close"] } }, "required": ["action"] })
+}
+
+pub fn local_file_open_params() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "file": { "type": "string", "description": "Its name, as local_files lists it." },
+            "action": { "type": "string", "enum": ["reveal", "open", "analyze"], "description": "Show it in the system's file manager, open it with its app, or read its size and triangles." },
+        },
+        "required": ["file", "action"],
+    })
+}
+
+pub fn local_file_ai_params() -> Value {
+    json!({
+        "type": "object",
+        "properties": { "file": { "type": "string", "description": "A 3MF or STL, as local_files lists it." }, "prompt": { "type": "string", "description": "What to change, in the user's words." } },
+        "required": ["file", "prompt"],
+    })
+}
+
+pub fn files_view_params() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "sort": { "type": "string", "enum": ["name", "date", "size", "time", "weight", "folder"] },
+            "descending": { "type": "boolean" },
+            "search": { "type": "string", "description": "Text the names must hold; empty clears it." },
+        },
+    })
+}
+
+pub fn explore_tab_params() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "action": { "type": "string", "enum": ["back", "forward", "reload", "close", "browser"], "description": "browser: open the page in the system's browser." },
+            "tab": { "type": "string", "description": "Its title, from explore_state; the one shown by default." },
+        },
+        "required": ["action"],
+    })
+}
+
+pub fn explore_site_params() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "action": { "type": "string", "enum": ["logout", "pin", "unpin"], "description": "logout: sign out of the site (its cookies only); pin: keep it in the sidebar." },
+            "site": { "type": "string", "description": "A site's name, from explore_state." },
+        },
+        "required": ["action", "site"],
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -558,5 +963,12 @@ mod tests {
             assert!(!CONTROL_KINDS.contains(&kind));
         }
         assert!(control_words(&crate::control::Action::NozzleTemp { n: 1, temp: 215.0 }).contains("T1"));
+    }
+
+    #[test]
+    fn days_are_worded() {
+        assert_eq!(ymd(0), "1970-01-01");
+        assert_eq!(ymd(1_762_387_200), "2025-11-06");
+        assert_eq!(ymd(951_782_400), "2000-02-29");
     }
 }
