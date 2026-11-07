@@ -11,9 +11,19 @@ pub(crate) fn approvals() -> &'static Mutex<HashMap<String, Sender<bool>>> {
 }
 
 pub(crate) fn emit(event: &str, payload: Value) {
+    #[cfg(test)]
+    emitted().lock().unwrap().push((event.to_string(), payload.clone()));
     if let Some(app) = crate::snappy::app() {
         let _ = app.emit(event, payload);
     }
+}
+
+/// What the tools showed the interface, for tests that play its part
+/// (cards, questions, the page's side).
+#[cfg(test)]
+pub(crate) fn emitted() -> &'static Mutex<Vec<(String, Value)>> {
+    static E: OnceLock<Mutex<Vec<(String, Value)>>> = OnceLock::new();
+    E.get_or_init(|| Mutex::new(Vec::new()))
 }
 
 /// The drawer opened or closed: closing it refuses what was waiting.

@@ -51,6 +51,8 @@ mod files;
 mod prepare;
 mod printers;
 mod queue;
+#[cfg(test)]
+mod real_tests;
 mod tasks;
 #[cfg(test)]
 mod tests;

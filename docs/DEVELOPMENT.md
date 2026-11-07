@@ -298,3 +298,16 @@ shows there). Some tests are opt-in (`--ignored`) because they need real tools: 
 slicing engine, Claude Code (`CHAT_REAL=1`, `AUTH_REAL=1`, `IA_REAL=1`), a
 Python with trimesh (`SS_PYTHON=…`), a 3MF of your own (`IA_3MF=…`). Each
 says how to run it in its comment.
+
+Snappy against the real Claude Code (Haiku, a few cents a test), one family
+of tools at a time: the test plays the interface's part (it answers the
+cards, the questions and the page's calls), and the printers are simulated:
+
+```sh
+cd src-tauri && SNAPPY_REAL=1 XDG_CONFIG_HOME=<a folder Claude already trusts> \
+  cargo test --lib --features sim real_tools -- --ignored --test-threads=1 --nocapture
+```
+
+`XDG_CONFIG_HOME` keeps Snappy's folder out of your own (and trusted
+without writing Claude's settings); `real_snappy` runs the memory, refusal
+and image tests of `snappy.rs` the same way.
