@@ -1040,6 +1040,8 @@
   "snappy.tool.plate_view": "プレートを確認",
   "snappy.tool.attachment_view": "画像を確認",
   "snappy.ask.camera": "{printer} のカメラで撮影して確認",
+  "snappy.ask.explore_url": "このアドレスを「探索」で開く: {url}",
+  "snappy.tool.explore_open_url": "アドレスを開く",
   "snappy.empty": "工房について何でも Snappy に聞くか、任せてください：スライス、プレートの整列、プリンターの操作、キューの管理、設定の変更。何かを変更する前に確認します。",
   "snappy.stopped": "停止しました。",
   "snappy.approve.title": "Snappy からの確認:",

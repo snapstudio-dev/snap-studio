@@ -79,7 +79,7 @@ pub(crate) static TOOLS: &[Tool] = &[
     Tool {
         name: "printers_discover",
         description: "Searches the network for printers for a few seconds: their names and models, those not added yet. Never their addresses.",
-        params: no_params_value,
+        params: no_params,
         access: Access::Read,
         ask: None,
         run: printers_discover,
@@ -135,7 +135,7 @@ pub(crate) static TOOLS: &[Tool] = &[
     Tool {
         name: "camera_snapshot",
         description: "A picture of a printer's camera, now: to look at a print in progress, a failure, the bed. The user confirms it (it shows their workshop).",
-        params: crate::snappy_eyes::camera_params,
+        params: printer_param,
         access: Access::Write,
         ask: Some(crate::snappy_eyes::ask_camera),
         run: crate::snappy_eyes::camera,
@@ -179,7 +179,7 @@ pub(crate) fn print_file(args: &Value) -> Result<Value> {
         map: Vec::new(),
         queue: false,
     };
-    Ok(spawn_task(format!("print “{name}” on {}", p.name), async move {
+    Ok(spawn_task(format!("print “{name}” on {}", p.name), Cancel::Refuse(PRINT_STARTING), async move {
         crate::pf_print(app, request).await.map(|_| json!({ "started": true }))
     }))
 }
@@ -197,12 +197,8 @@ pub(crate) fn delete_file(args: &Value) -> Result<Value> {
     }
 }
 
-pub(crate) fn printer_only() -> Value {
-    json!({ "type": "object", "properties": { "printer": { "type": "string", "description": "The printer's display name." } }, "required": ["printer"] })
-}
-
 pub fn printer_details_params() -> Value {
-    printer_only()
+    printer_param()
 }
 
 /// What Control shows: temperatures, positions, fans, heads, light; and
@@ -339,16 +335,15 @@ pub fn rename_params() -> Value {
 }
 
 pub fn ask_rename(args: &Value) -> Result<String> {
-    let p = printer_named(str_arg(args, "printer")?)?;
-    let file = str_arg(args, "file")?;
-    printer_file(&p, file)?;
-    Ok(crate::t!("snappy.ask.rename_file", file = file, printer = p.name, name = str_arg(args, "name")?))
+    let (p, path) = printer_and_file(args)?;
+    // The file the card names is the one renamed.
+    keep_resolved(json!({ "printer": p.id, "path": path }));
+    Ok(crate::t!("snappy.ask.rename_file", file = str_arg(args, "file")?, printer = p.name, name = str_arg(args, "name")?))
 }
 
 pub fn rename(args: &Value) -> Result<Value> {
-    let p = printer_named(str_arg(args, "printer")?)?;
-    let f = printer_file(&p, str_arg(args, "file")?)?;
-    let new_path = block_on(crate::pf_rename(p.id, f.path, str_arg(args, "name")?.to_string())).map_err(|e| anyhow!(e))?;
+    let (p, path) = printer_and_file(args)?;
+    let new_path = block_on(crate::pf_rename(p.id, path, str_arg(args, "name")?.to_string())).map_err(|e| anyhow!(e))?;
     Ok(json!({ "renamed": new_path.rsplit('/').next().unwrap_or_default() }))
 }
 
@@ -381,14 +376,26 @@ pub(crate) fn download_file(args: &Value) -> Result<(crate::printers::Printer, c
 }
 
 pub fn ask_download(args: &Value) -> Result<String> {
-    let (p, _) = download_file(args)?;
+    let (p, f) = download_file(args)?;
+    // The file the card names is the one downloaded.
+    keep_resolved(json!({ "printer": p.id, "root": f.root, "path": f.path }));
     Ok(crate::t!("snappy.ask.download_file", file = str_arg(args, "file")?, printer = p.name))
 }
 
 /// To the user's Downloads folder, as Printer files' Download does.
 pub fn download(args: &Value) -> Result<Value> {
-    let (p, f) = download_file(args)?;
-    let saved = block_on(crate::pf_download(p.id, f.root, vec![f.path], None)).map_err(|e| anyhow!(e))?;
+    let resolved = take_resolved().and_then(|v| {
+        let p = crate::printers::load().into_iter().find(|p| p.id == v["printer"].as_str().unwrap_or_default())?;
+        Some((p, v["root"].as_str()?.to_string(), v["path"].as_str()?.to_string()))
+    });
+    let (p, root, path) = match resolved {
+        Some(r) => r,
+        None => {
+            let (p, f) = download_file(args)?;
+            (p, f.root, f.path)
+        }
+    };
+    let saved = block_on(crate::pf_download(p.id, root, vec![path], None)).map_err(|e| anyhow!(e))?;
     Ok(json!({ "downloaded": saved.len() }))
 }
 
@@ -463,7 +470,7 @@ pub fn bed_mesh_action(args: &Value) -> Result<Value> {
         "measure" => {
             let temp = args["temp"].as_f64().unwrap_or(60.0);
             let (id, name) = (p.id.clone(), p.name.clone());
-            Ok(crate::snappy_tools::spawn_task(format!("bed mesh on {name}"), async move {
+            Ok(crate::snappy_tools::spawn_task(format!("bed mesh on {name}"), Cancel::Refuse(BED_MESH_STOP), async move {
                 crate::bed_mesh_measure(id, temp).await.map(|_| json!({ "measured": true }))
             }))
         }
@@ -566,3 +573,6 @@ pub fn printer_open_params() -> Value {
         "required": ["printer"],
     })
 }
+
+/// A measure stops through the printer, not by forgetting the task.
+pub(crate) const BED_MESH_STOP: &str = "A bed mesh measure is stopped on the printer: use bed_mesh_action with stop or abort.";

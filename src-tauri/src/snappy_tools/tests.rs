@@ -1,14 +1,14 @@
 //! Tests of Snappy's tools.
 
 use super::*;
+/// The drawer's state is the app's: tests that set it take turns.
+static DRAWER_TURN: Mutex<()> = Mutex::new(());
+
 #[allow(unused_imports)]
 use super::{app::*, approval::*, bridge::*, common::*, create::*, explore::*, files::*, prepare::*, printers::*, queue::*, tasks::*};
 
 mod first_wave {
     use super::*;
-
-    /// The drawer's state is the app's: tests that set it take turns.
-    static DRAWER: Mutex<()> = Mutex::new(());
 
     #[test]
     fn every_tool_is_declared_once() {
@@ -64,6 +64,7 @@ mod first_wave {
             "create_manage",
             "explore_site",
             "camera_snapshot",
+            "explore_open_url",
         ];
         expected.sort();
         assert_eq!(writes, expected);
@@ -76,7 +77,7 @@ mod first_wave {
     /// closed; a write does not.
     #[test]
     fn reads_run_without_asking() {
-        let _turn = DRAWER.lock().unwrap_or_else(|e| e.into_inner());
+        let _turn = DRAWER_TURN.lock().unwrap_or_else(|e| e.into_inner());
         set_drawer(false);
         for (name, args) in [("print_queue", json!({})), ("memory_read", json!({}))] {
             if let Err(e) = call(name, &args) {
@@ -89,40 +90,40 @@ mod first_wave {
     /// refusal, everything refused at once.
     #[test]
     fn approval_is_denied_by_default() {
-        let _turn = DRAWER.lock().unwrap_or_else(|e| e.into_inner());
+        let _turn = DRAWER_TURN.lock().unwrap_or_else(|e| e.into_inner());
         set_drawer(false);
         assert!(!approve("delete_printer_file", "x"), "the drawer is closed: no");
         set_drawer(true);
         let waiting = |n: usize| {
             let end = std::time::Instant::now() + Duration::from_secs(5);
-            while approvals().lock().unwrap().len() < n && std::time::Instant::now() < end {
+            while approvals().ids().len() < n && std::time::Instant::now() < end {
                 std::thread::sleep(Duration::from_millis(10));
             }
         };
         let refused = std::thread::spawn(|| approve("delete_printer_file", "x"));
         waiting(1);
-        let id = approvals().lock().unwrap().keys().next().cloned().unwrap();
+        let id = approvals().ids().pop().unwrap();
         answer(&id, false);
         assert!(!refused.join().unwrap());
         let yes = std::thread::spawn(|| approve("delete_printer_file", "x"));
         waiting(1);
-        let id = approvals().lock().unwrap().keys().next().cloned().unwrap();
+        let id = approvals().ids().pop().unwrap();
         answer(&id, true);
         assert!(yes.join().unwrap(), "only an explicit yes passes");
         let closed = std::thread::spawn(|| approve("delete_printer_file", "x"));
         waiting(1);
         set_drawer(false);
         assert!(!closed.join().unwrap(), "closing the drawer refuses");
-        assert!(approvals().lock().unwrap().is_empty());
+        assert!(approvals().ids().is_empty());
     }
 
     /// A write waits for a yes: with the drawer closed it is refused, and
     /// nothing runs; bad arguments are refused before anyone is asked.
     #[test]
     fn a_refused_action_runs_nothing() {
-        let _turn = DRAWER.lock().unwrap_or_else(|e| e.into_inner());
+        let _turn = DRAWER_TURN.lock().unwrap_or_else(|e| e.into_inner());
         set_drawer(false);
-        let t = spawn_task("wait".into(), async {
+        let t = spawn_task("wait".into(), Cancel::Abort, async {
             tokio::time::sleep(Duration::from_secs(30)).await;
             Ok(json!({}))
         });
@@ -138,20 +139,20 @@ mod first_wave {
     /// question unanswered.
     #[test]
     fn questions_wait_for_the_user() {
-        let _turn = DRAWER.lock().unwrap_or_else(|e| e.into_inner());
+        let _turn = DRAWER_TURN.lock().unwrap_or_else(|e| e.into_inner());
         set_drawer(false);
         assert!(call("ask_user", &json!({ "question": "PLA or PETG?" })).is_err());
         set_drawer(true);
         let asked = std::thread::spawn(|| call("ask_user", &json!({ "question": "PLA or PETG?", "options": ["PLA", "PETG"] })).unwrap());
         let end = std::time::Instant::now() + Duration::from_secs(5);
-        while questions().lock().unwrap().is_empty() && std::time::Instant::now() < end {
+        while questions().ids().is_empty() && std::time::Instant::now() < end {
             std::thread::sleep(Duration::from_millis(10));
         }
-        let id = questions().lock().unwrap().keys().next().cloned().unwrap();
+        let id = questions().ids().pop().unwrap();
         reply(&id, Some("PETG".into()));
         assert_eq!(asked.join().unwrap()["answer"], "PETG");
         let skipped = std::thread::spawn(|| call("ask_user", &json!({ "question": "Brim?" })).unwrap());
-        while questions().lock().unwrap().is_empty() && std::time::Instant::now() < end {
+        while questions().ids().is_empty() && std::time::Instant::now() < end {
             std::thread::sleep(Duration::from_millis(10));
         }
         set_drawer(false);
@@ -160,7 +161,7 @@ mod first_wave {
 
     #[test]
     fn a_send_needs_every_choice() {
-        let _turn = DRAWER.lock().unwrap_or_else(|e| e.into_inner());
+        let _turn = DRAWER_TURN.lock().unwrap_or_else(|e| e.into_inner());
         set_drawer(false);
         // No printer of that name here: refused before anyone is asked.
         let e = call(
@@ -184,7 +185,7 @@ mod first_wave {
 
     #[test]
     fn tasks_are_followed_and_cancelled() {
-        let t = spawn_task("wait".into(), async {
+        let t = spawn_task("wait".into(), Cancel::Abort, async {
             tokio::time::sleep(Duration::from_secs(30)).await;
             Ok(json!({}))
         });
@@ -192,7 +193,7 @@ mod first_wave {
         assert_eq!(task_status(&json!({ "task": id })).unwrap()["state"], "running");
         assert_eq!(task_cancel(&json!({ "task": id })).unwrap()["state"], "cancelled");
         assert_eq!(task_status(&json!({ "task": id })).unwrap()["state"], "cancelled");
-        let done = spawn_task("quick".into(), async { Ok(json!({ "n": 1 })) });
+        let done = spawn_task("quick".into(), Cancel::Abort, async { Ok(json!({ "n": 1 })) });
         let id = done["task"].as_str().unwrap().to_string();
         let end = std::time::Instant::now() + Duration::from_secs(5);
         while task_status(&json!({ "task": id })).unwrap()["state"] == "running" && std::time::Instant::now() < end {
@@ -247,5 +248,61 @@ mod actions {
         assert_eq!(ymd(0), "1970-01-01");
         assert_eq!(ymd(1_762_387_200), "2025-11-06");
         assert_eq!(ymd(951_782_400), "2000-02-29");
+    }
+
+    #[test]
+    fn explore_opens_only_web_addresses() {
+        assert_eq!(web_url("https://www.printables.com/model/1").unwrap(), "https://www.printables.com/model/1");
+        for bad in ["file:///etc/passwd", "javascript:alert(1)", "snapstudio://x", "http://", "data:text/html,hi", "not a url"] {
+            assert!(web_url(bad).is_err(), "{bad}");
+        }
+        // An address never opens without its card.
+        assert!(explore_open(&json!({ "url": "https://example.com" })).is_err());
+        let t = tools().iter().find(|t| t.name == "explore_open_url").unwrap();
+        assert_eq!(t.access, Access::Write);
+    }
+
+    /// Closing the drawer while a card is being added never leaves it
+    /// waiting: it is either refused at once or never added.
+    #[test]
+    fn a_card_cannot_slip_past_a_closing_drawer() {
+        let _turn = DRAWER_TURN.lock().unwrap_or_else(|e| e.into_inner());
+        for _ in 0..200 {
+            set_drawer(true);
+            let asking = std::thread::spawn(|| approve("delete_printer_file", "x"));
+            set_drawer(false);
+            // Whatever the order, the call ends refused, quickly.
+            assert!(!asking.join().unwrap());
+            assert!(approvals().ids().is_empty());
+        }
+    }
+
+    #[test]
+    fn what_waits_can_be_drawn_again() {
+        let _turn = DRAWER_TURN.lock().unwrap_or_else(|e| e.into_inner());
+        set_drawer(true);
+        let t = std::thread::spawn(|| approve("delete_printer_file", "Delete “a.gcode”"));
+        let end = std::time::Instant::now() + Duration::from_secs(5);
+        while approvals().ids().is_empty() && std::time::Instant::now() < end {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let shown = waiting_shown();
+        assert_eq!(shown.len(), 1);
+        assert_eq!(shown[0]["kind"], "approval");
+        assert_eq!(shown[0]["text"], "Delete “a.gcode”");
+        set_drawer(false);
+        assert!(!t.join().unwrap());
+    }
+
+    #[test]
+    fn a_print_being_started_is_never_said_cancelled() {
+        let t = spawn_task("start".into(), Cancel::Refuse(PRINT_STARTING), async {
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            Ok(json!({}))
+        });
+        let id = t["task"].as_str().unwrap().to_string();
+        assert!(ask_task_cancel(&json!({ "task": id })).unwrap_err().to_string().contains("print_control"), "said before any card");
+        assert!(task_cancel(&json!({ "task": id })).is_err());
+        assert_eq!(task_status(&json!({ "task": id })).unwrap()["state"], "running", "still running, as it is");
     }
 }

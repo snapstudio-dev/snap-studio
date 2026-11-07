@@ -55,7 +55,7 @@ pub(crate) static TOOLS: &[Tool] = &[
     Tool {
         name: "plate_objects",
         description: "Prepare's plate: each object's id, name, position and size in mm, rotation, scale, whether it is on the plate, and its colors with their heads.",
-        params: no_params_value,
+        params: no_params,
         access: Access::Read,
         ask: None,
         run: plate_objects,
@@ -147,12 +147,17 @@ pub(crate) fn ask_slice_run(_: &Value) -> Result<String> {
 }
 
 pub(crate) fn slice_run(_: &Value) -> Result<Value> {
-    Ok(spawn_task(crate::t!("snappy.task.slice"), async {
+    Ok(spawn_task(crate::t!("snappy.task.slice"), Cancel::Call(stop_slice), async {
         tauri::async_runtime::spawn_blocking(|| ui_call_within("slice_run", json!({}), SLICE_TIMEOUT))
             .await
             .map_err(|e| e.to_string())?
             .map_err(|e| e.to_string())
     }))
+}
+
+/// Stops the slice running, as the sheet's Stop does.
+fn stop_slice() -> Result<()> {
+    ui_call("slice_stop", json!({})).map(|_| ())
 }
 
 pub(crate) fn send_params() -> Value {

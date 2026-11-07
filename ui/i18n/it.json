@@ -1072,6 +1072,8 @@
   "snappy.tool.plate_view": "Guarda il piatto",
   "snappy.tool.attachment_view": "Guarda la tua immagine",
   "snappy.ask.camera": "Scattare una foto con la fotocamera di {printer} e guardarla",
+  "snappy.ask.explore_url": "Aprire questo indirizzo in Esplora: {url}",
+  "snappy.tool.explore_open_url": "Apre un indirizzo",
   "snappy.empty": "Chieda a Snappy qualsiasi cosa sul suo laboratorio, o gli chieda di farla: slicing, disporre il piatto, controllare una stampante, gestire la coda, cambiare un'impostazione. Chiede prima di cambiare qualcosa.",
   "snappy.stopped": "Interrotto.",
   "snappy.approve.title": "Snappy chiede di:",

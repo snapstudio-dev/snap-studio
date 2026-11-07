@@ -6,7 +6,7 @@ pub(crate) static TOOLS: &[Tool] = &[
     Tool {
         name: "create_list",
         description: "Create's conversations (an object made or changed with the AI): id, title, object, last change, mode.",
-        params: no_params_value,
+        params: no_params,
         access: Access::Read,
         ask: None,
         run: create_list,

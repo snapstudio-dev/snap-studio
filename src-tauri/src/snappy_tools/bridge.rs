@@ -3,9 +3,9 @@
 
 use super::*;
 
-pub(crate) fn ui_calls() -> &'static Mutex<HashMap<String, Sender<Value>>> {
-    static C: OnceLock<Mutex<HashMap<String, Sender<Value>>>> = OnceLock::new();
-    C.get_or_init(|| Mutex::new(HashMap::new()))
+pub(crate) fn ui_calls() -> &'static Pending<Value> {
+    static C: OnceLock<Pending<Value>> = OnceLock::new();
+    C.get_or_init(Pending::new)
 }
 
 /// Asks the UI about what only it holds (Prepare's state, the Files view).
@@ -15,11 +15,10 @@ pub(crate) fn ui_call(method: &str, args: Value) -> Result<Value> {
 
 pub(crate) fn ui_call_within(method: &str, args: Value, timeout: Duration) -> Result<Value> {
     let id = uuid::Uuid::new_v4().simple().to_string();
-    let (tx, rx) = channel();
-    ui_calls().lock().unwrap().insert(id.clone(), tx);
+    let rx = ui_calls().add(&id, json!({ "method": method }));
     emit("snappy-ui", json!({ "id": id, "method": method, "args": args }));
     let got = rx.recv_timeout(timeout);
-    ui_calls().lock().unwrap().remove(&id);
+    ui_calls().remove(&id);
     let v = got.map_err(|_| anyhow!("Snap Studio did not answer"))?;
     match v.get("error").and_then(|e| e.as_str()) {
         Some(e) => Err(anyhow!(e.to_string())),
@@ -29,7 +28,5 @@ pub(crate) fn ui_call_within(method: &str, args: Value, timeout: Duration) -> Re
 
 /// The UI's answer to [`ui_call`].
 pub fn ui_reply(id: &str, result: Value) {
-    if let Some(tx) = ui_calls().lock().unwrap().remove(id) {
-        let _ = tx.send(result);
-    }
+    ui_calls().answer(id, result);
 }

@@ -104,7 +104,7 @@ pub(crate) fn start_job(args: &Value) -> Result<Value> {
     let (job, printer) = queued_job(args)?;
     let app = crate::snappy::app().ok_or_else(|| anyhow!("app not ready"))?.clone();
     let id = job.id.clone();
-    Ok(spawn_task(format!("start “{}” on {printer}", job.name), async move {
+    Ok(spawn_task(format!("start “{}” on {printer}", job.name), Cancel::Refuse(PRINT_STARTING), async move {
         crate::job_launch(app, id, None).await.map(|_| json!({ "started": true }))
     }))
 }

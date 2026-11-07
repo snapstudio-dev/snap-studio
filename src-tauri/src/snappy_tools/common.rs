@@ -124,22 +124,26 @@ pub(crate) fn printer_files(args: &Value) -> Result<Value> {
     Ok(json!({ "printer": p.name, "files": out, "total": total }))
 }
 
-/// No parameters.
-pub fn no_params_value() -> Value {
-    json!({ "type": "object", "properties": {} })
-}
-
 pub(crate) fn app() -> Result<tauri::AppHandle> {
     crate::snappy::app().cloned().ok_or_else(|| anyhow!("app not ready"))
 }
 
 /// A tool the page answers and words: `<name>_check` gives the card's
 /// text (and checks the arguments), `<name>` does it.
+/// The page words the card and keeps what it named under a token, which the
+/// run passes back: the action works on what the user approved.
 pub(crate) fn page_ask(method: &str, args: &Value) -> Result<String> {
     let v = ui_call(&format!("{method}_check"), args.clone())?;
+    if let Some(t) = v["token"].as_str() {
+        keep_resolved(json!({ "page_token": t }));
+    }
     v["card"].as_str().map(String::from).ok_or_else(|| anyhow!("Snap Studio did not word this action"))
 }
 
 pub(crate) fn page_run(method: &str, args: &Value) -> Result<Value> {
-    ui_call_within(method, args.clone(), SHEET_TIMEOUT)
+    let mut args = args.clone();
+    if let Some(t) = take_resolved().and_then(|v| v["page_token"].as_str().map(String::from)) {
+        args["_token"] = json!(t);
+    }
+    ui_call_within(method, args, SHEET_TIMEOUT)
 }

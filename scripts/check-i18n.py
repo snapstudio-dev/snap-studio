@@ -52,7 +52,7 @@ def used_keys():
         keys |= set(re.findall(r'"((?:[a-z_]+\.)+[a-z_0-9]+)"', strip_comments(f.read_text())))
     html = (UI / "index.html").read_text()
     keys |= set(re.findall(r'data-i18n(?:-[a-z]+)?="([\w.]+)"', html))
-    for f in SRC.glob("*.rs"):
+    for f in SRC.rglob("*.rs"):
         text = f.read_text()
         keys |= set(re.findall(r'\bt!\(\s*"([\w.]+)"', text))
         # Keys passed around as literals (menu items, lookup tables).

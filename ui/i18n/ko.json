@@ -1040,6 +1040,8 @@
   "snappy.tool.plate_view": "플레이트 확인",
   "snappy.tool.attachment_view": "이미지 확인",
   "snappy.ask.camera": "{printer} 카메라로 사진을 찍어 확인",
+  "snappy.ask.explore_url": "이 주소를 탐색에서 열기: {url}",
+  "snappy.tool.explore_open_url": "주소 열기",
   "snappy.empty": "작업실에 대해 무엇이든 Snappy에게 묻거나 맡기세요: 슬라이스, 플레이트 정렬, 프린터 제어, 대기열 관리, 설정 변경. 무언가를 바꾸기 전에 확인합니다.",
   "snappy.stopped": "중지됨.",
   "snappy.approve.title": "Snappy의 요청:",

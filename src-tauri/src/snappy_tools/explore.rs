@@ -6,23 +6,32 @@ pub(crate) static TOOLS: &[Tool] = &[
     Tool {
         name: "explore_state",
         description: "Explore: the sites it offers, the open tabs (titles), the one shown, and the favorites.",
-        params: no_params_value,
+        params: no_params,
         access: Access::Read,
         ask: None,
         run: explore_state,
     },
     Tool {
         name: "explore_open",
-        description: "Shows a site, a favorite or a web address in Explore.",
+        description: "Shows one of Explore's sites or one of its favorites.",
         params: explore_open_params,
         access: Access::Harmless,
         ask: None,
         run: explore_open,
     },
     Tool {
+        name: "explore_open_url",
+        description:
+            "Opens a web address in Explore: only one the user gave, http or https. The user confirms it, the address shown whole.",
+        params: explore_url_params,
+        access: Access::Write,
+        ask: Some(ask_explore_url),
+        run: explore_open_url,
+    },
+    Tool {
         name: "favorite_add",
         description: "Adds the page Explore shows to the favorites. The user confirms it.",
-        params: no_params_value,
+        params: no_params,
         access: Access::Write,
         ask: Some(ask_fav_add),
         run: fav_add,
@@ -65,20 +74,57 @@ pub fn explore_open_params() -> Value {
         "properties": {
             "site": { "type": "string", "description": "A site of explore_state's sites, by name." },
             "favorite": { "type": "string", "description": "A favorite, by its id or title." },
-            "url": { "type": "string", "description": "A web address the user gave." },
         },
     })
 }
 
-/// Shows a site, a favorite or an address in Explore (one of them).
+/// Shows a site or a favorite in Explore (one of them): only what Explore
+/// already knows, so no card. An address goes through explore_open_url.
 pub fn explore_open(args: &Value) -> Result<Value> {
     let url = match args["favorite"].as_str() {
-        Some(f) => Some(
-            crate::fav_list().into_iter().find(|x| x.id == f || x.title == f).map(|x| x.url).ok_or_else(|| anyhow!("no favorite “{f}”"))?,
-        ),
-        None => args["url"].as_str().map(String::from),
+        Some(f) => Some(web_url(
+            &crate::fav_list()
+                .into_iter()
+                .find(|x| x.id == f || x.title == f)
+                .map(|x| x.url)
+                .ok_or_else(|| anyhow!("no favorite “{f}”"))?,
+        )?),
+        None => None,
     };
+    if url.is_none() && args["site"].as_str().is_none() {
+        return Err(anyhow!("give a site or a favorite; a web address goes through explore_open_url"));
+    }
     ui_call("explore_open", json!({ "site": args["site"], "url": url }))
+}
+
+pub fn explore_url_params() -> Value {
+    json!({
+        "type": "object",
+        "properties": { "url": { "type": "string", "description": "The web address the user gave, http or https." } },
+        "required": ["url"],
+    })
+}
+
+/// A web page's address, checked: http or https with a host, nothing else
+/// (no file:, no custom scheme), so a text Snappy read cannot send Explore
+/// elsewhere.
+pub(crate) fn web_url(raw: &str) -> Result<String> {
+    let u = url::Url::parse(raw.trim()).map_err(|_| anyhow!("not a web address: {raw}"))?;
+    if !matches!(u.scheme(), "http" | "https") || u.host_str().is_none_or(str::is_empty) {
+        return Err(anyhow!("only http and https addresses open in Explore"));
+    }
+    Ok(u.to_string())
+}
+
+pub fn ask_explore_url(args: &Value) -> Result<String> {
+    let url = web_url(str_arg(args, "url")?)?;
+    Ok(crate::t!("snappy.ask.explore_url", url = url))
+}
+
+/// Opens an address the user confirmed.
+pub fn explore_open_url(args: &Value) -> Result<Value> {
+    let url = web_url(str_arg(args, "url")?)?;
+    ui_call("explore_open", json!({ "url": url }))
 }
 
 pub fn ask_fav_add(_: &Value) -> Result<String> {

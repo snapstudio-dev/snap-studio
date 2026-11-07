@@ -1072,6 +1072,8 @@
   "snappy.tool.plate_view": "Regarde le plateau",
   "snappy.tool.attachment_view": "Regarde votre image",
   "snappy.ask.camera": "Prendre une photo avec la caméra de {printer} et la regarder",
+  "snappy.ask.explore_url": "Ouvrir cette adresse dans Explorer : {url}",
+  "snappy.tool.explore_open_url": "Ouvre une adresse",
   "snappy.empty": "Posez vos questions sur votre atelier, ou demandez à Snappy de le faire : trancher, disposer le plateau, piloter une imprimante, gérer la file, modifier un réglage. Il vous demande avant de changer quoi que ce soit.",
   "snappy.stopped": "Arrêté.",
   "snappy.approve.title": "Snappy demande à :",

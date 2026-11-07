@@ -55,7 +55,7 @@ pub(crate) static TOOLS: &[Tool] = &[
     Tool {
         name: "settings_list",
         description: "Snap Studio's settings as Settings shows them: each one's key, label, section, current value and choices.",
-        params: no_params_value,
+        params: no_params,
         access: Access::Read,
         ask: None,
         run: settings_list,

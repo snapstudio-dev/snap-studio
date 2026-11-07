@@ -98,6 +98,12 @@ async function snappyLoad() {
   if (!snapList.children.length) snapList.appendChild(snappyDiv("snappy-empty", tr("snappy.empty")));
   snappySetBusy(await invoke("snappy_busy").catch(() => false));
   snapList.scrollTop = snapList.scrollHeight;
+  // Cards and questions still waiting (a view drawn again, over a site).
+  for (const w of (await invoke("snappy_waiting").catch(() => [])) || []) {
+    if (SNAP.cards.has(w.id)) continue;
+    if (w.kind === "approval") snappyApprovalCard(w);
+    else if (w.kind === "question") snappyQuestionCard(w);
+  }
 }
 
 /* ------------------------------------------------------------ rendering */
@@ -378,8 +384,10 @@ snapList.addEventListener("click", (e) => {
 
 /* ------------------------------------------------------------ approvals */
 
-listen("snappy-approval", (e) => {
-  const { id, text } = e.payload;
+listen("snappy-approval", (e) => snappyApprovalCard(e.payload));
+
+function snappyApprovalCard({ id, text }) {
+  if (SNAP.cards.has(id)) return;
   const card = snappyDiv("snappy-card");
   card.append(snappyDiv("title", tr("snappy.approve.title")), snappyDiv("what", text));
   const row = snappyDiv("row");
@@ -395,7 +403,7 @@ listen("snappy-approval", (e) => {
   card.appendChild(row);
   SNAP.cards.set(id, card);
   $("snappy-cards").appendChild(card);
-});
+}
 
 function snappyAnswer(id, yes) {
   invoke("snappy_approve", { id, yes }).catch(() => {});
@@ -420,8 +428,10 @@ listen("snappy-approval-done", (e) => snappyCardDone(e.payload.id, e.payload.app
 /* Snappy asks (its ask_user tool): the question with its answers as
    buttons, a field for another answer, and Skip. The answer goes back to
    Snappy; it stays as a line of the conversation. */
-listen("snappy-question", (e) => {
-  const { id, question, options } = e.payload;
+listen("snappy-question", (e) => snappyQuestionCard(e.payload));
+
+function snappyQuestionCard({ id, question, options }) {
+  if (SNAP.cards.has(id)) return;
   const card = snappyDiv("snappy-card question");
   card.append(snappyDiv("what", question));
   const reply = (answer) => {
@@ -452,7 +462,7 @@ listen("snappy-question", (e) => {
   SNAP.cards.set(id, card);
   $("snappy-cards").appendChild(card);
   (options?.length ? row.firstElementChild : input)?.focus();
-});
+}
 
 function snappyQuestionDone(id, answer) {
   const card = SNAP.cards.get(id);

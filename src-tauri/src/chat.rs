@@ -568,6 +568,8 @@ fn restarts() -> &'static Mutex<HashSet<String>> {
 /// Closes a conversation's Claude off the caller's thread (the engine's
 /// poller calls the listener).
 fn close_later(id: &str) {
+    // Closing from now on: a message sent right after starts a new Claude.
+    claude_pty::retire(id);
     let id = id.to_string();
     std::thread::spawn(move || close(&id));
 }
@@ -600,6 +602,8 @@ fn app_listener(app: &AppHandle, id: &str, sandbox: bool) -> claude_pty::Listene
             Some("result") if restarts().lock().unwrap().remove(&id) => close_later(&id),
             Some("exited") => {
                 crate::ia::watch_stop(&id);
+                // Ended before its answer: nothing left to restart.
+                restarts().lock().unwrap().remove(&id);
                 // A sandbox that cannot start (bubblewrap missing, refused by
                 // AppArmor…): Claude stops at once, never unsandboxed; said
                 // in words.

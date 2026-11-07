@@ -284,8 +284,13 @@ fn listener() -> claude_pty::Listener {
         }
         if event["type"] == "exited" {
             crate::snappy_tools::refuse_all();
+            // Ended before its answer: nothing left to restart.
+            RESTART.store(false, std::sync::atomic::Ordering::SeqCst);
         }
         if event["type"] == "result" && RESTART.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            // Closing from now on, before the answer reaches the card: a
+            // message sent right after starts the new Claude.
+            claude_pty::retire(KEY);
             std::thread::spawn(|| claude_pty::close(KEY));
         }
         if !matches!(event["type"].as_str(), Some("exited" | "auth_failed")) {
@@ -585,8 +590,11 @@ mod tests {
         if std::env::var("SNAPPY_REAL").is_err() {
             return;
         }
-        let _ = std::fs::remove_file(log_path());
-        let _ = std::fs::remove_file(state_path());
+        // A Snappy of its own: on, its card open, nothing left by another test.
+        set_enabled(true);
+        let _ = reset();
+        let _ = clear_memory();
+        crate::snappy_tools::set_drawer(true);
         let mut png = std::io::Cursor::new(Vec::new());
         image::RgbImage::from_pixel(64, 64, image::Rgb([220, 20, 20])).write_to(&mut png, image::ImageFormat::Png).unwrap();
         let img = crate::chat::Attachment {

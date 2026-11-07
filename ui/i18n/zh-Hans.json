@@ -1040,6 +1040,8 @@
   "snappy.tool.plate_view": "查看打印板",
   "snappy.tool.attachment_view": "查看你的图片",
   "snappy.ask.camera": "用 {printer} 的摄像头拍照并查看",
+  "snappy.ask.explore_url": "在“探索”中打开此地址：{url}",
+  "snappy.tool.explore_open_url": "打开地址",
   "snappy.empty": "向 Snappy 询问工作间的任何问题，或让它来做：切片、排列打印板、控制打印机、管理队列、更改设置。更改任何内容前都会先询问您。",
   "snappy.stopped": "已停止。",
   "snappy.approve.title": "Snappy 请求：",

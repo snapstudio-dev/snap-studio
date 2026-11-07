@@ -1072,6 +1072,8 @@
   "snappy.tool.plate_view": "Olha a placa",
   "snappy.tool.attachment_view": "Olha sua imagem",
   "snappy.ask.camera": "Tirar uma foto com a câmera de {printer} e olhar",
+  "snappy.ask.explore_url": "Abrir este endereço em Explorar: {url}",
+  "snappy.tool.explore_open_url": "Abre um endereço",
   "snappy.empty": "Pergunte ao Snappy qualquer coisa sobre sua oficina, ou peça que ele faça: fatiar, organizar a placa, controlar uma impressora, gerenciar a fila, mudar uma configuração. Ele pergunta antes de mudar algo.",
   "snappy.stopped": "Interrompido.",
   "snappy.approve.title": "O Snappy pede para:",

@@ -468,6 +468,13 @@ listen("snappy-ui", async (e) => {
     }
     else if (method === "slice_set") result = await snappySliceSet(args || {});
     else if (method === "slice_run") result = await snappySliceRun();
+    else if (method === "slice_stop") {
+      // As the sheet's Stop.
+      if (SL.job) {
+        invoke("slice_cancel", { id: SL.job });
+        result = { stopped: true };
+      } else result = { error: "No slice is running." };
+    }
     else if (method === "open_slice_sheet") result = await snappyOpenSliceSheet();
     else if (method === "open_view") result = snappyOpenView(args || {});
     else if (SNAPPY_ACTIONS[method]) result = await SNAPPY_ACTIONS[method](args || {});

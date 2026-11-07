@@ -1072,6 +1072,8 @@
   "snappy.tool.plate_view": "Betrachtet die Druckplatte",
   "snappy.tool.attachment_view": "Betrachtet dein Bild",
   "snappy.ask.camera": "Ein Foto mit der Kamera von {printer} aufnehmen und ansehen",
+  "snappy.ask.explore_url": "Diese Adresse in „Entdecken“ öffnen: {url}",
+  "snappy.tool.explore_open_url": "Öffnet eine Adresse",
   "snappy.empty": "Fragen Sie Snappy alles zu Ihrer Werkstatt oder lassen Sie es handeln: slicen, die Platte anordnen, einen Drucker steuern, die Warteschlange verwalten, eine Einstellung ändern. Es fragt, bevor es etwas ändert.",
   "snappy.stopped": "Gestoppt.",
   "snappy.approve.title": "Snappy möchte:",

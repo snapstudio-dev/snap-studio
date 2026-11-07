@@ -1716,6 +1716,13 @@ fn snappy_drawer(open: bool) {
     snappy_tools::set_drawer(open);
 }
 
+/// What waits for the user now (cards and questions), for a card drawn
+/// again.
+#[tauri::command]
+fn snappy_waiting() -> Vec<serde_json::Value> {
+    snappy_tools::waiting_shown()
+}
+
 /// The user's answer to an approval card.
 #[tauri::command]
 fn snappy_approve(id: String, yes: bool) {
@@ -2337,6 +2344,7 @@ pub fn run() {
             snappy_set_model,
             snappy_drawer,
             snappy_approve,
+            snappy_waiting,
             snappy_ui_reply,
             auth_status,
             auth_verify,

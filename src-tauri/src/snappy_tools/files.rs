@@ -23,7 +23,7 @@ pub(crate) static TOOLS: &[Tool] = &[
     Tool {
         name: "files_folders",
         description: "The folders of the Files view, by name: the one shown and the recent ones.",
-        params: no_params_value,
+        params: no_params,
         access: Access::Read,
         ask: None,
         run: files_folders,

@@ -17,7 +17,6 @@ use crate::privacy;
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;

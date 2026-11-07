@@ -259,14 +259,36 @@ pub fn pretrust(dir: &Path) -> Result<()> {
         return Err(anyhow!("not a folder of the app: {}", dir.display()));
     }
     let Some(file) = claude_json() else { return Ok(()) };
-    let mut cfg: Value = match std::fs::read(&file) {
-        Ok(b) => serde_json::from_slice(&b)?,
-        // No settings yet: Claude writes them on its first start, and asks.
-        Err(_) => return Ok(()),
-    };
-    // Trusting a folder trusts what is under it.
+    // Claude itself (the user's own sessions too) rewrites this file: it is
+    // read, changed and put back only if nobody wrote it meanwhile, else
+    // read again — never one write over another's.
+    for _ in 0..3 {
+        let Ok(before) = std::fs::metadata(&file) else {
+            // No settings yet: Claude writes them on its first start, and asks.
+            return Ok(());
+        };
+        let mut cfg: Value = serde_json::from_slice(&std::fs::read(&file)?)?;
+        if !trust_in(&mut cfg, &dir) {
+            return Ok(());
+        }
+        let tmp = file.with_extension(format!("snapstudio-{}", std::process::id()));
+        write_private(&tmp, &serde_json::to_vec_pretty(&cfg)?)?;
+        let now = std::fs::metadata(&file)?;
+        if now.len() == before.len() && now.modified().ok() == before.modified().ok() {
+            std::fs::rename(&tmp, &file)?;
+            return Ok(());
+        }
+        let _ = std::fs::remove_file(&tmp);
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    Err(anyhow!("Claude's settings kept changing"))
+}
+
+/// Marks `dir` trusted in Claude's settings; false when it already is
+/// (itself or an ancestor: trusting a folder trusts what is under it).
+fn trust_in(cfg: &mut Value, dir: &Path) -> bool {
     if dir.ancestors().any(|a| cfg["projects"][a.to_string_lossy().as_ref()]["hasTrustDialogAccepted"] == true) {
-        return Ok(());
+        return false;
     }
     let key = dir.to_string_lossy().to_string();
     if !cfg["projects"].is_object() {
@@ -276,13 +298,18 @@ pub fn pretrust(dir: &Path) -> Result<()> {
         cfg["projects"][&key] = json!({});
     }
     cfg["projects"][&key]["hasTrustDialogAccepted"] = json!(true);
-    // Written beside it then renamed, with its permissions: never half a file.
-    let tmp = file.with_extension(format!("snapstudio-{}", std::process::id()));
-    std::fs::write(&tmp, serde_json::to_vec_pretty(&cfg)?)?;
-    if let Ok(meta) = std::fs::metadata(&file) {
-        let _ = std::fs::set_permissions(&tmp, meta.permissions());
-    }
-    std::fs::rename(&tmp, &file)?;
+    true
+}
+
+/// A file only its owner reads, from its creation on (Claude's settings may
+/// hold its sign-in).
+fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
+    let _ = std::fs::remove_file(path);
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut opts, 0o600);
+    opts.open(path)?.write_all(bytes)?;
     Ok(())
 }
 
@@ -557,9 +584,20 @@ pub fn is_busy(key: &str) -> bool {
 }
 
 /// Where a run's hook files go on this machine (a container's go in its
-/// workspace instead): the system's temporary folder, one folder per run.
+/// workspace instead): a folder of the app's, `~/.config/snap-studio/run`,
+/// only its owner's (0700). Not the system's temporary folder: commands in
+/// Claude's built-in sandbox may write there, and an answer file written
+/// by an agent would answer its own permission request. The hooks run
+/// outside the sandbox (Claude runs them), so they reach this folder.
 pub fn host_sentinel_dir(run: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("snapstudio-claude-{run}"))
+    let base = crate::ia::root().parent().map(Path::to_path_buf).unwrap_or_else(std::env::temp_dir).join("run");
+    let _ = std::fs::create_dir_all(&base);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o700));
+    }
+    base.join(run)
 }
 
 /// Starts Claude. `listener` gets the view events, then
@@ -589,7 +627,8 @@ pub fn start(mut l: Launch, listener: Listener, screen: Option<Screen>) -> Resul
     let refusal = crate::t!("chat.denied_by_user");
     std::fs::write(dir.join("perm.deny"), permission_decision(false, None, None, &refusal).to_string())?;
     std::fs::write(dir.join("question.deny"), question_reply(&crate::t!("chat.question_unanswered")).to_string())?;
-    let pidfile = std::env::temp_dir().join(format!("claude-turn-{run}.pid"));
+    // Beside the hook files, out of the agents' reach.
+    let pidfile = dir.join(format!("claude-turn-{run}.pid"));
     let argv = argv(&l, &pidfile);
     // A resumed transcript holds the whole conversation: only what comes
     // after its current end is this run's.
@@ -1007,6 +1046,15 @@ fn ended_within(sess: &Session, d: Duration) -> bool {
     }
 }
 
+/// Marks a Claude as closing, at once: no message goes into it any more
+/// (the next one starts a new Claude, which waits for this one's end). The
+/// close itself may then run elsewhere.
+pub fn retire(key: &str) {
+    if let Some(s) = session(key) {
+        s.shared.lock().unwrap().closing = true;
+    }
+}
+
 /// Ends a Claude: Esc and two Ctrl-C first, then its whole group. Nothing
 /// is lost: the next start resumes from the transcript.
 pub fn close(key: &str) {
@@ -1023,10 +1071,9 @@ pub fn close(key: &str) {
     }
     #[cfg(unix)]
     {
-        let pid = std::fs::read_to_string(&sess.pidfile)
-            .ok()
-            .and_then(|s| s.trim().parse::<libc::pid_t>().ok())
-            .or_else(|| sess.child.lock().unwrap().process_id().and_then(|p| libc::pid_t::try_from(p).ok()));
+        // The group of the process this terminal started (the pid wrapper):
+        // never a number read back from a file another process could write.
+        let pid = sess.child.lock().unwrap().process_id().and_then(|p| libc::pid_t::try_from(p).ok());
         if let Some(pid) = pid.filter(|p| *p > 1) {
             // SAFETY: a plain signal to the group the terminal created.
             unsafe { libc::killpg(pid, libc::SIGTERM) };
@@ -1231,6 +1278,27 @@ mod tests {
     }
 
     #[test]
+    fn trust_is_added_once_and_kept_private() {
+        let mut cfg =
+            json!({ "projects": { "/Users/a/.config/snap-studio": { "hasTrustDialogAccepted": true } }, "oauthAccount": { "x": 1 } });
+        assert!(!trust_in(&mut cfg, Path::new("/Users/a/.config/snap-studio/ia/1/workspace")), "an ancestor trusted");
+        let mut cfg = json!({ "oauthAccount": { "x": 1 } });
+        assert!(trust_in(&mut cfg, Path::new("/w")));
+        assert_eq!(cfg["projects"]["/w"]["hasTrustDialogAccepted"], true);
+        assert_eq!(cfg["oauthAccount"]["x"], 1, "the rest kept");
+        assert!(!trust_in(&mut cfg, Path::new("/w")), "once");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let d = tmp("private");
+            let p = d.join("cfg.tmp");
+            write_private(&p, b"{}").unwrap();
+            assert_eq!(std::fs::metadata(&p).unwrap().permissions().mode() & 0o777, 0o600);
+            let _ = std::fs::remove_dir_all(&d);
+        }
+    }
+
+    #[test]
     fn a_late_proof_never_ends_the_next_turn() {
         let mut p = Proofs::default();
         assert!(p.accepts(None), "an older Claude without prompt ids: every proof counts");
@@ -1380,6 +1448,10 @@ done
         assert_eq!(texts, ["pong: ping", "pong: again"]);
         assert!(answer(&key, &rid2, &json!({})).is_err(), "answered once");
 
+        // Retired: not open any more at once, the process still there.
+        retire(&key);
+        assert!(!is_open(&key));
+        assert!(inject_prompt(&key, "late").is_err(), "nothing goes into a closing Claude");
         close(&key);
         wait(&|e| e.last().is_some_and(|x| x["type"] == "exited"));
         assert_eq!(got.lock().unwrap().last().unwrap()["type"], "exited");

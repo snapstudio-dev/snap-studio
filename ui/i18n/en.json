@@ -1069,6 +1069,8 @@
   "snappy.tool.plate_view": "Looks at the plate",
   "snappy.tool.attachment_view": "Looks at your image",
   "snappy.ask.camera": "Take a picture with {printer}'s camera and look at it",
+  "snappy.ask.explore_url": "Open this address in Explore: {url}",
+  "snappy.tool.explore_open_url": "Opens an address",
   "snappy.empty": "Ask Snappy anything about your workshop, or ask it to do it: slice, arrange the plate, drive a printer, manage the queue, change a setting. It asks before changing anything.",
   "snappy.stopped": "Stopped.",
   "snappy.approve.title": "Snappy asks to:",

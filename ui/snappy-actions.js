@@ -76,7 +76,7 @@ function snappyPlateCheck(args) {
 
 /* As Prepare's tools do it, the plate shown; one undo step each. */
 async function snappyPlateEdit(args) {
-  const c = snappyPlateCheck(args);
+  const c = snappyApproved(args) || snappyPlateCheck(args);
   if (c.error) return c;
   if ((window.currentView || "files") !== "prepare") switchView("prepare");
   const ids = c.list.map((o) => o.id);
@@ -127,7 +127,7 @@ function snappyPlateAddCheck({ file }) {
 }
 
 async function snappyPlateAdd(args) {
-  const c = snappyPlateAddCheck(args);
+  const c = snappyApproved(args) || snappyPlateAddCheck(args);
   if (c.error) return c;
   switchView("prepare");
   await prepareAddFile(c.path);
@@ -290,7 +290,7 @@ function snappySettingsCheck({ setting, value }) {
 
 /* As by hand: the field's own handlers save and apply it. */
 function snappySettingsSet(args) {
-  const c = snappySettingsCheck(args);
+  const c = snappyApproved(args) || snappySettingsCheck(args);
   if (c.error) return c;
   if (c.button) {
     c.button.click();
@@ -316,7 +316,7 @@ function snappyAppCheck({ action }) {
 
 /* As Settings' buttons do; a confirmation the app would ask is the card's. */
 async function snappyApp(args) {
-  const c = snappyAppCheck(args);
+  const c = snappyApproved(args) || snappyAppCheck(args);
   if (c.error) return c;
   switch (args.action) {
     case "check_update":
@@ -376,7 +376,7 @@ function snappyPrinterCheck(a) {
 
 /* As the printer sheet saves it: the address stays the app's. */
 async function snappyPrinterManage(a) {
-  const c = snappyPrinterCheck(a);
+  const c = snappyApproved(a) || snappyPrinterCheck(a);
   if (c.error) return c;
   if (a.action === "remove") P.list = await invoke("printer_remove", { id: c.printer.id });
   else {
@@ -422,7 +422,7 @@ function snappySaveProfileCheck({ name }) {
 
 /* As the sheet's Save does, named as asked; its own message says why not. */
 async function snappySaveProfile(args) {
-  const c = snappySaveProfileCheck(args);
+  const c = snappyApproved(args) || snappySaveProfileCheck(args);
   if (c.error) return c;
   advSaveOpen();
   $("advsave-name").value = args.name.trim();
@@ -442,7 +442,7 @@ function snappyPreviewCheck({ action }) {
 }
 
 async function snappyPreview(args) {
-  const c = snappyPreviewCheck(args);
+  const c = snappyApproved(args) || snappyPreviewCheck(args);
   if (c.error) return c;
   if (args.action === "save") await savePreview();
   else if (args.action === "edit") editInPrepare();
@@ -467,14 +467,14 @@ function snappyLocalAiCheck({ file, prompt }) {
   if (f.error) return f;
   if (!/\.(3mf|stl)$/i.test(f.name)) return snappyFail("Only a 3MF or STL can be changed with the AI.");
   if (!String(prompt || "").trim()) return snappyFail("Say what to change.");
-  return { card: tr("snappy.ask.file_ai", { file: f.name, prompt }), path: f.path };
+  return { card: tr("snappy.ask.file_ai", { file: f.name, prompt }), path: f.path, file: state.files.find((x) => x.path === f.path) };
 }
 
 /* As Edit with AI does: the sheet with the request, started. */
 async function snappyLocalAi(args) {
-  const c = snappyLocalAiCheck(args);
+  const c = snappyApproved(args) || snappyLocalAiCheck(args);
   if (c.error) return c;
-  iaStart(state.files.find((x) => x.path === c.path));
+  iaStart(c.file || state.files.find((x) => x.path === c.path));
   $("ia-prompt").value = args.prompt;
   await iaCreate();
   if (!$("iamodal").classList.contains("hidden") && !$("iamodal").classList.contains("closing")) {
@@ -528,7 +528,7 @@ function snappySiteCheck({ action, site }) {
 }
 
 async function snappySiteAction(args) {
-  const c = snappySiteCheck(args);
+  const c = snappyApproved(args) || snappySiteCheck(args);
   if (c.error) return c;
   if (args.action === "logout") {
     const t = LIB.tabs.find((x) => x.site === c.site.id);
@@ -541,10 +541,27 @@ async function snappySiteAction(args) {
 /* ------------------------------------------------------------ the table */
 
 /* Only the card's text goes back for a check. */
+/* What a card named, kept under a token until its action runs: the action
+   then works on what the user approved (that file, that printer), not on
+   whatever bears the same name by then (snappy_tools/common.rs passes the
+   token back). Forgotten after the approval's own wait. */
+const SNAP_APPROVED = new Map();
 const snappyCardOnly = (fn) => (args) => {
   const c = fn(args || {});
-  return c.error ? { error: c.error } : { card: c.card };
+  if (c.error) return { error: c.error };
+  const token = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
+  SNAP_APPROVED.set(token, c);
+  setTimeout(() => SNAP_APPROVED.delete(token), 20 * 60 * 1000);
+  return { card: c.card, token };
 };
+
+/* The approved card's target for this run, if any (used once). */
+function snappyApproved(args) {
+  const c = args?._token && SNAP_APPROVED.get(args._token);
+  if (!c) return null;
+  SNAP_APPROVED.delete(args._token);
+  return c;
+}
 
 const SNAPPY_ACTIONS = {
   plate_objects: snappyPlateObjects,

@@ -42,10 +42,6 @@ fn fit_jpeg(bytes: &[u8]) -> Result<Vec<u8>> {
 
 // ------------------------------------------------------------ the camera
 
-pub fn camera_params() -> Value {
-    json!({ "type": "object", "properties": { "printer": { "type": "string", "description": "The printer's display name." } }, "required": ["printer"] })
-}
-
 pub fn ask_camera(args: &Value) -> Result<String> {
     let p = crate::snappy_tools::printer_named(args["printer"].as_str().unwrap_or_default())?;
     Ok(crate::t!("snappy.ask.camera", printer = p.name))
@@ -82,14 +78,20 @@ pub fn attachments_dir() -> PathBuf {
     crate::snappy::root().join("attachments")
 }
 
+/// Whether `name` can be an attachment's: the characters
+/// `chat::attachment_name` keeps (any letter or digit, accents and CJK
+/// included, dots, dashes, underscores), never a separator or a dot first.
+fn attachment_name_ok(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() < 240
+        && !name.starts_with('.')
+        && name.chars().all(|c| c.is_alphanumeric() || matches!(c, '.' | '-' | '_'))
+}
+
 /// An attachment's file, by its name only (no path can reach elsewhere).
 fn attachment_path(name: &str) -> Result<PathBuf> {
-    let ok = !name.is_empty() && name.len() < 120 && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'));
-    if !ok || name.starts_with('.') {
-        return Err(anyhow!("no attachment named “{name}”"));
-    }
     let p = attachments_dir().join(name);
-    if !p.is_file() {
+    if !attachment_name_ok(name) || !p.is_file() {
         return Err(anyhow!("no attachment named “{name}”"));
     }
     Ok(p)
@@ -152,6 +154,19 @@ mod tests {
     fn attachments_are_reached_by_name_only() {
         for bad in ["../MEMORY.md", "/etc/hosts", "a/b.jpg", ".hidden", ""] {
             assert!(attachment_path(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn accented_and_cjk_names_are_read_back() {
+        for name in ["Pièce.jpg", "写真.jpg", "Überhang_2.jpg"] {
+            // Named as save_attachments names them, then accepted.
+            let saved = crate::chat::attachment_name(&std::env::temp_dir().join("snapstudio-none"), name);
+            assert!(saved.ends_with(name), "{saved}");
+            assert!(attachment_name_ok(&saved), "{saved}");
+        }
+        for bad in ["../MEMORY.md", "a/b.jpg", "a\\b.jpg", ".hidden", ""] {
+            assert!(!attachment_name_ok(bad), "{bad}");
         }
     }
 
