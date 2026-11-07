@@ -24,7 +24,7 @@ use std::time::Duration;
 use tauri::Emitter;
 
 /// How long an approval waits for the user.
-const APPROVAL_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+pub(crate) const APPROVAL_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 /// How long the UI has to answer a question about what it shows.
 const UI_TIMEOUT: Duration = Duration::from_secs(10);
 /// How long the slice sheet may take to open or to apply changes (a new
@@ -550,6 +550,30 @@ pub static TOOLS: &[Tool] = &[
         ask: Some(crate::snappy_actions::ask_explore_site),
         run: crate::snappy_actions::explore_site,
     },
+    Tool {
+        name: "camera_snapshot",
+        description: "A picture of a printer's camera, now: to look at a print in progress, a failure, the bed. The user confirms it (it shows their workshop).",
+        params: crate::snappy_eyes::camera_params,
+        access: Access::Write,
+        ask: Some(crate::snappy_eyes::ask_camera),
+        run: crate::snappy_eyes::camera,
+    },
+    Tool {
+        name: "plate_view",
+        description: "A picture of Prepare's plate as its 3D view shows it, with the objects' names: to judge an arrangement or an orientation.",
+        params: no_params,
+        access: Access::Read,
+        ask: None,
+        run: crate::snappy_eyes::plate_view,
+    },
+    Tool {
+        name: "attachment_view",
+        description: "An image the user attached to a message, by the name the message gives: look at it before answering about it.",
+        params: crate::snappy_eyes::attachment_params,
+        access: Access::Read,
+        ask: None,
+        run: crate::snappy_eyes::attachment_view,
+    },
 ];
 
 pub fn find(name: &str) -> Option<&'static Tool> {
@@ -597,8 +621,14 @@ pub fn call(name: &str, args: &Value) -> Result<Value> {
             return Err(anyhow!("The user did not approve this action ({card}). Nothing was done."));
         }
     }
-    let out = (tool.run)(args)?;
-    Ok(privacy::json(&out, &privacy::known()))
+    let mut out = (tool.run)(args)?;
+    // An image is not text: it keeps out of the text filter.
+    let image = crate::snappy_eyes::take_image(&mut out);
+    let mut out = privacy::json(&out, &privacy::known());
+    if let Some(i) = image {
+        out["_image"] = i;
+    }
+    Ok(out)
 }
 
 // ------------------------------------------------------------ approval
@@ -1281,6 +1311,7 @@ mod tests {
                 "local_file_ai",
                 "create_manage",
                 "explore_site",
+                "camera_snapshot",
             ]
         );
         for t in TOOLS {

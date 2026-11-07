@@ -35,8 +35,10 @@ with its packages for macOS, Windows and Linux. What comes next:
   first launch, before the anonymous count's. It needs the AI: with the AI
   off, its switch is locked. Over the
   slice sheet it sits beside it, above the blur, and it stays visible over
-  the sites of Explore. Its model is
-  set in Settings › AI. It uses the Claude already set up for the AI,
+  the sites of Explore. It can look at a printer's
+  camera, Prepare's plate and the images you attach. Its model, its
+  memory (to read, edit or clear) and a new conversation are in Settings ›
+  AI. It uses the Claude already set up for the AI,
   with none of Claude's own tools, and never sends serial numbers,
   addresses, hostnames or file paths (#95).
 - **Anonymous usage count**: Snap Studio sends one anonymous signal at

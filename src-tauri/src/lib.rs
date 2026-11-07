@@ -40,6 +40,7 @@ mod slice;
 mod slicers;
 mod snappy;
 mod snappy_actions;
+mod snappy_eyes;
 mod snappy_mcp;
 mod snappy_tools;
 mod stl;
@@ -1630,8 +1631,32 @@ fn snappy_history() -> Vec<serde_json::Value> {
 /// Sends a message to Snappy with the app's current context (view,
 /// printer, Prepare); starts its Claude when needed.
 #[tauri::command]
-async fn snappy_send(text: String, context: serde_json::Value) -> Result<(), String> {
-    off_main(move || snappy::send(&text, &context).map_err(ui_err)).await
+async fn snappy_send(text: String, context: serde_json::Value, images: Option<Vec<chat::Attachment>>) -> Result<(), String> {
+    off_main(move || snappy::send(&text, &context, &images.unwrap_or_default()).map_err(ui_err)).await
+}
+
+/// An image attached to a message to Snappy, for its card (a data URL).
+#[tauri::command]
+fn snappy_attachment(name: String) -> Result<String, String> {
+    snappy_eyes::attachment_url(&name).map_err(ui_err)
+}
+
+/// Snappy's memory as saved (Settings › AI › Snappy).
+#[tauri::command]
+fn snappy_memory() -> String {
+    snappy::memory_raw()
+}
+
+/// Saves Snappy's memory as edited by the user (filtered, within its limits).
+#[tauri::command]
+fn snappy_memory_set(content: String) -> Result<(), String> {
+    snappy::set_memory(&content).map_err(ui_err)
+}
+
+/// Forgets everything Snappy remembers.
+#[tauri::command]
+fn snappy_memory_clear() -> Result<(), String> {
+    snappy::clear_memory().map_err(ui_err)
 }
 
 #[tauri::command]
@@ -2299,6 +2324,10 @@ pub fn run() {
             ia_term_view,
             snappy_history,
             snappy_send,
+            snappy_attachment,
+            snappy_memory,
+            snappy_memory_set,
+            snappy_memory_clear,
             snappy_stop,
             snappy_busy,
             snappy_enabled,

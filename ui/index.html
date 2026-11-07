@@ -1197,6 +1197,12 @@
         </span>
         <button type="button" id="snappy-reset" class="btn small" data-i18n="settings.snappy.reset">New Conversation</button>
       </div>
+      <div class="grow-row snappy-more">
+        <span class="k"><span data-i18n="settings.snappy.memory">Memory</span>
+          <span class="sub" id="snappy-mem-sub" data-i18n="settings.snappy.memory.sub">What Snappy remembers from one conversation to the next</span>
+        </span>
+        <button type="button" id="snappy-mem-open" class="btn small" data-i18n="settings.snappy.memory_open">View and Edit…</button>
+      </div>
     </div>
     <div class="set-section" data-i18n="settings.ai.components">Components</div>
     <div class="group set-ai">
@@ -1447,6 +1453,22 @@
     </div>
   </div>
 </div>
+<!-- Snappy's memory, to read, edit or clear (snappy.js). -->
+<div id="snappymem" class="modal hidden">
+  <div class="modal-box snappy-mem-box">
+    <h3 data-i18n="settings.snappy.memory_title">Snappy's Memory</h3>
+    <div class="det-sub" data-i18n="settings.snappy.memory_hint">Snappy writes it itself and reads it with each message. Never serial numbers, addresses or file paths: they are removed.</div>
+    <textarea id="snappymem-text" class="field snappy-mem-text" spellcheck="false"></textarea>
+    <div id="snappymem-count" class="pf-test"></div>
+    <div class="modal-actions">
+      <button id="snappymem-clear" class="btn danger" data-i18n="settings.snappy.memory_clear">Clear</button>
+      <span class="spacer"></span>
+      <button id="snappymem-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="snappymem-save" class="btn primary" data-i18n="common.save">Save</button>
+    </div>
+  </div>
+</div>
+
 <div id="advsave" class="modal hidden">
   <div class="modal-box">
     <h3 data-i18n="slice.adv.save.title">Save as Custom Profile</h3>

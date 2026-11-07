@@ -22,6 +22,11 @@ assert.strictEqual(items[1].name, "printers");
 assert.strictEqual(items[4].stopped, false);
 assert.strictEqual(items[4].error, null);
 
+// A message with images; the app's own notes.
+const withImages = S.snappyItems({ type: "user", message: { content: [{ type: "attachment", name: "001-a.jpg" }, { type: "text", text: "Why?" }] } });
+assert.deepStrictEqual(withImages, [{ kind: "user", text: "Why?", images: ["001-a.jpg"] }]);
+assert.deepStrictEqual(S.snappyItems({ type: "note", kind: "forgotten" }), [{ kind: "note", key: "snappy.forgotten" }]);
+
 // Stopped, failed, ended, signed out.
 assert.strictEqual(S.snappyItems({ type: "result", subtype: "error_during_execution", is_error: true })[0].stopped, true);
 assert.strictEqual(S.snappyItems({ type: "result", subtype: "error", is_error: true, result: "API Error" })[0].error, "API Error");

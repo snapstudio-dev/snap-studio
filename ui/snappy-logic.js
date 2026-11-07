@@ -17,11 +17,20 @@ const snappyToolName = (name) => String(name || "").replace(SNAPPY_SERVER, "");
 function snappyItems(ev) {
   const out = [];
   switch (ev?.type) {
-    case "user":
+    case "user": {
+      const images = [];
+      let text = "";
       for (const b of ev.message?.content || []) {
-        if (b.type === "text" && b.text?.trim()) out.push({ kind: "user", text: b.text });
+        if (b.type === "text" && b.text?.trim()) text += b.text;
+        else if (b.type === "attachment" && b.name) images.push(b.name);
         else if (b.type === "tool_result") out.push({ kind: "tool_done", id: b.tool_use_id, error: !!b.is_error });
       }
+      if (text || images.length) out.push({ kind: "user", text, images });
+      break;
+    }
+    case "note":
+      // Said by the app: the conversation's Claude session was gone.
+      if (ev.kind === "forgotten") out.push({ kind: "note", key: "snappy.forgotten" });
       break;
     case "assistant":
       for (const b of ev.message?.content || []) {

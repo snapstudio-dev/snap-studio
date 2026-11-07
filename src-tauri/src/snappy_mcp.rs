@@ -238,12 +238,19 @@ pub fn rpc(msg: &Value) -> Option<Value> {
             // A tool that panics answers as a failed call: the connection
             // stays up and Snappy is told, instead of a reset socket.
             let called = std::panic::catch_unwind(|| crate::snappy_tools::call(name, &args));
-            let (text, is_error) = match called {
-                Ok(Ok(v)) => (v.to_string(), false),
-                Ok(Err(e)) => (crate::privacy::text(&e.to_string(), &crate::privacy::known()), true),
-                Err(_) => (format!("The tool {name} failed inside Snap Studio. Nothing more is known; tell the user."), true),
-            };
-            ok(id, json!({ "content": [{ "type": "text", "text": text }], "isError": is_error }))
+            let (mut content, is_error) = (Vec::new(), matches!(called, Ok(Err(_)) | Err(_)));
+            match called {
+                Ok(Ok(mut v)) => {
+                    // An image the tool saw goes as an image block, the rest as text.
+                    if let Some(img) = crate::snappy_eyes::take_image(&mut v) {
+                        content.push(json!({ "type": "image", "data": img["data"], "mimeType": img["mime"] }));
+                    }
+                    content.push(json!({ "type": "text", "text": v.to_string() }));
+                }
+                Ok(Err(e)) => content.push(json!({ "type": "text", "text": crate::privacy::text(&e.to_string(), &crate::privacy::known()) })),
+                Err(_) => content.push(json!({ "type": "text", "text": format!("The tool {name} failed inside Snap Studio. Nothing more is known; tell the user.") })),
+            }
+            ok(id, json!({ "content": content, "isError": is_error }))
         }
         _ => error(id, -32601, &format!("method not found: {method}")),
     })

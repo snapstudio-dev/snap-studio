@@ -107,6 +107,19 @@ pub fn memory() -> String {
     crate::privacy::text(&raw, &crate::privacy::known())
 }
 
+/// The memory as saved, for the user to read and edit (Settings).
+pub fn memory_raw() -> String {
+    std::fs::read_to_string(memory_path()).unwrap_or_default()
+}
+
+/// Forgets everything Snappy remembers.
+pub fn clear_memory() -> Result<()> {
+    match std::fs::remove_file(memory_path()) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.into()),
+        _ => Ok(()),
+    }
+}
+
 /// Replaces the memory with `content`, filtered, within its limits.
 pub fn set_memory(content: &str) -> Result<()> {
     let clean = checked_memory(content, &crate::privacy::known())?;
@@ -142,8 +155,12 @@ pub fn turn_text(text: &str, context: &Value) -> String {
 }
 
 /// The user's message as the log keeps it.
-fn logged_message(text: &str) -> Value {
-    json!({ "type": "user", "message": { "content": [{ "type": "text", "text": text }] } })
+fn logged_message(text: &str, images: &[String]) -> Value {
+    let mut content: Vec<Value> = images.iter().map(|n| json!({ "type": "attachment", "name": n })).collect();
+    if !text.trim().is_empty() {
+        content.push(json!({ "type": "text", "text": text }));
+    }
+    json!({ "type": "user", "message": { "content": content } })
 }
 
 fn log_append(events: &[Value]) {
@@ -320,7 +337,15 @@ pub fn launch(claude: &Path, mcp_config: &Path, session_id: &str, resume: bool, 
         // No CLAUDE.md or rules of any level, no auto-memory: Snappy's
         // instructions are the app's, its memory is MEMORY.md (checked in
         // Claude Code 2.1.319: the variable empties every memory file).
-        envs: vec![("CLAUDE_CODE_DISABLE_CLAUDE_MDS".into(), "1".into()), ("CLAUDE_CODE_DISABLE_AUTO_MEMORY".into(), "1".into())],
+        envs: vec![
+            ("CLAUDE_CODE_DISABLE_CLAUDE_MDS".into(), "1".into()),
+            ("CLAUDE_CODE_DISABLE_AUTO_MEMORY".into(), "1".into()),
+            // A tool call may wait for the user: a card (15 minutes at
+            // most), then a send's spool check (as long). Claude gives up on
+            // a tool past MCP_TOOL_TIMEOUT (checked in Claude Code 2.1.286),
+            // and the yes would then come too late.
+            ("MCP_TOOL_TIMEOUT".into(), tool_timeout_ms().to_string()),
+        ],
         clean_env: false,
         sentinel_dir: sentinel_dir(),
         transcript: crate::ia::session_file_in(&dir, session_id),
@@ -328,22 +353,30 @@ pub fn launch(claude: &Path, mcp_config: &Path, session_id: &str, resume: bool, 
     }
 }
 
+/// How long Claude waits for one of Snappy's tools, in ms: two waits for
+/// the user and a margin.
+pub fn tool_timeout_ms() -> u128 {
+    (crate::snappy_tools::APPROVAL_TIMEOUT * 2).as_millis() + 5 * 60 * 1000
+}
+
 pub fn is_busy() -> bool {
     claude_pty::is_busy(KEY)
 }
 
-/// Sends a message with the app's `context`: typed into the waiting CLI, or
-/// the prompt of a new one (Snappy's session resumed when it exists).
-pub fn send(text: &str, context: &Value) -> Result<()> {
+/// Sends a message with the app's `context` and its `images`: typed into
+/// the waiting CLI, or the prompt of a new one (Snappy's session resumed
+/// when it exists).
+pub fn send(text: &str, context: &Value, images: &[crate::chat::Attachment]) -> Result<()> {
     static GATE: OnceLock<Mutex<()>> = OnceLock::new();
     let _gate = GATE.get_or_init(|| Mutex::new(())).lock().unwrap();
-    if text.trim().is_empty() {
+    if text.trim().is_empty() && images.is_empty() {
         return Ok(());
     }
     if !enabled() {
         return Err(anyhow!(crate::t!("err.snappy_off")));
     }
-    let prompt = turn_text(text, context);
+    let names = crate::snappy_eyes::save_attachments(images)?;
+    let prompt = turn_text(&with_images(text, &names), context);
     claude_pty::check_prompt(&prompt)?;
     if claude_pty::is_open(KEY) {
         claude_pty::inject_prompt(KEY, &prompt)?;
@@ -358,6 +391,15 @@ pub fn send(text: &str, context: &Value) -> Result<()> {
         }
         let id = session_id();
         let resume = crate::ia::session_file_in(&dir, &id).is_file();
+        // A conversation whose Claude session is gone (Claude Code deletes
+        // its transcripts after `cleanupPeriodDays`, 30 days by default):
+        // the card still shows it, Snappy no longer remembers it. Said once,
+        // in the conversation.
+        if !resume && !history().is_empty() {
+            let note = json!({ "type": "note", "kind": "forgotten" });
+            log_append(std::slice::from_ref(&note));
+            emit(vec![note]);
+        }
         // Claude connects to its MCP servers after it starts: the message
         // waits for the tools, then is typed in, rather than leave as the
         // launch prompt without them.
@@ -368,8 +410,18 @@ pub fn send(text: &str, context: &Value) -> Result<()> {
         }
         claude_pty::inject_prompt(KEY, &prompt)?;
     }
-    log_append(&[logged_message(text)]);
+    log_append(&[logged_message(text, &names)]);
     Ok(())
+}
+
+/// The message with its images named, for Claude (which looks at them with
+/// the attachment_view tool).
+fn with_images(text: &str, names: &[String]) -> String {
+    if names.is_empty() {
+        return text.to_string();
+    }
+    let list = names.join(", ");
+    format!("{text}\n\n(Images attached to this message, to look at with the attachment_view tool: {list})").trim_start().to_string()
 }
 
 // ------------------------------------------------------------ usage, reset
@@ -444,6 +496,7 @@ pub fn reset() -> Result<()> {
     let old = session_id();
     let _ = std::fs::remove_file(crate::ia::session_file_in(&root(), &old));
     let _ = std::fs::remove_file(log_path());
+    let _ = std::fs::remove_dir_all(crate::snappy_eyes::attachments_dir());
     let mut st = state();
     st["session_id"] = json!(uuid::Uuid::new_v4().to_string());
     save_state(&st);
@@ -486,7 +539,7 @@ mod tests {
         };
         // A read runs without a card: none ever waits.
         crate::snappy_tools::set_drawer(true);
-        send("Call your memory_read tool now (do not answer from the memory attached to this message), then tell me in one sentence which material I print most.", &json!({ "view": "prepare" }))
+        send("Call your memory_read tool now (do not answer from the memory attached to this message), then tell me in one sentence which material I print most.", &json!({ "view": "prepare" }), &[])
             .unwrap();
         wait(1);
         assert!(crate::snappy_tools::waiting().is_empty(), "a read asks nothing");
@@ -508,7 +561,8 @@ mod tests {
         assert!(said.contains("PETG"), "{said}");
         // An action with the drawer closed: refused, nothing done.
         crate::snappy_tools::set_drawer(false);
-        send("Use favorite_add to add the page shown to the favorites. Then tell me if it worked, in one sentence.", &json!({})).unwrap();
+        send("Use favorite_add to add the page shown to the favorites. Then tell me if it worked, in one sentence.", &json!({}), &[])
+            .unwrap();
         wait(2);
         let h = history();
         let results: String = h
@@ -520,6 +574,69 @@ mod tests {
         println!("results: {results}");
         assert!(results.contains("did not approve"), "{results}");
         claude_pty::close(KEY);
+    }
+
+    /// Snappy looks at an attached image through the app's MCP server (an
+    /// image block): a red square, said red. A few cents:
+    /// `SNAPPY_REAL=1 XDG_CONFIG_HOME=… cargo test --lib real_snappy_sees -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn real_snappy_sees_an_image() {
+        if std::env::var("SNAPPY_REAL").is_err() {
+            return;
+        }
+        let _ = std::fs::remove_file(log_path());
+        let _ = std::fs::remove_file(state_path());
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::RgbImage::from_pixel(64, 64, image::Rgb([220, 20, 20])).write_to(&mut png, image::ImageFormat::Png).unwrap();
+        let img = crate::chat::Attachment {
+            name: "square.png".into(),
+            media_type: "image/png".into(),
+            data: crate::util::b64_encode(png.get_ref()),
+        };
+        send("What color is the attached image? Answer with one word.", &json!({}), &[img]).unwrap();
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(150);
+        while !history().iter().any(|e| e["type"] == "result") && std::time::Instant::now() < end {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        }
+        let h = history();
+        let tools: Vec<String> = h
+            .iter()
+            .filter(|e| e["type"] == "assistant")
+            .flat_map(|e| e["message"]["content"].as_array().cloned().unwrap_or_default())
+            .filter_map(|b| b["name"].as_str().map(String::from))
+            .collect();
+        let said: String = h
+            .iter()
+            .filter(|e| e["type"] == "assistant")
+            .flat_map(|e| e["message"]["content"].as_array().cloned().unwrap_or_default())
+            .filter_map(|b| b["text"].as_str().map(String::from))
+            .collect();
+        println!("tools: {tools:?}\nsaid: {said}");
+        assert!(tools.iter().any(|t| t.ends_with("attachment_view")), "{tools:?}");
+        assert!(said.to_lowercase().contains("red") || said.to_lowercase().contains("rouge"), "{said}");
+        assert_eq!(h[0]["message"]["content"][0]["type"], "attachment", "the image kept in the log");
+        claude_pty::close(KEY);
+    }
+
+    #[test]
+    fn claude_waits_for_the_user_long_enough() {
+        let l = launch(Path::new("/c"), Path::new("/m"), "11111111-2222-3333-4444-555555555555", false, String::new(), "fr", None);
+        let t: u128 = l.envs.iter().find(|(k, _)| k == "MCP_TOOL_TIMEOUT").expect("MCP_TOOL_TIMEOUT").1.parse().unwrap();
+        // A card, then a send's spool check, each up to the approval wait.
+        assert!(t > 2 * crate::snappy_tools::APPROVAL_TIMEOUT.as_millis(), "{t}");
+    }
+
+    #[test]
+    fn images_are_named_to_claude_and_kept_in_the_log() {
+        assert_eq!(with_images("look", &[]), "look");
+        let p = with_images("Why this?", &["001-photo.jpg".into()]);
+        assert!(p.starts_with("Why this?") && p.contains("attachment_view") && p.contains("001-photo.jpg"), "{p}");
+        assert!(with_images("", &["001-a.jpg".into()]).starts_with("(Images"), "an image alone");
+        let m = logged_message("Why this?", &["001-photo.jpg".into()]);
+        assert_eq!(m["message"]["content"][0], json!({ "type": "attachment", "name": "001-photo.jpg" }));
+        assert_eq!(m["message"]["content"][1]["text"], "Why this?");
+        assert_eq!(logged_message("", &["001-a.jpg".into()])["message"]["content"].as_array().unwrap().len(), 1);
     }
 
     #[test]

@@ -5500,6 +5500,10 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 
 /* Settings › AI › Snappy: off, only its switch shows. */
 #set-snappy.off .snappy-more { display: none; }
+/* Snappy's memory sheet. */
+.snappy-mem-box { width: min(640px, 92vw); }
+.snappy-mem-text { width: 100%; min-height: 300px; margin-top: 10px; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; resize: vertical; }
+.snappy-mem-box .modal-actions .spacer { flex: 1; }
 /* Settings › AI › Snappy: how full the conversation's context is. */
 .snappy-use .k { flex: 1; min-width: 0; }
 .snappy-meter { display: block; height: 6px; margin: 8px 0 4px; border-radius: 3px; background: var(--card-border); overflow: hidden; }
@@ -5602,6 +5606,15 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .snappy-hl { animation: snappy-hl 2.4s ease; border-radius: 8px; }
 @keyframes snappy-hl { 0%, 60% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
 .snappy-card .row { display: flex; gap: 6px; }
+.snappy-images { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.snappy-images img { max-width: 160px; max-height: 120px; border-radius: 8px; object-fit: cover; display: block; }
+.snappy-msg.user .snappy-images:last-child { margin-bottom: 0; }
+.snappy-attach { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 14px 0; border-top: 1px solid var(--separator); }
+.snappy-attach + .snappy-foot { border-top: 0; }
+.snappy-thumb { position: relative; }
+.snappy-thumb img { width: 52px; height: 52px; border-radius: 8px; object-fit: cover; border: 1px solid var(--card-border); display: block; }
+.snappy-thumb button { position: absolute; top: -5px; right: -5px; width: 18px; height: 18px; border: 0; border-radius: 50%; background: var(--text); color: var(--content-bg); font-size: 10px; cursor: pointer; }
+.snappy-add { width: 34px; height: 34px; flex: none; }
 .snappy-foot { display: flex; align-items: flex-end; gap: 8px; padding: 10px 14px 12px; border-top: 1px solid var(--separator); }
 .snappy-foot textarea {
   flex: 1;

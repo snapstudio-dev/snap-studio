@@ -441,12 +441,24 @@ async function snappySendSlice({ printer, queue, options }) {
   return { sent: true, queued: !!queue };
 }
 
+/* Prepare's plate as its 3D view shows it, for Snappy's eyes: drawn now and
+   read at once (the view keeps no drawing buffer). */
+function snappyPlateView() {
+  if (typeof PR === "undefined" || !PR.gl) return { error: "Prepare is not open." };
+  const objects = PR.objects.map((o) => o.name).filter(Boolean);
+  if (!objects.length) return { error: "The plate is empty." };
+  prDraw();
+  const url = PR.gl.canvas.toDataURL("image/png");
+  return { png: url.slice(url.indexOf(",") + 1), objects };
+}
+
 listen("snappy-ui", async (e) => {
   const { id, method, args } = e.payload;
   let result;
   try {
     if (method === "send_slice") result = await snappySendSlice(args || {});
     else if (method === "slice_summary") result = snappyPrepare();
+    else if (method === "plate_view") result = snappyPlateView();
     else if (method === "local_files") result = snappyLocalFiles(state.view_files);
     else if (method === "local_file") result = snappyLocalFile(state.view_files, args?.name);
     else if (method === "slice_options") result = snappySliceOptions();
@@ -607,3 +619,61 @@ function snappyIntroSet(host, on, noAi) {
 }
 
 invoke("snappy_enabled").then((on) => snappyEnabledShow(on !== false)).catch(() => {});
+
+/* Settings › AI › Snappy › Memory: MEMORY.md, to read, edit or clear. Its
+   limits are Snappy's (about 200 lines, 24 KB); what is saved is filtered
+   as anything sent to the model. */
+const SNAP_MEM_LINES = 200;
+const SNAP_MEM_BYTES = 24 * 1024;
+
+function snappyMemCount() {
+  const t = $("snappymem-text").value;
+  const lines = t ? t.split("\n").length : 0;
+  const kb = new TextEncoder().encode(t).length;
+  const over = lines > SNAP_MEM_LINES || kb > SNAP_MEM_BYTES;
+  const el = $("snappymem-count");
+  el.textContent = tr("settings.snappy.memory_count", { lines, max: SNAP_MEM_LINES, kb: (kb / 1024).toFixed(1), maxkb: SNAP_MEM_BYTES / 1024 });
+  el.className = "pf-test" + (over ? " err" : "");
+  $("snappymem-save").disabled = over;
+}
+
+async function snappyMemSub() {
+  const t = await invoke("snappy_memory").catch(() => "");
+  const lines = t.trim() ? t.trim().split("\n").length : 0;
+  $("snappy-mem-sub").textContent = lines ? tr("settings.snappy.memory_lines", { n: lines }) : tr("settings.snappy.memory_empty");
+}
+
+$("snappy-mem-open").addEventListener("click", async () => {
+  $("snappymem-text").value = await invoke("snappy_memory").catch(() => "");
+  snappyMemCount();
+  openSheet($("snappymem"));
+});
+$("snappymem-text").addEventListener("input", snappyMemCount);
+$("snappymem-cancel").addEventListener("click", () => closeSheet($("snappymem")));
+$("snappymem-save").addEventListener("click", async () => {
+  try {
+    await invoke("snappy_memory_set", { content: $("snappymem-text").value });
+    closeSheet($("snappymem"));
+    toast(tr("settings.snappy.memory_saved"));
+  } catch (e) {
+    toast(String(e), true);
+  }
+  snappyMemSub();
+});
+$("snappymem-clear").addEventListener("click", async () => {
+  const ok = await confirmDelete(tr("settings.snappy.memory_clear_title"), tr("settings.snappy.memory_clear_text"), tr("settings.snappy.memory_clear"));
+  if (!ok) return;
+  try {
+    await invoke("snappy_memory_clear");
+    closeSheet($("snappymem"));
+    toast(tr("settings.snappy.memory_cleared"));
+  } catch (e) {
+    toast(String(e), true);
+  }
+  snappyMemSub();
+});
+snappyMemSub();
+window.addEventListener("langchange", snappyMemSub);
+listen("snappy-chat", (e) => {
+  if ((e.payload.events || []).some((ev) => ev.type === "result")) snappyMemSub();
+});
