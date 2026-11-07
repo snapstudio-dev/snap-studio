@@ -58,7 +58,9 @@ The Snapmaker ecosystem and the model sites you use, inside the app.
   model libraries: MakerWorld, Printables, Thingiverse, Cults3D,
   MyMiniFactory, Thangs, Yeggi and GrabCAD. Each opens in a tab, sessions
   kept. Explore only shows the sites' own pages: nothing is read from them.
-- No address bar: Back, Forward and Reload float over the page.
+- No address bar: Back, Forward and Reload float over the page. The pill
+  stays readable on a light or a dark site (light on dark, dark on light)
+  and no longer fades out.
 - Pin any site to the sidebar, under Snapmaker Space; Favorites there too.
 - A model downloaded from any tab goes straight to [Prepare](#-prepare);
   other files land in [Files](#-files).
@@ -96,6 +98,14 @@ The U1 plate as in Orca — then slice.
   on a part or off the plate is flagged, with a fix.
 - [One tower per material](#-one-tower-per-material) when the materials do
   not bond, and [virtual heads](#-color-mixing) in the head pickers.
+- **Supports**: with supports off, a badge at the bottom left of the 3D
+  view says when an object probably needs them (parts starting in the air,
+  a long overhang, large overhangs), estimated from the shape as placed.
+  **Turn supports on** sets them for the next slice. **Show Overhangs**
+  colors in red the faces that point down more than the profile's support
+  angle, and hatches the ones hidden behind the model. After a slice
+  without supports, the engine's own warning is shown, with **Turn supports
+  on and slice again**. The picture above does not show this badge yet.
 
 <br clear="both">
 
@@ -191,7 +201,11 @@ ones are changed, with a link to show them.
   Prepare, where it is placed on the plate; its outer wall's head), ooze
   prevention; a warning when the tower would mix materials that do not
   bond with each other, with one-click fixes, one tower per
-  material among them.
+  material among them;
+- a warning when a material does not suit the plate set on the printer
+  (it does not stick, it needs a hotter bed than the plate takes, or it
+  bonds so strongly it can tear the surface), and a glue tip when the pair
+  needs one. Each can be hidden in Settings › Prepare.
 
 Then a toolpath preview with duration, filament and cost, sent to the
 printer — with its picture on the printer's screen — or saved as G-code.
@@ -317,6 +331,12 @@ also opened from the printer's page (**Control**).
 - Home and jog X, Y and Z (0.1 to 50 mm), the position live.
 - One card per head, in its spool's colour: temperature, load, unload, extrude.
 - Bed, fans, light, a small camera view; the emergency stop always in reach.
+- **Plate**: the plate on this printer (textured PEI, smooth PEI, and the
+  others the machine offers), or **Not set**. A material that does not suit
+  it is flagged when a spool is declared. A chip suggests the bed
+  temperature from the filament profiles for that plate (the highest when
+  several materials are loaded) and sets the target only when clicked.
+  The picture above does not show the plate picker yet.
 - Safe by design: locked during a print.
 
 <details>
@@ -327,7 +347,13 @@ also opened from the printer's page (**Control**).
 - One card per head, in its spool's colour: temperature as a gauge, its
   target on a slider, activate, load, unload, extrude, retract.
 - The bed's temperature; the part fan, the chamber fan, the purifier and
-  the chamber light; a small camera view.
+  the chamber light; a small camera view. The plate on this printer is
+  chosen here and kept for that printer.
+- Before a print starts, if the printer's plate is not the one the file was
+  sliced for, a sheet says so: the bed temperature and the first layer were
+  set for the other plate. When glue is advised, **Glue applied** is a
+  reminder and never blocks Start. Each of these, and the material warning,
+  can be hidden in Settings › Prepare.
 - Turn all heaters off, turn the motors off, restart the firmware, and the
   emergency stop, always in reach.
 - Safe by design: locked during a print (only the emergency stop, the light
@@ -552,6 +578,9 @@ Privacy below).
 system, language) to count its users. Nothing else: no files, models,
 printers, conversations or identifier. A sheet says so at first launch,
 with a switch to turn it off; it is also in Settings › Application.
+If that launch's signal could not be delivered, it is retried until the
+app quits, even after the count is switched off; later launches send
+nothing.
 Details: [docs/privacy.md](docs/privacy.md).
 
 **Why does macOS warn me at the first launch?** The app is not signed with
@@ -592,7 +621,6 @@ with its pull request (drafts, approved or under discussion):
 |---|---|
 | **Several plates in Prepare** — plate tabs, auto-arrange across plates, slice them all and queue them; multi-plate 3MF files kept as such | [#18](https://github.com/kameka22/snap-studio/pull/18) |
 | **Print by object** — one object after the other, with collision checks for the U1's head and an adjustable order | [#22](https://github.com/kameka22/snap-studio/pull/22) |
-| **Plate and material warnings** — an incompatible plate and filament flagged before printing, and a tip when glue is advised | [#16](https://github.com/kameka22/snap-studio/pull/16) |
 | **Calibration assistants** — PID of nozzles and bed, and guided input shaper, offsets between heads and flow measurement, in Care & Tuning | [#38](https://github.com/kameka22/snap-studio/pull/38) |
 | **Filaments** — your spool inventory (weight deducted after each print, low-stock alert) and filament deals | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Filament library** — complete filament management: brands, types and colors, custom and per-spool profiles, linked to the U1's spools (RFID) and used in Prepare; scope to define | [#79](https://github.com/kameka22/snap-studio/pull/79) |

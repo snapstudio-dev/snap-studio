@@ -66,7 +66,8 @@ l'app.
   onglet, sessions conservées. Explorer n'affiche que les pages des sites
   eux-mêmes : rien n'en est lu.
 - Pas de barre d'adresse : Précédent, Suivant et Recharger flottent sur
-  la page.
+  la page. La pastille reste lisible sur un site clair ou sombre (claire
+  sur fond sombre, sombre sur fond clair) et ne s'estompe plus.
 - Épinglez n'importe quel site dans la barre latérale, sous Snapmaker
   Space ; les favoris y sont aussi.
 - Un modèle téléchargé depuis un onglet va droit dans
@@ -111,6 +112,16 @@ Le plateau U1 comme dans Orca — puis découper.
 - [Une tour par matériau](#-une-tour-par-matériau) quand les matériaux
   n'adhèrent pas entre eux, et les [têtes virtuelles](#-mélange-de-couleurs)
   dans les choix de tête.
+- **Supports** : supports désactivés, un badge en bas à gauche de la vue
+  3D indique qu'un objet a probablement besoin de supports (des parties
+  commencent dans le vide, un long porte-à-faux, de grands surplombs),
+  estimé d'après la forme telle qu'elle est posée. **Activer les supports**
+  les prépare pour la prochaine découpe. **Afficher les surplombs** colore
+  en rouge les faces plus inclinées que l'angle de support du profil, et
+  hachure celles cachées derrière le modèle. Après une découpe sans
+  supports, l'avertissement du moteur s'affiche, avec **Activer les
+  supports et redécouper**. L'image ci-dessus ne montre pas encore ce
+  badge.
 
 <br clear="both">
 
@@ -216,7 +227,11 @@ réglages avancés sont modifiés, avec un lien pour les afficher :
   avec Préparer, où elle se place sur le plateau ; la tête de son mur
   extérieur), la prévention des coulures ; un avertissement quand la tour mélangerait des
   matières qui n'adhèrent pas entre elles, avec des
-  corrections en un clic, dont une tour par matériau.
+  corrections en un clic, dont une tour par matériau ;
+- un avertissement quand un matériau ne convient pas au plateau réglé sur
+  l'imprimante (il n'adhère pas, il demande un plateau plus chaud, ou il
+  adhère si fort qu'il peut arracher la surface), et un conseil de colle
+  quand la paire en a besoin. Chacun se masque dans Réglages › Préparer.
 
 Puis un aperçu des trajectoires avec durée, filament et coût, envoyé à
 l'imprimante — avec son image sur l'écran de l'imprimante — ou enregistré en
@@ -350,6 +365,13 @@ d'Entretien et réglages, aussi accessible depuis la page de l'imprimante
   décharger, extruder.
 - Plateau, ventilateurs, lumière, une petite vue caméra ; l'arrêt d'urgence
   toujours à portée.
+- **Plateau** : le plateau de cette imprimante (PEI texturé, PEI lisse, et
+  les autres que la machine propose), ou **Non défini**. Un matériau qui
+  ne lui convient pas est signalé quand une bobine est déclarée. Une
+  pastille conseille la température du plateau d'après les profils de
+  filament pour ce plateau (la plus haute quand plusieurs matériaux sont
+  chargés) et ne change la consigne que si vous cliquez. L'image ci-dessus
+  ne montre pas encore le choix de plateau.
 - Sûr par construction : bloqué pendant une impression.
 
 <details>
@@ -361,7 +383,14 @@ d'Entretien et réglages, aussi accessible depuis la page de l'imprimante
 - Une carte par tête, à la couleur de sa bobine : la température en jauge,
   la consigne au curseur, activer, charger, décharger, extruder, rétracter.
 - La température du plateau ; le ventilateur de pièce, celui de la chambre,
-  le purificateur et la lumière ; une petite vue caméra.
+  le purificateur et la lumière ; une petite vue caméra. Le plateau de
+  cette imprimante se choisit ici et reste attaché à cette imprimante.
+- Avant le démarrage d'une impression, si le plateau de l'imprimante n'est
+  pas celui pour lequel le fichier a été découpé, une fenêtre le dit : la
+  température du plateau et la première couche ont été réglées pour l'autre
+  plateau. Quand la colle est conseillée, **Colle appliquée** est un
+  rappel et ne bloque jamais Démarrer. Chacun de ces avis, et
+  l'avertissement de matériau, se masque dans Réglages › Préparer.
 - Tout couper (chauffe), couper les moteurs, redémarrer le firmware, et
   l'arrêt d'urgence, toujours à portée.
 - Sûr par construction : bloqué pendant une impression (seuls l'arrêt
@@ -606,7 +635,9 @@ Anthropic par Claude Code. Il envoie aussi un signal anonyme au démarrage
 système, langue) pour compter ses utilisateurs. Rien d'autre : ni fichiers,
 ni modèles, ni imprimantes, ni conversations, ni identifiant. Une fenêtre le
 dit au premier lancement, avec un interrupteur pour le désactiver ; il est
-aussi dans Réglages › Application. Détails :
+aussi dans Réglages › Application. Si le signal de ce lancement n'a pas pu
+partir, il est réessayé jusqu'à ce que vous quittiez l'app, même après avoir
+désactivé le comptage ; les lancements suivants n'envoient rien. Détails :
 [docs/privacy.md](docs/privacy.md) (en anglais).
 
 **Pourquoi macOS m'avertit-il au premier lancement ?** L'app n'est pas
@@ -649,7 +680,6 @@ chacun avec sa pull request (brouillons, validés ou en discussion) :
 |---|---|
 | **Plusieurs plateaux dans Préparer** — onglets de plateaux, agencement automatique sur plusieurs plateaux, tout découper et l'envoyer dans la file ; les 3MF multi-plateaux gardés tels quels | [#18](https://github.com/kameka22/snap-studio/pull/18) |
 | **Impression objet par objet** — un objet après l'autre, avec contrôle de collision pour la tête de la U1 et un ordre réglable | [#22](https://github.com/kameka22/snap-studio/pull/22) |
-| **Alertes plateau et matière** — un plateau et un filament incompatibles signalés avant d'imprimer, et un conseil quand la colle est recommandée | [#16](https://github.com/kameka22/snap-studio/pull/16) |
 | **Assistants de calibration** — PID des buses et du plateau, et input shaper, décalages entre têtes et mesure du débit guidés, dans Entretien et réglages | [#38](https://github.com/kameka22/snap-studio/pull/38) |
 | **Filaments** — l'inventaire de vos bobines (poids déduit après chaque impression, alerte de stock bas) et les bonnes affaires | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Bibliothèque de filaments** — la gestion complète des filaments : marques, types et couleurs, profils personnalisés et par bobine, liés aux bobines de la U1 (RFID) et utilisés dans Préparer ; périmètre à définir | [#79](https://github.com/kameka22/snap-studio/pull/79) |

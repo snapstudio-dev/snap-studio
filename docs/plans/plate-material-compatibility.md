@@ -1,8 +1,10 @@
 # Plate and material compatibility warnings
 
-Draft PR [#16](https://github.com/kameka22/snap-studio/pull/16).
-Implemented (see [Implementation](#implementation)); the rule table is to be
-reviewed by the owner before merging.
+Merged in [#16](https://github.com/kameka22/snap-studio/pull/16)
+(2026-11-04). Implemented (see [Implementation](#implementation)). The rule
+table was marked for review before merging; the pull request has no review
+comment, and that review is not requested again. Graphic Effect stays the
+least sure pair in [Open questions](#open-questions-for-the-owner).
 
 Scope approved by the owner: warn when the build plate and the materials do
 not go together, and show a glue tip when the pair needs one, when preparing
@@ -31,7 +33,9 @@ material family (`spMaterialFamily`) × plate (`curr_bed_type` value) →
 `ok`, `warn` (with a reason key) or `glue` (with the treatment and the
 reason). Unknown material or plate: `ok`, nothing shown. The examples from
 the PR (TPU, PETG on smooth PEI) are the starting point; the full table is
-written at implementation and **reviewed by the owner before merging**. It is
+written at implementation and was marked for review by the owner before
+merging. #16 merged without a review comment; that review is not a gate
+anymore. It is
 a data table so it can be edited later without touching the logic. The
 copy names materials generically.
 
@@ -163,8 +167,10 @@ Pairs not listed are fine (nothing shown).
 
 ## Open questions for the owner
 
-- The rule table's content (above; reviewed before merging). The Graphic
+- The rule table's content (above). It was flagged for review before
+  merging; #16 has since merged with no review comment, so it is not asked
+  again as a gate. The Graphic
   Effect plate's rules are the least sure: Snapmaker's guidance for it is
-  not known here.
+  not known here. An owner may still correct that pair later.
 - Whether point 1's plate should also be read from the U1 itself, if its
   firmware ever reports the plate (not known today).

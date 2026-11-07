@@ -1,7 +1,10 @@
 # Prepare: telling whether a print needs supports
 
-Implemented in draft PR #89 (A and B with the overhang view, see
-[Implementation](#implementation)). The question: in Prepare, before slicing,
+Merged in [#89](https://github.com/kameka22/snap-studio/pull/89)
+(2026-11-04), on main, still under Unreleased (A and B with the overhang
+view, see [Implementation](#implementation)). The in-app slice check in
+[Tests](#tests) was not re-run for the 0.19 documentation draft. The
+question: in Prepare, before slicing,
 can Snap Studio tell that an object will need supports, the way Snapmaker
 Orca warns "It seems object X has floating regions"? And must that come from
 the engine, or can we compute it ourselves?

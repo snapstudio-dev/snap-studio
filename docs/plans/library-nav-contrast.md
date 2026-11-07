@@ -4,7 +4,10 @@ In Explore, when a site is shown (Snapmaker Space, MakerWorld, Printables…),
 the Back, Forward and Reload buttons at the top left of the page can hardly be
 seen when the site has a dark background.
 
-Implemented in draft PR #88 ([Implementation](#implementation)). The
+Merged in [#88](https://github.com/kameka22/snap-studio/pull/88)
+(2026-11-04), including the Linux flicker fix
+([Implementation](#implementation)). Checks on macOS and Windows remain as
+written below. The
 owner's choice is **[D. Adaptive pill](#d-adaptive-pill-owners-choice)**:
 the floating pill stays, dark on a light site and light on a dark site.
 

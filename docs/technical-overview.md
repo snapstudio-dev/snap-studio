@@ -114,6 +114,8 @@ No cloud and no account: everything goes over the LAN to the U1's own **Moonrake
 - **Speed slider** (50 to 120 %): speeds × f and accelerations × f². At 100 %, the G-code is exactly the profile's.
 - **Color mixing**: the preview color uses Snapmaker Orca's own pigment mixer (`filament_mixer_model.h`, MIT), ported as is in `mixcolor.rs` so that the swatch matches the slicer.
 - **Material bonding** (tower warnings, one tower per material, mixing): a small table in `ui/spoolcheck.js`. Same family bonds, known pairs come from Snapmaker's wiki and slicer guides, and **unknown pairs are never warned about**. The pillar sizes come from a feasibility slice documented in [plans/prime-tower-per-material.md](plans/prime-tower-per-material.md).
+- **Supports hint** (`support_hint.rs`, `plate_support_hint`, `ui/prepare.js`): with supports off, a mesh estimate (parts in the air, a long overhang, large overhangs) is a badge, not the engine's test. **Show Overhangs** colors faces past the profile's `support_threshold_angle` and hatches hidden ones. After a slice without supports, the engine's own warning is shown, with a button that turns supports on and slices again.
+- **Plate and material** (`ui/plate-rules.js`, `ui/control.js`): the plate is chosen in Control and kept per printer. Warnings and the glue tip come from `PLATE_RULES`; pairs not listed are fine. A chip suggests the highest filament-profile bed temperature for that plate and sets the target only when clicked. Before a start, a mismatch between the sliced plate and the printer's plate is warned, and glue is a reminder that does not block Start. The engine still receives `curr_bed_type` from the slice. The ignored check `engine_writes_the_plate` stays ignored; the engine is not upgraded here (#86 is out of the 0.19 scope).
 - **Spool check**: CIEDE2000 color distance with a tolerance of 10 between the file's colors and the loaded spools.
 - **Maintenance intervals**: head contacts every 100,000 tool changes, following Snapmaker's figure. The other intervals are prudent defaults, and the app says so, since Snapmaker gives none.
 - **Bed-mesh thresholds**: 0.5 / 1 mm by default, and manual leveling is only suggested above 2 mm, since the U1's mesh compensates below that.
@@ -131,9 +133,9 @@ No cloud and no account: everything goes over the LAN to the U1's own **Moonrake
 
 ## 5. Tests and CI
 
-- **Rust**: `cargo test --lib` gives **270 passed, 0 failed, 25 ignored** (the ignored tests need a local Snapmaker Orca or the engine). Several tests run against a small fake Moonraker on `127.0.0.1`, for file listing, deletion permissions and sharing. Another test checks that the print-start request matches Snapmaker Orca's. With the printer simulator, `cargo test --lib --features sim` adds its own tests and the end-to-end ones: the printer code against simulated U1s, on a virtual clock (**302 passed** in all).
-- **Interface logic**: **27 Node test scripts** (`scripts/test-*.js`, about 3,100 lines) cover Prepare, towers and pillars, virtual heads, the spool check, Prints, the camera, Control, bed mesh, printer files and their picking, files attached to an AI message, the 3D printer model, themes and more.
-- **Translations**: `scripts/check-i18n.py` checks the 9 catalogs, with 2,269 keys each and 100 % coverage.
+- **Rust**: `cargo test --lib` gives **287 passed, 0 failed, 27 ignored** (the ignored tests need a local Snapmaker Orca or the engine). Several tests run against a small fake Moonraker on `127.0.0.1`, for file listing, deletion permissions and sharing. Another test checks that the print-start request matches Snapmaker Orca's. With the printer simulator, `cargo test --lib --features sim` adds its own tests and the end-to-end ones: the printer code against simulated U1s, on a virtual clock (**319 passed**, 27 ignored). Counted on 2026-11-07 with Rust 1.99.1 on Linux, on this tree.
+- **Interface logic**: **29 Node test scripts** (`scripts/test-*.js`, 3,340 lines) cover Prepare, towers and pillars, virtual heads, the spool check, Prints, the camera, Control, bed mesh, printer files and their picking, files attached to an AI message, the 3D printer model, themes and more.
+- **Translations**: `scripts/check-i18n.py` checks the 9 catalogs, with 2,334 keys each and 100 % coverage.
 - **CI** (GitHub Actions): `test.yml` runs both jobs, "Rust unit tests" (with and without the simulator) and "Interface logic and catalogs", on every pull request and every push to `main`. `build.yml` (started by hand) builds the release for macOS (universal), Windows x64 and Linux amd64/arm64, signs the update packages and publishes `latest.json` for the updater; it fails if a release binary carries the printer simulator or its server. `engine.yml` repackages each Snapmaker Orca version and runs a **real test slice** on every platform before publishing; if one platform fails, nothing is published. `pages.yml` deploys the website.
 
 ## 6. Documentation and languages
@@ -185,6 +187,11 @@ A welcome assistant then sets up the language, the models folder, the U1 on your
 ## 9. Development log
 
 Since 2026-10-28, the opening of the Snapmaker Innovation Fund Phase 2. Updated with each release; full details are in the [CHANGELOG](../CHANGELOG.md).
+
+**On main, not yet a version** (app still 0.18.0; What's new still current 0.18; checklist [plans/v0.19.md](plans/v0.19.md))
+- Supports hint in Prepare and after slicing ([#89](https://github.com/kameka22/snap-studio/pull/89)), plate and material warnings ([#16](https://github.com/kameka22/snap-studio/pull/16)), Explore's adaptive Back/Forward pill ([#88](https://github.com/kameka22/snap-studio/pull/88)), and one anonymous `app_started` at launch ([#90](https://github.com/kameka22/snap-studio/pull/90), [privacy.md](privacy.md)).
+- A printer simulator for development and tests only ([#87](https://github.com/kameka22/snap-studio/pull/87)), not a user-facing feature.
+- Snappy ([#95](https://github.com/kameka22/snap-studio/pull/95)) is still an open draft and is not in this tree. Draft plans [#91](https://github.com/kameka22/snap-studio/pull/91)–[#94](https://github.com/kameka22/snap-studio/pull/94) are not shipped. The engine upgrade ([#86](https://github.com/kameka22/snap-studio/pull/86)) is out of this release.
 
 **0.18.0, 2026-10-31** ([#85](https://github.com/kameka22/snap-studio/pull/85))
 - STL and 3MF models in AI conversations: attached when creating a conversation or during one (dropped, chosen or pasted), copied into the conversation's folder, with a conversation that can start from a single model ([#83](https://github.com/kameka22/snap-studio/pull/83)).

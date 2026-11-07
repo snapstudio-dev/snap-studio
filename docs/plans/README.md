@@ -4,6 +4,12 @@ One plan per project in progress. A finished plan leaves this folder: it stays
 available in the git history (links below), and what is left to do joins the
 lists below.
 
+## Release in preparation
+
+| Plan | Subject | State |
+|---|---|---|
+| [v0.19.md](v0.19.md) | 0.19.0 documentation: changelog, What's new, README, site | Draft checklist. The app version stays **0.18.0** and What's new stays on 0.18 until [#95](https://github.com/kameka22/snap-studio/pull/95) is merged. No tag and no release in that work. |
+
 ## In progress
 
 | Plan | Subject | State |
@@ -26,11 +32,11 @@ lists below.
 | [rust-review.md](rust-review.md) | Rust review of `src-tauri/`: renamed Orca presets, protocol pool panics, commands on the UI thread, error context, tests, formatting | Merged in [#82](https://github.com/kameka22/snap-studio/pull/82), in 0.18.0; *Consider* items left |
 | [prints-redesign.md](prints-redesign.md) | Prints page redesign: list and record (C, chosen from three mockup directions; the stats go to the printer page and a Statistics page in a follow-up) | Implemented in draft PR [#65](https://github.com/kameka22/snap-studio/pull/65) |
 | [ai-source-models.md](ai-source-models.md) | STL and 3MF files as source models in AI conversations (creation sheet and chat); dropped files reach the AI view; a message for files that can't be attached | Merged in [#83](https://github.com/kameka22/snap-studio/pull/83), in 0.18.0; checks in the app on the three systems left |
-| [printer-simulator.md](printer-simulator.md) | Dev builds: simulated printers (a fake Moonraker per printer on this computer) and a full simulation mode, with time acceleration and fault injection | Implemented in draft PR [#87](https://github.com/kameka22/snap-studio/pull/87) (phases 1 to 5); open questions in the PR |
-| [support-needed-hint.md](support-needed-hint.md) | Prepare: tell whether an object needs supports — a badge on the 3D view computed from the mesh, an overhang view, and the engine's warning after the slice | Implemented in draft PR [#89](https://github.com/kameka22/snap-studio/pull/89) (A and B, overhang view); checks in the app on a real slice left |
-| [library-nav-contrast.md](library-nav-contrast.md) | Explore: Back, Forward and Reload almost invisible over dark sites; adaptive pill (dark on light sites, light on dark sites), chosen | Implemented in draft PR [#88](https://github.com/kameka22/snap-studio/pull/88), with the Linux flicker fix; checks on macOS and Windows left |
-| [plate-material-compatibility.md](plate-material-compatibility.md) | Plate and material compatibility: warnings and glue tip in Prepare and at start, plus the plate set per printer in Control, a check when a spool is loaded, a suggested bed temperature and a glue reminder | Implemented in draft PR [#16](https://github.com/kameka22/snap-studio/pull/16); the rule table to review before merging |
-| [usage-analytics.md](usage-analytics.md) | Anonymous usage count with Aptabase: one `app_started` event, announced in a friendly sheet at first launch, easy to turn off in Settings | Implemented in draft PR [#90](https://github.com/kameka22/snap-studio/pull/90); the What's new entry goes in at release |
+| [printer-simulator.md](printer-simulator.md) | Dev builds: simulated printers (a fake Moonraker per printer on this computer) and a full simulation mode, with time acceleration and fault injection | Merged in [#87](https://github.com/kameka22/snap-studio/pull/87) (phases 1 to 5). Development and test builds only (Cargo feature `sim`); not a user-facing item of 0.19 |
+| [support-needed-hint.md](support-needed-hint.md) | Prepare: tell whether an object needs supports — a badge on the 3D view computed from the mesh, an overhang view, and the engine's warning after the slice | Merged in [#89](https://github.com/kameka22/snap-studio/pull/89), on main, still under Unreleased. The in-app slice check in the plan was not re-run for the 0.19 docs draft |
+| [library-nav-contrast.md](library-nav-contrast.md) | Explore: Back, Forward and Reload almost invisible over dark sites; adaptive pill (dark on light sites, light on dark sites), chosen | Merged in [#88](https://github.com/kameka22/snap-studio/pull/88), with the Linux flicker fix; checks on macOS and Windows still listed in the plan |
+| [plate-material-compatibility.md](plate-material-compatibility.md) | Plate and material compatibility: warnings and glue tip in Prepare and at start, plus the plate set per printer in Control, a check when a spool is loaded, a suggested bed temperature and a glue reminder | Merged in [#16](https://github.com/kameka22/snap-studio/pull/16). The pre-merge rule-table review has no comment on the pull request and is not asked again. Graphic Effect stays the least sure pair in the plan |
+| [usage-analytics.md](usage-analytics.md) | Anonymous usage count with Aptabase: one `app_started` event, announced in a friendly sheet at first launch, easy to turn off in Settings | Merged in [#90](https://github.com/kameka22/snap-studio/pull/90). Privacy doc, README and site footer are in place. The What's new entry is still outstanding ([v0.19.md](v0.19.md)); the plan's first-launch text is the flow before [#95](https://github.com/kameka22/snap-studio/pull/95) |
 
 The other planned features each have a draft pull request: see the
 [Roadmap](../../README.md#roadmap).
@@ -58,6 +64,21 @@ tests), whose real behavior remains to be checked.
 - **Network search**: the U1 shows in "On the network" (otherwise: the
   `[discover]` log in the `cargo tauri dev` terminal).
 - **Welcome assistant**: first launch on a fresh account.
+- **Supports hint** (#89, on main, not in a release yet): rotate a safe T
+  or bridge demo, the badge updates, turn supports on, the overhang toggle
+  (red faces and hatched hidden ones), then a slice without supports, the
+  warning, and slice again. Still listed in the plan; not run for the 0.19
+  docs draft, and not newly declared a release blocker.
+- **Plate and materials** (#16, on main, not in a release yet): the plate
+  kept per printer in Control, the material warning when a spool changes,
+  the suggested bed temperature, the start-sheet mismatch and the glue
+  reminder. Printer screens against the simulator `farm` only. Graphic
+  Effect remains the least sure pair in the plan; the pre-merge review is
+  not opened again.
+- **Explore pill** (#88): macOS and Windows still listed in the plan.
+- **Anonymous count** (#90): a production check needs a release build that
+  has the Aptabase key. Do not read or print that secret. The notice
+  preview (`SNAP_PREVIEW_NOTICES=1`) is not proof that a signal is sent.
 - **Spool check** (0.10.0): a substituted head really prints the color
   (`print_task_config.extruder_map_table`), `SET_PRINT_USED_EXTRUDERS` with
   the physical heads, and the map back to identity when the print ends; the

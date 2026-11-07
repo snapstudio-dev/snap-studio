@@ -11,6 +11,13 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+<!-- 0.19.0 is not dated and the app version stays 0.18.0. Snappy (#95) is
+     still an open draft and is intentionally absent here. Do not run
+     `scripts/changelog.py release` until #95 is merged and a release date
+     is chosen. The developer simulator (#87) is not a user-facing note.
+     Draft plans #91–#94 and the engine upgrade #86 are not part of 0.19.
+     Remaining steps: docs/plans/v0.19.md. -->
+
 ### Added
 - **Anonymous usage count**: Snap Studio sends one anonymous signal at
   start (version, system, language) to count its users, through Aptabase;

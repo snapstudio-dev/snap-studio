@@ -1,9 +1,11 @@
 # Dev: printer simulator and full simulation mode
 
-Implemented in draft PR #87 (phases 1 to 5), following kameka22's decisions
-at the end (2026-11-02); how to use it is in
-[DEVELOPMENT.md](../DEVELOPMENT.md#simulated-printers). Written against
-`main` at `26add37` (0.18.0); line numbers are those of that commit.
+Merged in [#87](https://github.com/kameka22/snap-studio/pull/87) (phases 1
+to 5), following kameka22's decisions at the end (2026-11-02); how to use
+it is in [DEVELOPMENT.md](../DEVELOPMENT.md#simulated-printers). It is
+development and test infrastructure (Cargo feature `sim`). A release binary
+does not include it, and it is not a user-facing item of 0.19. Written
+against `main` at `26add37` (0.18.0); line numbers are those of that commit.
 
 ## Why
 
