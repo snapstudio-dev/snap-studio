@@ -147,4 +147,15 @@ assert.strictEqual(A.snvMoodPose({ seed: 7, t: sway + 0.5, mood: "idle", reduced
 const g = A.snvPointerGaze({ x: 1000, y: 0 }, { left: 0, top: 0, width: 42, height: 42 });
 assert.ok(g.x > 0.99 && g.x <= 1);
 
+// The card's own words follow a language change while they show: each is
+// bound to its key (data-i18n, re-applied on langchange), never written once
+// with tr() as plain text (the empty card's description stayed French).
+const card = require("fs").readFileSync(require("path").join(__dirname, "..", "ui", "snappy-card.js"), "utf8");
+for (const key of ["snappy.empty", "snappy.approve.title", "snappy.approve.allow", "snappy.approve.refuse", "snappy.question.other", "snappy.question.skip"]) {
+  assert.ok(card.includes(`"${key}"`), key);
+  assert.ok(!new RegExp(`(textContent|placeholder)\\s*=\\s*tr\\("${key.replace(/\./g, "\\.")}"`).test(card), `${key} written once as text`);
+  assert.ok(!new RegExp(`snappyDiv\\([^)]*tr\\("${key.replace(/\./g, "\\.")}"`).test(card), `${key} written once as text`);
+}
+assert.ok(/langchange[^\n]*applyI18n\(\$\("snappy"\)\)/.test(card), "the card re-applies its words on langchange");
+
 console.log("snappy: ok");

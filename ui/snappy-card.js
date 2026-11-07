@@ -95,7 +95,7 @@ async function snappyLoad() {
   snapList.innerHTML = "";
   SNAP.tools.clear();
   for (const ev of past) for (const item of snappyItems(ev)) snappyShow(item, false);
-  if (!snapList.children.length) snapList.appendChild(snappyDiv("snappy-empty", tr("snappy.empty")));
+  if (!snapList.children.length) snapList.appendChild(snappyWords(snappyDiv("snappy-empty"), "snappy.empty"));
   snappySetBusy(await invoke("snappy_busy").catch(() => false));
   snapList.scrollTop = snapList.scrollHeight;
   // Cards and questions still waiting (a view drawn again, over a site).
@@ -113,6 +113,15 @@ function snappyDiv(cls, text) {
   d.className = cls;
   if (text !== undefined) d.textContent = text;
   return d;
+}
+
+/* The card's own words (not the conversation's): bound to their key, so a
+   language change reaches them while they show (applyI18n on langchange). */
+function snappyWords(el, key, attr = "") {
+  el.dataset["i18n" + attr] = key;
+  if (attr === "Placeholder") el.placeholder = tr(key);
+  else el.textContent = tr(key);
+  return el;
 }
 
 function snappyAdd(el) {
@@ -389,15 +398,15 @@ listen("snappy-approval", (e) => snappyApprovalCard(e.payload));
 function snappyApprovalCard({ id, text }) {
   if (SNAP.cards.has(id)) return;
   const card = snappyDiv("snappy-card");
-  card.append(snappyDiv("title", tr("snappy.approve.title")), snappyDiv("what", text));
+  card.append(snappyWords(snappyDiv("title"), "snappy.approve.title"), snappyDiv("what", text));
   const row = snappyDiv("row");
   const yes = document.createElement("button");
   yes.className = "btn small primary";
-  yes.textContent = tr("snappy.approve.allow");
+  snappyWords(yes, "snappy.approve.allow");
   yes.onclick = () => snappyAnswer(id, true);
   const no = document.createElement("button");
   no.className = "btn small";
-  no.textContent = tr("snappy.approve.refuse");
+  snappyWords(no, "snappy.approve.refuse");
   no.onclick = () => snappyAnswer(id, false);
   row.append(yes, no);
   card.appendChild(row);
@@ -449,13 +458,13 @@ function snappyQuestionCard({ id, question, options }) {
   const free = snappyDiv("row");
   const input = document.createElement("input");
   input.type = "text";
-  input.placeholder = tr("snappy.question.other");
+  snappyWords(input, "snappy.question.other", "Placeholder");
   input.addEventListener("keydown", (k) => {
     if (k.key === "Enter" && input.value.trim()) reply(input.value.trim());
   });
   const skip = document.createElement("button");
   skip.className = "btn small";
-  skip.textContent = tr("snappy.question.skip");
+  snappyWords(skip, "snappy.question.skip");
   skip.onclick = () => reply(null);
   free.append(input, skip);
   card.append(row, free);

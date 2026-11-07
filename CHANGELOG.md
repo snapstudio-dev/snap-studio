@@ -57,6 +57,9 @@ with its packages for macOS, Windows and Linux. What comes next:
   and reminds to apply glue when needed (#16).
 
 ### Fixed
+- **Snappy follows a change of language at once**: the conversation card's
+  description, and the confirmation and question cards still waiting, kept
+  the previous language until the card was reloaded (#95).
 - **Explore**: the Back, Forward and Reload buttons over a site stay
   visible on any site: the pill turns light on dark sites and dark on light
   ones, and no longer fades out. Their tooltips are translated, and the

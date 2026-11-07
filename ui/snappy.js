@@ -188,6 +188,10 @@ function snappyViewSync() {
   invoke("snappy_view_set", { rect, setup }).catch(() => {});
 }
 
+/* A new language: the view over a site takes it at once (its setup carries
+   the language, and a new setup makes the view again). */
+window.addEventListener("langchange", snappyViewSync);
+
 /* Once the card has finished moving (opening, widening). */
 function snappyViewSoon() {
   setTimeout(snappyViewSync, 240);
