@@ -8,7 +8,7 @@ lists below.
 
 | Plan | Subject | State |
 |---|---|---|
-| [v0.19.md](v0.19.md) | 0.19.0 documentation: changelog, What's new, README, site | Draft checklist. The app version stays **0.18.0** and What's new stays on 0.18 until [#95](https://github.com/kameka22/snap-studio/pull/95) is merged. No tag and no release in that work. |
+| [v0.19.md](v0.19.md) | 0.19.0 documentation: changelog, What's new, README, site | Draft checklist. [#95](https://github.com/kameka22/snap-studio/pull/95) is merged. The app version stays **0.18.0**, the changelog stays Unreleased, and What's new `current` stays 0.18. The coming 0.19 page leads with Snappy. No tag and no release in that work. |
 
 ## In progress
 
@@ -16,7 +16,7 @@ lists below.
 |---|---|---|
 | [ai-setup.md](ai-setup.md) | AI dependency checks per mode (welcome step and Settings), AI locked until a mode is ready; Settings with a side menu | Implemented; checks on the Mac left (see the plan) |
 | [ai-chat.md](ai-chat.md) | AI conversations as a real chat view (Claude Code stream-json), terminal kept as advanced view | Implemented, with the Claude sign-in window; since #25 the Terminal tab shows the chat's own session (read only). Since #95 the launch is the shared PTY engine (interactive Claude, never `-p`; see snappy.md). Container mode and macOS checks left (see the plan) |
-| [snappy.md](snappy.md) | Snappy, the in-app workshop assistant (icon and drawer, MCP tools with approval, memory), and the shared Claude PTY engine that replaces `claude -p` for Create too | Implemented in draft PR [#95](https://github.com/kameka22/snap-studio/pull/95); container mode untested (no Docker on the test Mac), open questions in the PR |
+| [snappy.md](snappy.md) | Snappy, the in-app workshop assistant (permanent icon and floating card, MCP tools with approval, memory), and the shared Claude PTY engine that replaces `claude -p` for Create too | Merged in [#95](https://github.com/kameka22/snap-studio/pull/95) (`d31cc67`). The hover icon and the drawer were superseded. Container mode untested (no Docker on the test Mac) |
 | [prime-tower-per-material.md](prime-tower-per-material.md) | One prime tower per material: pillars per group of materials that bond (concentric rings, one per head), engine tower off, list order | Implemented in draft PR [#37](https://github.com/kameka22/snap-studio/pull/37); checks on the U1 left (see the plan) |
 | [languages.md](languages.md) | German, Spanish, Brazilian Portuguese and Italian (wave 1); Japanese, Simplified Chinese and Korean next (wave 2); Weblate for review | Wave 1 implemented in draft PR [#72](https://github.com/kameka22/snap-studio/pull/72) |
 | [printer-files-multi-delete.md](printer-files-multi-delete.md) | Printer files: right-click → Delete on picked files deletes them all and keeps the other picks; Ctrl/Cmd and Shift-click picking outside Select mode | Merged in [#84](https://github.com/kameka22/snap-studio/pull/84), in 0.18.0; checks on a printer left (see the plan) |

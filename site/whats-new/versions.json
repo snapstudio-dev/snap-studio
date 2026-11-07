@@ -77,6 +77,112 @@
       ]
     },
     {
+      "version": "0.19",
+      "tagline": {
+        "en": "Snappy beside your work, a supports warning, and a glue tip for the plate.",
+        "fr": "Snappy à côté de votre travail, un avertissement de supports, et un conseil de colle pour le plateau."
+      },
+      "summary": {
+        "en": "Snappy, the supports warning, and glue on the plate. Not released yet.",
+        "fr": "Snappy, l’avertissement de supports, et la colle sur le plateau. Pas encore publié."
+      },
+      "features": [
+        {
+          "id": "snappy",
+          "icon": "sparkle",
+          "color": "#bf5af2",
+          "edge": "linear-gradient(90deg, #ff375f, #bf5af2 40%, #0a84ff 70%, #30d158)",
+          "image": "../assets/snappy.webp",
+          "frame": "1190/204",
+          "mark": {
+            "src": "../assets/snappy-avatar.webp",
+            "w": 92,
+            "h": 96,
+            "alt": {
+              "en": "Snappy’s icon at its real size, 92 by 96 pixels",
+              "fr": "L’icône de Snappy à sa taille réelle, 92 par 96 pixels"
+            }
+          },
+          "tag": { "en": "Assistant", "fr": "Assistant" },
+          "chip": {
+            "en": "Snappy", "fr": "Snappy", "de": "Snappy", "es": "Snappy", "pt-BR": "Snappy",
+            "it": "Snappy", "ja": "Snappy", "zh-Hans": "Snappy", "ko": "Snappy"
+          },
+          "title": { "en": "Snappy, beside what you are doing", "fr": "Snappy, à côté de ce que vous faites" },
+          "text": {
+            "en": "The icon stays at the end of the sidebar’s separator, above Settings, and opens a card that floats beside it. You type there. Snappy asks before it changes anything, and does not ask for a read. It needs the AI: with the AI off, its switch stays locked. The model, the memory and a new conversation are in Settings › AI. The picture is that icon and the card’s input, not a full conversation and not an approval card.",
+            "fr": "L’icône reste au bout du séparateur de la barre latérale, au-dessus de Réglages, et ouvre une carte qui flotte à côté. Vous écrivez là. Snappy demande confirmation avant de changer quoi que ce soit, et ne la demande pas pour une lecture. Il a besoin de l’IA : IA désactivée, son interrupteur reste verrouillé. Le modèle, la mémoire et une nouvelle conversation sont dans Réglages › IA. L’image montre cette icône et le champ de la carte, pas une conversation complète et pas une demande de confirmation."
+          },
+          "alt": {
+            "en": "The Snappy icon at the end of the sidebar separator, above Settings, beside the card’s input reading “Hey! What can you do?”. Not a full conversation.",
+            "fr": "L’icône Snappy au bout du séparateur de la barre latérale, au-dessus de Réglages, à côté du champ « Hey! What can you do? ». Pas une conversation complète."
+          }
+        },
+        {
+          "id": "supports-warning",
+          "icon": "prepare",
+          "color": "#ff9f0a",
+          "edge": "linear-gradient(90deg, #ff9f0a, #ffd60a)",
+          "image": "../assets/supports-warning.webp",
+          "frame": "662/216",
+          "tag": { "en": "Prepare", "fr": "Préparer" },
+          "chip": {
+            "en": "Supports warning", "fr": "Avertissement supports", "de": "Stützhinweis", "es": "Aviso de soportes", "pt-BR": "Aviso de suportes",
+            "it": "Avviso sui supporti", "ja": "サポートの警告", "zh-Hans": "支撑警告", "ko": "서포트 경고"
+          },
+          "title": { "en": "When a part probably needs supports", "fr": "Quand une pièce a probablement besoin de supports" },
+          "text": {
+            "en": "In Prepare, a badge says when an object probably needs supports, with the reason and Turn supports on. This picture is that warning only: parts start in the air. It does not show the overhang view.",
+            "fr": "Dans Préparer, un badge dit qu’un objet a probablement besoin de supports, avec la raison et Activer les supports. Cette image est seulement cet avertissement : des parties commencent dans le vide. Elle ne montre pas la vue des surplombs."
+          },
+          "alt": {
+            "en": "The supports warning: Supports probably needed, a model file whose parts start in the air, and Turn supports on. No overhang view.",
+            "fr": "L’avertissement de supports : Supports probably needed, un fichier dont des parties commencent dans le vide, et Turn supports on. Pas la vue des surplombs."
+          }
+        },
+        {
+          "id": "plate-glue",
+          "icon": "control",
+          "color": "#0a84ff",
+          "edge": "linear-gradient(90deg, #0a84ff, #64d2ff)",
+          "image": "../assets/plate-glue.webp",
+          "frame": "930/636",
+          "tag": { "en": "Plate", "fr": "Plateau" },
+          "chip": {
+            "en": "Glue on the plate", "fr": "Colle sur le plateau", "de": "Kleber auf der Platte", "es": "Pegamento en la placa", "pt-BR": "Cola na mesa",
+            "it": "Colla sul piano", "ja": "プレートののり", "zh-Hans": "热床涂胶", "ko": "플레이트 접착제"
+          },
+          "title": { "en": "Glue, when the plate needs it", "fr": "La colle, quand le plateau en a besoin" },
+          "text": {
+            "en": "Snap Studio warns when a material does not suit the plate, and shows how to apply glue when the pair needs it. Here, PETG on the Smooth PEI Plate bonds too strongly and can tear the surface. The picture is that glue tip, not the plate picker in Control.",
+            "fr": "Snap Studio vous prévient quand un matériau ne convient pas au plateau, et montre comment mettre de la colle quand la paire en a besoin. Ici, le PETG sur le plateau PEI lisse adhère trop fort et peut arracher la surface. L’image est ce conseil de colle, pas le choix du plateau dans Contrôle."
+          },
+          "alt": {
+            "en": "The glue tip: PETG on the Smooth PEI Plate, a diagram of the part, the glue and the plate, and a switch to hide the tip.",
+            "fr": "Le conseil de colle : PETG on the Smooth PEI Plate, un schéma pièce, colle et plateau, et un interrupteur pour masquer le conseil."
+          }
+        }
+      ],
+      "small": [
+        {
+          "icon": "shield", "color": "#64d2ff",
+          "title": { "en": "Anonymous usage count", "fr": "Comptage anonyme" },
+          "text": {
+            "en": "One anonymous signal at start (version, system, language), nothing else. The sheet comes after Snappy’s introduction. Turn it off there or in Settings › Application. A signal that could not be delivered is retried until you quit. Details in the privacy note.",
+            "fr": "Un signal anonyme au démarrage (version, système, langue), rien d’autre. La fenêtre vient après la présentation de Snappy. Vous pouvez le désactiver là ou dans Réglages › Application. Un signal qui n’a pas pu partir est réessayé jusqu’à ce que vous quittiez. Détails dans la note de confidentialité."
+          }
+        },
+        {
+          "icon": "check", "color": "#30d158",
+          "title": { "en": "Fixes", "fr": "Corrections" },
+          "text": {
+            "en": "Explore’s Back, Forward and Reload stay visible on a light or a dark site. Snappy’s card follows a change of language at once.",
+            "fr": "Précédent, Suivant et Recharger d’Explorer restent lisibles sur un site clair ou sombre. La carte de Snappy suit tout de suite un changement de langue."
+          }
+        }
+      ]
+    },
+    {
       "version": "0.17",
       "date": "2026-10-28",
       "tagline": {

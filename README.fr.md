@@ -120,8 +120,11 @@ Le plateau U1 comme dans Orca — puis découper.
   en rouge les faces plus inclinées que l'angle de support du profil, et
   hachure celles cachées derrière le modèle. Après une découpe sans
   supports, l'avertissement du moteur s'affiche, avec **Activer les
-  supports et redécouper**. L'image ci-dessus ne montre pas encore ce
-  badge.
+  supports et redécouper**. L'image ci-dessus est le plateau, pas cet
+  avertissement. Le cadrage ci-dessous est seulement l'avertissement : il
+  ne montre pas la vue des surplombs.
+
+<img src="docs/screenshots/supports-warning.png" width="662" height="216" alt="L'avertissement de supports : un modèle a probablement besoin de supports parce que des parties commencent dans le vide, avec Activer les supports. La vue des surplombs n'est pas montrée." style="max-width:100%;height:auto">
 
 <br clear="both">
 
@@ -173,6 +176,27 @@ Claude modifie une pièce ou en crée une à partir d'une description.
 - Les résultats sont des 3MF multicolores, prêts à découper.
 - Les conversations se recherchent, s'épinglent, se renomment, se
   dupliquent ; voir [Concevoir avec l'IA](#concevoir-avec-lia).
+
+<br clear="both">
+
+### ✦ Snappy
+
+<img src="docs/screenshots/snappy-avatar.png" width="92" height="96" alt="L'icône de Snappy, à sa taille réelle">
+<img src="docs/screenshots/snappy.png" width="1190" height="204" alt="L'icône Snappy au-dessus de Réglages, et le champ de la carte. Pas une conversation complète." style="max-width:100%;height:auto">
+
+L'assistant d'atelier. L'icône reste au bout du séparateur de la barre
+latérale, au-dessus de Réglages, et ouvre une carte qui flotte à côté.
+
+- Il a besoin de l'IA. IA désactivée, son interrupteur reste verrouillé.
+  L'assistant de bienvenue vous le propose ; si vous aviez déjà l'app, une
+  fenêtre le fait au lancement suivant, avant celle du comptage anonyme.
+- Vous écrivez dans la carte. Snappy demande confirmation avant de changer
+  quoi que ce soit, et ne la demande pas pour une lecture. Tout ce qui
+  n'est pas un oui est un non.
+- Le modèle, la mémoire (lire, modifier ou effacer) et une nouvelle
+  conversation sont dans Réglages › IA.
+- Les images sont l'icône, à sa taille réelle, et le champ de la carte.
+  Ce n'est pas une conversation complète, ni une demande de confirmation.
 
 <br clear="both">
 
@@ -370,8 +394,11 @@ d'Entretien et réglages, aussi accessible depuis la page de l'imprimante
   ne lui convient pas est signalé quand une bobine est déclarée. Une
   pastille conseille la température du plateau d'après les profils de
   filament pour ce plateau (la plus haute quand plusieurs matériaux sont
-  chargés) et ne change la consigne que si vous cliquez. L'image ci-dessus
-  ne montre pas encore le choix de plateau.
+  chargés) et ne change la consigne que si vous cliquez. L'image ci-dessus ne montre
+  pas le choix de plateau. Le cadrage ci-dessous est seulement le conseil
+  de colle.
+
+<img src="docs/screenshots/plate-glue.png" width="930" height="636" alt="Le conseil de colle : le PETG sur le plateau PEI lisse adhère trop fort. Pas le choix du plateau." style="max-width:100%;height:auto">
 - Sûr par construction : bloqué pendant une impression.
 
 <details>

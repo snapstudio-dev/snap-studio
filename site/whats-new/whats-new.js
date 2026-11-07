@@ -98,6 +98,20 @@ function shotStyle(f) {
   return css.length ? ` style="${esc(css.join(";"))}"` : "";
 }
 
+/* A real crop keeps its own proportion. frame is "width/height" in pixels. */
+function shotFrame(f) {
+  return typeof f.frame === "string" && /^\d+\/\d+$/.test(f.frame) ? f.frame : "";
+}
+
+/* A small real icon, never drawn larger than its file. Capped so a mistake
+   cannot turn it into the hero. */
+function markHtml(f) {
+  const m = f.mark;
+  const w = Number(m && m.w), h = Number(m && m.h);
+  if (!m || !m.src || !Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1 || w > 128 || h > 128) return "";
+  return `<img class="avatar-mark" src="${esc(m.src)}" alt="${esc(L(m.alt))}" width="${w}" height="${h}">`;
+}
+
 function chipsHtml(v) {
   return v.features
     .map((f) => `<a href="#${esc(f.id)}"><b style="background:${esc(f.color)}"></b>${esc(L(f.chip))}</a>`)
@@ -105,14 +119,16 @@ function chipsHtml(v) {
 }
 
 function featureHtml(f, i) {
+  const frame = shotFrame(f);
   const media =
     f.stage === "icon"
       ? `<div class="icon-stage"><div class="glow"></div><img class="big" src="../assets/icon-512.png" alt="">
           <div class="dock"><i></i><i></i><img src="../assets/icon-512.png" alt=""><i></i><i></i></div></div>`
-      : `<div class="shot"><img src="${esc(f.image)}" alt="${esc(L(f.alt))}" loading="lazy"${shotStyle(f)}></div>`;
+      : `<div class="shot${frame ? " natural" : ""}"${frame ? ` style="--frame:${frame}"` : ""}><img src="${esc(f.image)}" alt="${esc(L(f.alt))}" loading="lazy"${shotStyle(f)}></div>`;
   return `<article class="feat${i % 2 ? " flip" : ""}${f.stage === "icon" ? " icon" : ""}" id="${esc(f.id)}" style="--c:${esc(f.edge)};--c1:${esc(f.color)}">
     <div class="media">${media}</div>
     <div class="txt">
+      ${markHtml(f)}
       <div class="tagc">${icon(f.icon)}${esc(L(f.tag))}</div>
       <h3>${esc(L(f.title))}</h3>
       <p>${esc(L(f.text))}</p>
@@ -186,11 +202,19 @@ function previousHtml(list, open) {
   </section>`;
 }
 
+/* A version with no date is not released. It leads the page as coming,
+   and is not labeled as a previous version. `current` stays the released
+   page the app's card points at. */
+function upcomingHtml(v) {
+  return `<div class="wn-next">${heroHtml(v)}<section class="wn-feats">${v.features.map(featureHtml).join("")}</section>${smallHtml(v)}</div>`;
+}
+
 function render() {
   const main = document.getElementById("wn");
   const cur = data.versions.find((v) => v.version === data.current) || data.versions[0];
-  const later = data.versions.filter((v) => v !== cur && v.features && v.features.length);
-  const prev = data.versions.filter((v) => v !== cur && !later.includes(v));
+  const upcoming = data.versions.filter((v) => v !== cur && v.features && v.features.length && !v.date);
+  const later = data.versions.filter((v) => v !== cur && v.features && v.features.length && v.date);
+  const prev = data.versions.filter((v) => v !== cur && !upcoming.includes(v) && !later.includes(v));
   // Entries opened by the reader stay open across a language switch; the
   // most recent one of the timeline is open at first, full sections closed.
   const was = [...main.querySelectorAll("details.ver[open], .wn-later.open")].map((d) => d.id.slice(1));
@@ -198,6 +222,7 @@ function render() {
   const target = decodeURIComponent(location.hash.slice(1));
   if (target.startsWith("v")) open.add(target.slice(1));
   main.innerHTML =
+    upcoming.map(upcomingHtml).join("") +
     heroHtml(cur) +
     `<section class="wn-feats">${cur.features.map(featureHtml).join("")}</section>` +
     smallHtml(cur) +

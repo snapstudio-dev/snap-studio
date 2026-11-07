@@ -105,7 +105,10 @@ The U1 plate as in Orca — then slice.
   colors in red the faces that point down more than the profile's support
   angle, and hatches the ones hidden behind the model. After a slice
   without supports, the engine's own warning is shown, with **Turn supports
-  on and slice again**. The picture above does not show this badge yet.
+  on and slice again**. The picture above is the plate, not this warning.
+  The crop below is the warning only: it does not show the overhang view.
+
+<img src="docs/screenshots/supports-warning.png" width="662" height="216" alt="The supports warning: a model probably needs supports because parts start in the air, with Turn supports on. The overhang view is not shown." style="max-width:100%;height:auto">
 
 <br clear="both">
 
@@ -153,6 +156,26 @@ Claude modifies a part or creates one from a description.
 - Results are multicolor 3MF files that slice as they are.
 - Conversations can be searched, pinned, renamed, duplicated; see
   [Design with AI](#design-with-ai).
+
+<br clear="both">
+
+### ✦ Snappy
+
+<img src="docs/screenshots/snappy-avatar.png" width="92" height="96" alt="Snappy's icon at its real size">
+<img src="docs/screenshots/snappy.png" width="1190" height="204" alt="The Snappy icon above Settings, and the card's input. Not a full conversation." style="max-width:100%;height:auto">
+
+The workshop assistant. The icon stays at the end of the sidebar's
+separator, above Settings, and opens a card that floats beside the sidebar.
+
+- It needs the AI. With the AI off, its switch stays locked. The welcome
+  assistant offers it; if you already had the app, a sheet does at the next
+  launch, before the anonymous-count sheet.
+- You type in the card. Snappy asks before it changes anything, and does
+  not ask for a read. Anything other than a yes is a no.
+- The model, the memory (read, edit or clear) and a new conversation are
+  in Settings › AI.
+- The pictures are the icon, at its real size, and the card's input. They
+  are not a full conversation and not an approval card.
 
 <br clear="both">
 
@@ -336,7 +359,10 @@ also opened from the printer's page (**Control**).
   it is flagged when a spool is declared. A chip suggests the bed
   temperature from the filament profiles for that plate (the highest when
   several materials are loaded) and sets the target only when clicked.
-  The picture above does not show the plate picker yet.
+  The picture above does not show the plate picker. The crop below is the
+  glue tip only.
+
+<img src="docs/screenshots/plate-glue.png" width="930" height="636" alt="The glue tip: PETG on the Smooth PEI Plate bonds too strongly. Not the plate picker." style="max-width:100%;height:auto">
 - Safe by design: locked during a print.
 
 <details>
