@@ -68,7 +68,12 @@ for (const v of site.versions) {
     assert.ok(v.features.length >= 2 && v.features.length <= 5, `${v.version}: 2 to 5 features`);
     assert.ok(!v.highlights, `${v.version}: a full section or a timeline entry, not both`);
   } else if (v !== cur) assert.ok(v.highlights.length >= 3 && v.highlights.length <= 5, `${v.version}: 3 to 5 highlights`);
-  for (const img of [v.image, ...(v.features || []).map((f) => f.image)].filter(Boolean))
+  for (const f of v.features || []) {
+    if (!f.mark) continue;
+    assert.ok(f.mark.alt && f.mark.alt.en && f.mark.alt.fr, `${v.version} ${f.id}: mark alt in en and fr`);
+    assert.ok(Number.isInteger(f.mark.w) && f.mark.w >= 1 && f.mark.w <= 128 && Number.isInteger(f.mark.h) && f.mark.h >= 1 && f.mark.h <= 128, `${v.version} ${f.id}: mark stays within its real size`);
+  }
+  for (const img of [v.image, ...(v.features || []).flatMap((f) => [f.image, f.mark && f.mark.src])].filter(Boolean))
     assert.ok(fs.existsSync(path.join(root, "site", "whats-new", img)), `${v.version}: ${img} exists`);
 }
 

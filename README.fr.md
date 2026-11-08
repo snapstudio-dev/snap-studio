@@ -12,7 +12,7 @@
 ![macOS · Windows · Linux](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-lightgrey)
 
 [**Télécharger**](https://github.com/kameka22/snap-studio/releases/latest) ·
-[Fonctions](#fonctions) · [IA](#concevoir-avec-lia) · [FAQ](#faq) ·
+[Fonctions](#fonctions) · [IA](#concevoir-avec-lia) · [Confidentialité](#confidentialité) · [FAQ](#faq) ·
 [Changelog](CHANGELOG.md) · [Feuille de route](#feuille-de-route) · [Contribuer](CONTRIBUTING.fr.md)
 
 [English](README.md) · **Français**
@@ -66,7 +66,8 @@ l'app.
   onglet, sessions conservées. Explorer n'affiche que les pages des sites
   eux-mêmes : rien n'en est lu.
 - Pas de barre d'adresse : Précédent, Suivant et Recharger flottent sur
-  la page.
+  la page. La pastille reste lisible sur un site clair ou sombre (claire
+  sur fond sombre, sombre sur fond clair) et ne s'estompe plus.
 - Épinglez n'importe quel site dans la barre latérale, sous Snapmaker
   Space ; les favoris y sont aussi.
 - Un modèle téléchargé depuis un onglet va droit dans
@@ -111,6 +112,17 @@ Le plateau U1 comme dans Orca — puis découper.
 - [Une tour par matériau](#-une-tour-par-matériau) quand les matériaux
   n'adhèrent pas entre eux, et les [têtes virtuelles](#-mélange-de-couleurs)
   dans les choix de tête.
+- **Supports** : supports désactivés, un badge en bas à gauche de la vue
+  3D indique qu'un objet a probablement besoin de supports (des parties
+  commencent dans le vide, un long porte-à-faux, de grands surplombs),
+  estimé d'après la forme telle qu'elle est posée. **Activer les supports**
+  les prépare pour la prochaine découpe. **Afficher les surplombs** colore
+  en rouge les faces plus inclinées que l'angle de support du profil, et
+  hachure celles cachées derrière le modèle. Après une découpe sans
+  supports, l'avertissement du moteur s'affiche, avec **Activer les
+  supports et redécouper**.
+
+<img src="docs/screenshots/supports-warning.png" width="460" alt="L'avertissement de supports : des parties commencent dans le vide, avec Activer les supports">
 
 <br clear="both">
 
@@ -165,6 +177,44 @@ Claude modifie une pièce ou en crée une à partir d'une description.
 
 <br clear="both">
 
+### ✦ Snappy
+
+<img align="right" width="40%" hspace="12" src="docs/screenshots/snappy.png" alt="La carte de Snappy à côté de la barre latérale, qui explique ce qu'il sait faire" />
+
+L'assistant d'atelier, intégré à l'app. Son icône est au bout du séparateur
+de la barre latérale, au-dessus de Réglages, et s'anime quand il travaille ;
+elle ouvre une carte qui flotte à côté. Posez une question, ou demandez-lui
+de le faire :
+
+- **Imprimantes** : état, températures et bobines ; origine, déplacements,
+  chauffe, chargement ou déchargement, ventilateurs et lumière ; mettre en
+  pause, reprendre ou annuler une impression ; maillages du plateau et
+  entretien.
+- **Préparer et découper** : ajouter des fichiers au plateau, disposer,
+  orienter, mettre à l'échelle, changer les réglages, découper, puis
+  envoyer à une imprimante ou à sa file.
+- **File, historique et fichiers** : réordonner ou lancer la file, relancer
+  une ancienne impression, trouver, trier et gérer les fichiers de votre
+  ordinateur et de vos imprimantes.
+- **Créer et Explorer** : lancer ou poursuivre une conception IA, ouvrir un
+  site.
+- **Il voit** : la caméra d'une imprimante (après votre accord), le plateau
+  tel que la vue 3D le montre, et les images jointes à un message.
+- **Il demande** : tout ce qui change quelque chose attend votre
+  **Autoriser** ; tout le reste est un non. Quand il lui faut un choix, il
+  pose la question avec quelques réponses. **Échap** l'arrête.
+- **Il se souvient** de ce qui mérite d'être gardé d'une conversation à
+  l'autre, dans une mémoire que vous pouvez lire, modifier ou effacer dans
+  Réglages › IA, avec le modèle, le remplissage de la conversation et
+  **Nouvelle conversation**.
+
+Snappy a besoin de l'IA (Claude Code). Il est proposé au premier lancement,
+et une fois à ceux qui avaient déjà l'app. Son contexte ne contient jamais
+de numéro de série d'imprimante, d'adresse IP, de nom d'hôte ni de chemin
+de fichier.
+
+<br clear="both">
+
 ### ✂️ Découpe
 
 <img align="right" width="40%" hspace="12" src="docs/screenshots/slicing.png" alt="La fenêtre de découpe, en Essentiel" />
@@ -216,7 +266,11 @@ réglages avancés sont modifiés, avec un lien pour les afficher :
   avec Préparer, où elle se place sur le plateau ; la tête de son mur
   extérieur), la prévention des coulures ; un avertissement quand la tour mélangerait des
   matières qui n'adhèrent pas entre elles, avec des
-  corrections en un clic, dont une tour par matériau.
+  corrections en un clic, dont une tour par matériau ;
+- un avertissement quand un matériau ne convient pas au plateau réglé sur
+  l'imprimante (il n'adhère pas, il demande un plateau plus chaud, ou il
+  adhère si fort qu'il peut arracher la surface), et un conseil de colle
+  quand la paire en a besoin. Chacun se masque dans Réglages › Préparer.
 
 Puis un aperçu des trajectoires avec durée, filament et coût, envoyé à
 l'imprimante — avec son image sur l'écran de l'imprimante — ou enregistré en
@@ -350,7 +404,16 @@ d'Entretien et réglages, aussi accessible depuis la page de l'imprimante
   décharger, extruder.
 - Plateau, ventilateurs, lumière, une petite vue caméra ; l'arrêt d'urgence
   toujours à portée.
+- **Plateau** : le plateau de cette imprimante (PEI texturé, PEI lisse, et
+  les autres que la machine propose), ou **Non défini**. Un matériau qui
+  ne lui convient pas est signalé quand une bobine est déclarée. Une
+  pastille conseille la température du plateau d'après les profils de
+  filament pour ce plateau (la plus haute quand plusieurs matériaux sont
+  chargés) et ne change la consigne que si vous cliquez. Quand un matériau
+  a besoin de colle sur ce plateau, un conseil montre comment l'appliquer.
 - Sûr par construction : bloqué pendant une impression.
+
+<img src="docs/screenshots/plate-glue.png" width="520" alt="Le conseil de colle : le PETG sur le plateau PEI lisse adhère trop fort, mettez de la colle">
 
 <details>
 <summary>Plus de détails</summary>
@@ -361,7 +424,14 @@ d'Entretien et réglages, aussi accessible depuis la page de l'imprimante
 - Une carte par tête, à la couleur de sa bobine : la température en jauge,
   la consigne au curseur, activer, charger, décharger, extruder, rétracter.
 - La température du plateau ; le ventilateur de pièce, celui de la chambre,
-  le purificateur et la lumière ; une petite vue caméra.
+  le purificateur et la lumière ; une petite vue caméra. Le plateau de
+  cette imprimante se choisit ici et reste attaché à cette imprimante.
+- Avant le démarrage d'une impression, si le plateau de l'imprimante n'est
+  pas celui pour lequel le fichier a été découpé, une fenêtre le dit : la
+  température du plateau et la première couche ont été réglées pour l'autre
+  plateau. Quand la colle est conseillée, **Colle appliquée** est un
+  rappel et ne bloque jamais Démarrer. Chacun de ces avis, et
+  l'avertissement de matériau, se masque dans Réglages › Préparer.
 - Tout couper (chauffe), couper les moteurs, redémarrer le firmware, et
   l'arrêt d'urgence, toujours à portée.
 - Sûr par construction : bloqué pendant une impression (seuls l'arrêt
@@ -584,6 +654,42 @@ ferait un terminal.
 **Supprimer** efface le dossier de la conversation et les fichiers de Claude
 pour cette session — jamais vos 3MF enregistrés, jamais une autre session.
 
+## Confidentialité
+
+Snap Studio envoie **un signal anonyme à chaque démarrage**, pour estimer
+combien de personnes l'utilisent, par version, système et langue. Le signal
+part vers [Aptabase](https://aptabase.com), hébergé dans l'Union européenne.
+L'événement s'appelle `app_started`, une fois par lancement. Snap Studio
+n'y joint aucune donnée à lui : le comptage sert à la version, au système
+et à la langue. Le module ajoute aussi l'heure, un numéro de session créé
+pour ce lancement et gardé en mémoire seulement (un nouveau à chaque
+lancement), et la vue web du système. La liste des champs est dans
+[docs/privacy.md](docs/privacy.md) (en anglais).
+
+Vos fichiers, vos modèles et leurs noms, vos imprimantes (adresse, numéro
+de série ou tout autre identifiant d'imprimante), vos conversations et vos
+textes, votre compte ou votre adresse e-mail, et tout identifiant conservé
+d'un lancement à l'autre n'en font pas partie.
+
+Sur les versions officielles publiées sur GitHub et construites avec ce
+comptage configuré, il est **activé par défaut**. Une étape au premier
+lancement vous l'explique, avec un interrupteur pour le désactiver. Si
+vous aviez déjà l'app, cette étape est une fenêtre, après la présentation
+de Snappy quand celle-ci est nouvelle aussi. Rien n'est envoyé avant que
+vous la fermiez. Vous pouvez aussi le désactiver plus tard dans
+**Réglages › Application › Comptage anonyme d'utilisation** : plus rien de
+nouveau n'est envoyé à partir de là.
+
+Une version de développement, une version que vous compilez, ou un fork
+n'a pas de clé pour ce service. Le comptage n'est pas chargé, la fenêtre
+ne s'ouvre pas, et Réglages indique « Non disponible dans cette version ».
+
+Si le signal de ce lancement n'a pas pu partir (pas de réseau, ou une
+erreur d'Aptabase), le module le garde et réessaie jusqu'à ce que vous
+quittiez, même si vous désactivez le comptage entre-temps. Ce nouvel essai
+ne concerne que le signal mis en file pendant que le comptage était activé.
+Les lancements suivants n'envoient rien.
+
 ## FAQ
 
 **Qu'est-ce qui a changé dans les dernières versions ?** Voir le
@@ -600,14 +706,17 @@ profils et les têtes sont ceux de la U1.
 **Qu'est-ce qui sort de mon ordinateur ?** Snap Studio échange avec GitHub
 (vérifier les mises à jour, télécharger le moteur), vos imprimantes sur le
 réseau local, les sites ouverts dans Explorer et, si vous utilisez l'IA,
-Anthropic par Claude Code. Il envoie aussi un signal anonyme au démarrage
-(voir Vie privée ci-dessous).
+Anthropic par Claude Code. Les messages de Snappy y vont aussi, avec ce que
+ses outils lisent dans l'app ; les numéros de série, adresses IP, noms
+d'hôte et chemins de fichiers en sont retirés avant, et une photo de la
+caméra ne part qu'avec votre accord. Il envoie aussi un signal anonyme au démarrage :
+voir [Confidentialité](#confidentialité).
 
-**Vie privée.** Snap Studio envoie un signal anonyme au démarrage (version,
-système, langue) pour compter ses utilisateurs. Rien d'autre : ni fichiers,
-ni modèles, ni imprimantes, ni conversations, ni identifiant. Une fenêtre le
-dit au premier lancement, avec un interrupteur pour le désactiver ; il est
-aussi dans Réglages › Application. Détails :
+**Vie privée.** Un signal anonyme à chaque démarrage, pour compter les
+utilisateurs. Activé par défaut dans les versions officielles, expliqué au
+premier lancement, et désactivable dans
+**Réglages › Application › Comptage anonyme d'utilisation**.
+Voir [Confidentialité](#confidentialité) et
 [docs/privacy.md](docs/privacy.md) (en anglais).
 
 **Pourquoi macOS m'avertit-il au premier lancement ?** L'app n'est pas
@@ -650,7 +759,6 @@ chacun avec sa pull request (brouillons, validés ou en discussion) :
 |---|---|
 | **Plusieurs plateaux dans Préparer** — onglets de plateaux, agencement automatique sur plusieurs plateaux, tout découper et l'envoyer dans la file ; les 3MF multi-plateaux gardés tels quels | [#18](https://github.com/kameka22/snap-studio/pull/18) |
 | **Impression objet par objet** — un objet après l'autre, avec contrôle de collision pour la tête de la U1 et un ordre réglable | [#22](https://github.com/kameka22/snap-studio/pull/22) |
-| **Alertes plateau et matière** — un plateau et un filament incompatibles signalés avant d'imprimer, et un conseil quand la colle est recommandée | [#16](https://github.com/kameka22/snap-studio/pull/16) |
 | **Assistants de calibration** — PID des buses et du plateau, et input shaper, décalages entre têtes et mesure du débit guidés, dans Entretien et réglages | [#38](https://github.com/kameka22/snap-studio/pull/38) |
 | **Filaments** — l'inventaire de vos bobines (poids déduit après chaque impression, alerte de stock bas) et les bonnes affaires | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Bibliothèque de filaments** — la gestion complète des filaments : marques, types et couleurs, profils personnalisés et par bobine, liés aux bobines de la U1 (RFID) et utilisés dans Préparer ; périmètre à définir | [#79](https://github.com/kameka22/snap-studio/pull/79) |

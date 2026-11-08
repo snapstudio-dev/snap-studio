@@ -98,6 +98,20 @@ function shotStyle(f) {
   return css.length ? ` style="${esc(css.join(";"))}"` : "";
 }
 
+/* A real crop keeps its own proportion. frame is "width/height" in pixels. */
+function shotFrame(f) {
+  return typeof f.frame === "string" && /^\d+\/\d+$/.test(f.frame) ? f.frame : "";
+}
+
+/* A small real icon, never drawn larger than its file. Capped so a mistake
+   cannot turn it into the hero. */
+function markHtml(f) {
+  const m = f.mark;
+  const w = Number(m && m.w), h = Number(m && m.h);
+  if (!m || !m.src || !Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1 || w > 128 || h > 128) return "";
+  return `<img class="avatar-mark" src="${esc(m.src)}" alt="${esc(L(m.alt))}" width="${w}" height="${h}">`;
+}
+
 function chipsHtml(v) {
   return v.features
     .map((f) => `<a href="#${esc(f.id)}"><b style="background:${esc(f.color)}"></b>${esc(L(f.chip))}</a>`)
@@ -105,14 +119,21 @@ function chipsHtml(v) {
 }
 
 function featureHtml(f, i) {
+  const frame = shotFrame(f);
+  const [fw, fh] = frame ? frame.split("/").map(Number) : [0, 0];
+  const tall = fw > 0 && fh > fw;
+  const img = `<img src="${esc(f.image)}" alt="${esc(L(f.alt))}"${fw ? ` width="${fw}" height="${fh}"` : ""} loading="lazy"${shotStyle(f)}>`;
+  const shotInner = tall ? `<a class="shot-open" href="${esc(f.image)}">${img}</a>` : img;
+  const fullLink = tall ? `<a class="shot-full" href="${esc(f.image)}">${esc(t("wn.full"))}</a>` : "";
   const media =
     f.stage === "icon"
       ? `<div class="icon-stage"><div class="glow"></div><img class="big" src="../assets/icon-512.png" alt="">
           <div class="dock"><i></i><i></i><img src="../assets/icon-512.png" alt=""><i></i><i></i></div></div>`
-      : `<div class="shot"><img src="${esc(f.image)}" alt="${esc(L(f.alt))}" loading="lazy"${shotStyle(f)}></div>`;
-  return `<article class="feat${i % 2 ? " flip" : ""}${f.stage === "icon" ? " icon" : ""}" id="${esc(f.id)}" style="--c:${esc(f.edge)};--c1:${esc(f.color)}">
+      : `<div class="shot${frame ? " natural" : ""}${tall ? " tall" : ""}"${frame ? ` style="--frame:${frame}"` : ""}>${shotInner}</div>${fullLink}`;
+  return `<article class="feat${i % 2 ? " flip" : ""}${f.stage === "icon" ? " icon" : ""}${tall ? " tall" : ""}" id="${esc(f.id)}" style="--c:${esc(f.edge)};--c1:${esc(f.color)}">
     <div class="media">${media}</div>
     <div class="txt">
+      ${markHtml(f)}
       <div class="tagc">${icon(f.icon)}${esc(L(f.tag))}</div>
       <h3>${esc(L(f.title))}</h3>
       <p>${esc(L(f.text))}</p>

@@ -63,6 +63,11 @@ then `python3 scripts/whats-new.py`, which copies the highlights' names to
 `ui/whats-new.json` for the sidebar card. The page is published with the
 site; a patch version has no entry of its own.
 
+`scripts/release.sh` and `scripts/engine.sh` have no dry run: each pushes
+and starts its workflow. `pages.yml` publishes the site, What's new
+included, on every push to `main`: merge a version's What's new just before
+its release, not days ahead.
+
 ## Changing the engine version
 
 `scripts/engine.sh 2.5.0` starts the

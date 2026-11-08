@@ -1,41 +1,41 @@
 {
-  "version": "0.18",
+  "version": "0.19",
   "highlights": [
     {
-      "id": "ai-source-models",
-      "en": "STL and 3MF in AI",
-      "fr": "STL et 3MF dans l’IA",
-      "de": "STL und 3MF in der KI",
-      "es": "STL y 3MF en la IA",
-      "pt-BR": "STL e 3MF na IA",
-      "it": "STL e 3MF nell’IA",
-      "ja": "AIでSTL・3MF",
-      "zh-Hans": "AI 支持 STL 和 3MF",
-      "ko": "AI에서 STL·3MF"
+      "id": "snappy",
+      "en": "Snappy",
+      "fr": "Snappy",
+      "de": "Snappy",
+      "es": "Snappy",
+      "pt-BR": "Snappy",
+      "it": "Snappy",
+      "ja": "Snappy",
+      "zh-Hans": "Snappy",
+      "ko": "Snappy"
     },
     {
-      "id": "integrated-title-bar",
-      "en": "Integrated title bar",
-      "fr": "Barre de titre intégrée",
-      "de": "Integrierte Titelleiste",
-      "es": "Barra de título integrada",
-      "pt-BR": "Barra de título integrada",
-      "it": "Barra del titolo integrata",
-      "ja": "統合タイトルバー",
-      "zh-Hans": "集成标题栏",
-      "ko": "통합 제목 표시줄"
+      "id": "supports-warning",
+      "en": "Supports warning",
+      "fr": "Avertissement supports",
+      "de": "Stützhinweis",
+      "es": "Aviso de soportes",
+      "pt-BR": "Aviso de suportes",
+      "it": "Avviso sui supporti",
+      "ja": "サポートの警告",
+      "zh-Hans": "支撑警告",
+      "ko": "서포트 경고"
     },
     {
-      "id": "printer-multi-pick",
-      "en": "Pick several files",
-      "fr": "Plusieurs fichiers",
-      "de": "Mehrere Dateien",
-      "es": "Varios archivos",
-      "pt-BR": "Vários arquivos",
-      "it": "Più file",
-      "ja": "複数ファイルを選択",
-      "zh-Hans": "多选文件",
-      "ko": "여러 파일 선택"
+      "id": "plate-glue",
+      "en": "Glue on the plate",
+      "fr": "Colle sur le plateau",
+      "de": "Kleber auf der Platte",
+      "es": "Pegamento en la placa",
+      "pt-BR": "Cola na mesa",
+      "it": "Colla sul piano",
+      "ja": "プレートののり",
+      "zh-Hans": "热床涂胶",
+      "ko": "플레이트 접착제"
     }
   ]
 }

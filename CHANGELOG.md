@@ -11,6 +11,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-11-08
+
 ### Added
 - **Snappy, the workshop assistant**: its icon is always there, at the end
   of the sidebar's separator, above Settings; it opens a conversation card
@@ -752,7 +754,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 - First public version: a 3MF browser with thumbnails, Prepare, built-in
   slicing, packages for macOS, Windows and Linux, automatic updates.
 
-[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/kameka22/snap-studio/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/kameka22/snap-studio/compare/v0.17.1...v0.18.0
 [0.17.1]: https://github.com/kameka22/snap-studio/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/kameka22/snap-studio/compare/v0.16.0...v0.17.0

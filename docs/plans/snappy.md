@@ -1,6 +1,6 @@
 # Snappy — in-app workshop assistant
 
-Status: UX and technical approach decided (2026-11-05). Implemented in draft PR #95 (see [Implementation notes](#implementation-notes)).
+Status: merged in [#95](https://github.com/kameka22/snap-studio/pull/95) (`d31cc6712a7265d882b4173ee451cce7e9b4a415`). The placement below is the permanent icon and the floating card. The hover icon and the drawer were superseded on 2026-11-05; their mockups are history, not screenshots. See [Implementation notes](#implementation-notes).
 
 ## What it is
 

@@ -12,7 +12,7 @@
 ![macOS · Windows · Linux](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-lightgrey)
 
 [**Download**](https://github.com/kameka22/snap-studio/releases/latest) ·
-[Features](#features) · [AI](#design-with-ai) · [FAQ](#faq) ·
+[Features](#features) · [AI](#design-with-ai) · [Privacy](#privacy) · [FAQ](#faq) ·
 [Changelog](CHANGELOG.md) · [Roadmap](#roadmap) · [Contributing](CONTRIBUTING.md)
 
 **English** · [Français](README.fr.md)
@@ -58,7 +58,9 @@ The Snapmaker ecosystem and the model sites you use, inside the app.
   model libraries: MakerWorld, Printables, Thingiverse, Cults3D,
   MyMiniFactory, Thangs, Yeggi and GrabCAD. Each opens in a tab, sessions
   kept. Explore only shows the sites' own pages: nothing is read from them.
-- No address bar: Back, Forward and Reload float over the page.
+- No address bar: Back, Forward and Reload float over the page. The pill
+  stays readable on a light or a dark site (light on dark, dark on light)
+  and no longer fades out.
 - Pin any site to the sidebar, under Snapmaker Space; Favorites there too.
 - A model downloaded from any tab goes straight to [Prepare](#-prepare);
   other files land in [Files](#-files).
@@ -96,6 +98,16 @@ The U1 plate as in Orca — then slice.
   on a part or off the plate is flagged, with a fix.
 - [One tower per material](#-one-tower-per-material) when the materials do
   not bond, and [virtual heads](#-color-mixing) in the head pickers.
+- **Supports**: with supports off, a badge at the bottom left of the 3D
+  view says when an object probably needs them (parts starting in the air,
+  a long overhang, large overhangs), estimated from the shape as placed.
+  **Turn supports on** sets them for the next slice. **Show Overhangs**
+  colors in red the faces that point down more than the profile's support
+  angle, and hatches the ones hidden behind the model. After a slice
+  without supports, the engine's own warning is shown, with **Turn supports
+  on and slice again**.
+
+<img src="docs/screenshots/supports-warning.png" width="460" alt="The supports warning: parts start in the air, with Turn supports on">
 
 <br clear="both">
 
@@ -146,6 +158,38 @@ Claude modifies a part or creates one from a description.
 
 <br clear="both">
 
+### ✦ Snappy
+
+<img align="right" width="40%" hspace="12" src="docs/screenshots/snappy.png" alt="Snappy's card beside the sidebar, answering what it can do" />
+
+The workshop assistant, built into the app. Its icon sits at the end of the
+sidebar's separator, above Settings, and comes alive while it works; it
+opens a card that floats beside the sidebar. Ask a question, or ask it to
+do the job:
+
+- **Printers**: status, temperatures and spools; home, jog, heat, load or
+  unload, fans and light; pause, resume or cancel a print; bed meshes and
+  maintenance.
+- **Prepare and slicing**: add files to the plate, arrange, orient, scale,
+  change the slice settings, slice, then send to a printer or its queue.
+- **Queue, history and files**: reorder or start queued prints, requeue a
+  past one, find, sort and manage files on your computer and your printers.
+- **Create and Explore**: start or continue an AI design, open a site.
+- **It sees**: a printer's camera (after you allow it), the plate as the
+  3D view shows it, and the images you attach to a message.
+- **It asks**: anything that changes something waits for your **Allow**;
+  anything else is a no. When it needs a choice, it asks with a few
+  answers to pick from. **Esc** stops it.
+- **It remembers** what is worth keeping from one conversation to the
+  next, in a memory you can read, edit or clear in Settings › AI, where the
+  model, how full the conversation is and **New conversation** are too.
+
+Snappy needs the AI (Claude Code). It is offered at first launch, and once
+to those who already had the app. Its context never carries a printer
+serial number, an IP address, a hostname or a file path.
+
+<br clear="both">
+
 ### ✂️ Slicing
 
 <img align="right" width="40%" hspace="12" src="docs/screenshots/slicing.png" alt="The slice sheet, in Basic" />
@@ -191,7 +235,11 @@ ones are changed, with a link to show them.
   Prepare, where it is placed on the plate; its outer wall's head), ooze
   prevention; a warning when the tower would mix materials that do not
   bond with each other, with one-click fixes, one tower per
-  material among them.
+  material among them;
+- a warning when a material does not suit the plate set on the printer
+  (it does not stick, it needs a hotter bed than the plate takes, or it
+  bonds so strongly it can tear the surface), and a glue tip when the pair
+  needs one. Each can be hidden in Settings › Prepare.
 
 Then a toolpath preview with duration, filament and cost, sent to the
 printer — with its picture on the printer's screen — or saved as G-code.
@@ -317,7 +365,15 @@ also opened from the printer's page (**Control**).
 - Home and jog X, Y and Z (0.1 to 50 mm), the position live.
 - One card per head, in its spool's colour: temperature, load, unload, extrude.
 - Bed, fans, light, a small camera view; the emergency stop always in reach.
+- **Plate**: the plate on this printer (textured PEI, smooth PEI, and the
+  others the machine offers), or **Not set**. A material that does not suit
+  it is flagged when a spool is declared. A chip suggests the bed
+  temperature from the filament profiles for that plate (the highest when
+  several materials are loaded) and sets the target only when clicked.
+  When a material needs glue on that plate, a tip shows how to apply it.
 - Safe by design: locked during a print.
+
+<img src="docs/screenshots/plate-glue.png" width="520" alt="The glue tip: PETG on the Smooth PEI Plate bonds too strongly, apply glue">
 
 <details>
 <summary>More details</summary>
@@ -327,7 +383,13 @@ also opened from the printer's page (**Control**).
 - One card per head, in its spool's colour: temperature as a gauge, its
   target on a slider, activate, load, unload, extrude, retract.
 - The bed's temperature; the part fan, the chamber fan, the purifier and
-  the chamber light; a small camera view.
+  the chamber light; a small camera view. The plate on this printer is
+  chosen here and kept for that printer.
+- Before a print starts, if the printer's plate is not the one the file was
+  sliced for, a sheet says so: the bed temperature and the first layer were
+  set for the other plate. When glue is advised, **Glue applied** is a
+  reminder and never blocks Start. Each of these, and the material warning,
+  can be hidden in Settings › Prepare.
 - Turn all heaters off, turn the motors off, restart the firmware, and the
   emergency stop, always in reach.
 - Safe by design: locked during a print (only the emergency stop, the light
@@ -532,6 +594,39 @@ rename, duplicate (same files, a fresh Claude session). **Delete** removes the
 conversation's folder and Claude's own files for that session — never your
 saved 3MF files, never another session.
 
+## Privacy
+
+Snap Studio sends **one anonymous signal each time it starts**, to estimate
+how many people use it, by version, system and language. The signal goes to
+[Aptabase](https://aptabase.com), hosted in the European Union. The event is
+`app_started`, once per launch. Snap Studio attaches no data of its own:
+what the count is for is the version, the system and the language. The
+plugin also includes the time, a session number made for that launch and
+kept in memory only (a new one each launch), and the system web view. The
+field list is in [docs/privacy.md](docs/privacy.md).
+
+Your files, models and their names, your printers (address, serial number
+or any other printer identifier), your conversations and prompts, your
+account or email, and any identifier kept from one launch to the next are
+not part of it.
+
+On the official releases published on GitHub and built with this count
+configured, it is **on by default**. A step at first launch explains it,
+with a switch to turn it off. If you already had the app, that step is a
+sheet, after Snappy's introduction when that introduction is new too.
+Nothing is sent before you close it. You can also turn it off later in
+**Settings › Application › Anonymous usage count**: nothing new is sent
+from then on.
+
+A development build, a build of your own, or a fork has no key for this
+service. The count is not loaded, the notice does not open, and Settings
+says "Not available in this build".
+
+If the signal of this launch could not be delivered (no network, or an
+error from Aptabase), the plugin keeps it and tries again until you quit,
+even if you turn the count off in the meantime. That retry is only a signal
+queued while the count was on. Later launches send nothing.
+
 ## FAQ
 
 **What changed in the last versions?** See the [changelog](CHANGELOG.md).
@@ -546,14 +641,16 @@ U1's.
 **What leaves my computer?** Snap Studio talks to GitHub (to check for
 updates and download the engine), to your printers on the local network, to
 the sites you open in Explore, and — if you use the AI — to Anthropic
-through Claude Code. It also sends one anonymous signal at start (see
-Privacy below).
+through Claude Code. Snappy's messages go there too, with what its tools
+read in the app; printer serial numbers, IP addresses, hostnames and file
+paths are filtered out first, and a camera picture leaves only after you
+allow it. It also sends one anonymous signal at start: see
+[Privacy](#privacy).
 
-**Privacy.** Snap Studio sends one anonymous signal at start (version,
-system, language) to count its users. Nothing else: no files, models,
-printers, conversations or identifier. A sheet says so at first launch,
-with a switch to turn it off; it is also in Settings › Application.
-Details: [docs/privacy.md](docs/privacy.md).
+**Privacy.** One anonymous signal at each start, to count users. On by
+default in the official releases, explained at first launch, and turned
+off in **Settings › Application › Anonymous usage count**.
+See [Privacy](#privacy) and [docs/privacy.md](docs/privacy.md).
 
 **Why does macOS warn me at the first launch?** The app is not signed with
 an Apple developer certificate yet; the commands above open it anyway.
@@ -593,7 +690,6 @@ with its pull request (drafts, approved or under discussion):
 |---|---|
 | **Several plates in Prepare** — plate tabs, auto-arrange across plates, slice them all and queue them; multi-plate 3MF files kept as such | [#18](https://github.com/kameka22/snap-studio/pull/18) |
 | **Print by object** — one object after the other, with collision checks for the U1's head and an adjustable order | [#22](https://github.com/kameka22/snap-studio/pull/22) |
-| **Plate and material warnings** — an incompatible plate and filament flagged before printing, and a tip when glue is advised | [#16](https://github.com/kameka22/snap-studio/pull/16) |
 | **Calibration assistants** — PID of nozzles and bed, and guided input shaper, offsets between heads and flow measurement, in Care & Tuning | [#38](https://github.com/kameka22/snap-studio/pull/38) |
 | **Filaments** — your spool inventory (weight deducted after each print, low-stock alert) and filament deals | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Filament library** — complete filament management: brands, types and colors, custom and per-spool profiles, linked to the U1's spools (RFID) and used in Prepare; scope to define | [#79](https://github.com/kameka22/snap-studio/pull/79) |

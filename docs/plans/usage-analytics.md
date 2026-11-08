@@ -1,6 +1,13 @@
 # Anonymous usage count (Aptabase)
 
-Implemented in draft PR #90 (see [Implementation](#implementation)).
+Merged in [#90](https://github.com/kameka22/snap-studio/pull/90)
+(2026-11-04). [docs/privacy.md](../privacy.md), the README privacy FAQ and
+the site footer are in place (see [Implementation](#implementation)). The
+What's new entry is a small line on the 0.19 page
+([v0.19.md](v0.19.md)).
+[#95](https://github.com/kameka22/snap-studio/pull/95) is merged: the
+introduction order on main is Snappy, then this count. The first-launch
+section below is the earlier proposal and is kept as history.
 
 Goal: know roughly how many people use Snap Studio (daily and monthly active
 users, by version, system and language), nothing more. Snap Studio is open
@@ -209,8 +216,9 @@ submission) is enough.
   `docs/privacy.md`).
 - **Release workflow** (`.github/workflows/build.yml`): the secret
   `APTABASE_APP_KEY` given to the Build step only.
-- **What's new**: not in `versions.json` yet, which the site publishes from
-  `main`; to add with the release, as a small entry:
+- **What's new**: a small entry on the 0.19 page in
+  `versions.json`. The entry says the sheet comes after Snappy's introduction. The
+  earlier wording, kept here:
   - en: "**Anonymous usage count** — Snap Studio now sends one anonymous
     signal at start (version, system, language) to count its users,
     nothing else. A sheet tells you at first launch; you can turn it off

@@ -1,6 +1,160 @@
 {
-  "current": "0.18",
+  "current": "0.19",
   "versions": [
+    {
+      "version": "0.19",
+      "tagline": {
+        "en": "Snappy beside your work, a supports warning, and a glue tip for the plate.",
+        "fr": "Snappy à côté de votre travail, un avertissement de supports, et un conseil de colle pour le plateau."
+      },
+      "summary": {
+        "en": "Snappy, the supports warning, and glue on the plate",
+        "fr": "Snappy, l’avertissement de supports, et la colle sur le plateau"
+      },
+      "features": [
+        {
+          "id": "snappy",
+          "icon": "sparkle",
+          "color": "#bf5af2",
+          "edge": "linear-gradient(90deg, #ff375f, #bf5af2 40%, #0a84ff 70%, #30d158)",
+          "image": "../assets/snappy.webp",
+          "frame": "1230/1788",
+          "mark": {
+            "src": "../assets/snappy-avatar.webp",
+            "w": 92,
+            "h": 96,
+            "alt": {
+              "en": "Snappy’s icon",
+              "fr": "L’icône de Snappy"
+            }
+          },
+          "tag": {
+            "en": "Assistant",
+            "fr": "Assistant"
+          },
+          "chip": {
+            "en": "Snappy",
+            "fr": "Snappy",
+            "de": "Snappy",
+            "es": "Snappy",
+            "pt-BR": "Snappy",
+            "it": "Snappy",
+            "ja": "Snappy",
+            "zh-Hans": "Snappy",
+            "ko": "Snappy"
+          },
+          "title": {
+            "en": "Snappy, beside what you are doing",
+            "fr": "Snappy, à côté de ce que vous faites"
+          },
+          "text": {
+            "en": "An assistant built into the app, one click away at the end of the sidebar. Ask it a question, or ask it to do the job: drive a printer, arrange and slice the plate, send it or queue it, find a file, start a design. It looks at a printer’s camera, the plate and the images you attach. Anything that changes something waits for your Allow, and it remembers what matters from one conversation to the next.",
+            "fr": "Un assistant intégré à l’app, à un clic au bout de la barre latérale. Posez-lui une question, ou demandez-lui de le faire : piloter une imprimante, disposer et découper le plateau, l’envoyer ou le mettre en file, trouver un fichier, lancer une conception. Il regarde la caméra d’une imprimante, le plateau et les images que vous joignez. Tout ce qui change quelque chose attend votre Autoriser, et il se souvient de l’essentiel d’une conversation à l’autre."
+          },
+          "alt": {
+            "en": "Snappy’s card beside the sidebar, answering what it can do: printers, files, Prepare and slicing, the queue, Create, Explore and settings, with a confirmation before any change.",
+            "fr": "La carte de Snappy à côté de la barre latérale, qui répond à ce qu’il sait faire : imprimantes, fichiers, Préparer et découpe, file, Créer, Explorer et réglages, avec une confirmation avant tout changement."
+          }
+        },
+        {
+          "id": "supports-warning",
+          "icon": "prepare",
+          "color": "#ff9f0a",
+          "edge": "linear-gradient(90deg, #ff9f0a, #ffd60a)",
+          "image": "../assets/supports-warning.webp",
+          "frame": "662/216",
+          "tag": {
+            "en": "Prepare",
+            "fr": "Préparer"
+          },
+          "chip": {
+            "en": "Supports warning",
+            "fr": "Avertissement supports",
+            "de": "Stützhinweis",
+            "es": "Aviso de soportes",
+            "pt-BR": "Aviso de suportes",
+            "it": "Avviso sui supporti",
+            "ja": "サポートの警告",
+            "zh-Hans": "支撑警告",
+            "ko": "서포트 경고"
+          },
+          "title": {
+            "en": "When a part probably needs supports",
+            "fr": "Quand une pièce a probablement besoin de supports"
+          },
+          "text": {
+            "en": "In Prepare, a badge says when an object probably needs supports, and why: parts that start in the air, a long overhang, large overhangs. Turn supports on in one click, or show the overhangs in red on the model. After a slice without supports, the engine’s warning offers to slice again with them.",
+            "fr": "Dans Préparer, un badge indique quand un objet a probablement besoin de supports, et pourquoi : des parties qui commencent dans le vide, un long porte-à-faux, de grands surplombs. Activez les supports en un clic, ou affichez les surplombs en rouge sur le modèle. Après une découpe sans supports, l’avertissement du moteur propose de redécouper avec."
+          },
+          "alt": {
+            "en": "The supports warning: parts start in the air, with Turn supports on.",
+            "fr": "L’avertissement de supports : des parties commencent dans le vide, avec Activer les supports."
+          }
+        },
+        {
+          "id": "plate-glue",
+          "icon": "control",
+          "color": "#0a84ff",
+          "edge": "linear-gradient(90deg, #0a84ff, #64d2ff)",
+          "image": "../assets/plate-glue.webp",
+          "frame": "930/636",
+          "tag": {
+            "en": "Plate",
+            "fr": "Plateau"
+          },
+          "chip": {
+            "en": "Glue on the plate",
+            "fr": "Colle sur le plateau",
+            "de": "Kleber auf der Platte",
+            "es": "Pegamento en la placa",
+            "pt-BR": "Cola na mesa",
+            "it": "Colla sul piano",
+            "ja": "プレートののり",
+            "zh-Hans": "热床涂胶",
+            "ko": "플레이트 접착제"
+          },
+          "title": {
+            "en": "Glue, when the plate needs it",
+            "fr": "La colle, quand le plateau en a besoin"
+          },
+          "text": {
+            "en": "Set the plate on each printer in Control. Snap Studio warns when a material does not suit it, suggests the bed temperature, and shows how to apply glue when the pair needs it — here, PETG bonds so strongly to the Smooth PEI Plate that it can tear the surface. Before a print, it says when the file was sliced for another plate.",
+            "fr": "Choisissez le plateau de chaque imprimante dans Contrôle. Snap Studio vous prévient quand un matériau ne lui convient pas, conseille la température du plateau, et montre comment mettre de la colle quand la paire en a besoin — ici, le PETG adhère si fort au plateau PEI lisse qu’il peut en arracher la surface. Avant une impression, il signale un fichier découpé pour un autre plateau."
+          },
+          "alt": {
+            "en": "The glue tip: PETG on the Smooth PEI Plate, apply glue, with a diagram of the part, the glue and the plate.",
+            "fr": "Le conseil de colle : PETG sur le plateau PEI lisse, mettez de la colle, avec un schéma de la pièce, de la colle et du plateau."
+          }
+        }
+      ],
+      "small": [
+        {
+          "icon": "shield",
+          "color": "#64d2ff",
+          "title": {
+            "en": "Anonymous usage count",
+            "fr": "Comptage anonyme"
+          },
+          "text": {
+            "en": "One anonymous signal at start (version, system, language), nothing else. The sheet comes after Snappy’s introduction. Turn it off there or in Settings › Application. A signal that could not be delivered is retried until you quit. Details in the privacy note.",
+            "fr": "Un signal anonyme au démarrage (version, système, langue), rien d’autre. La fenêtre vient après la présentation de Snappy. Vous pouvez le désactiver là ou dans Réglages › Application. Un signal qui n’a pas pu partir est réessayé jusqu’à ce que vous quittiez. Détails dans la note de confidentialité."
+          }
+        },
+        {
+          "icon": "check",
+          "color": "#30d158",
+          "title": {
+            "en": "Fixes",
+            "fr": "Corrections"
+          },
+          "text": {
+            "en": "Explore’s Back, Forward and Reload stay visible on a light or a dark site. Snappy’s card follows a change of language at once.",
+            "fr": "Précédent, Suivant et Recharger d’Explorer restent lisibles sur un site clair ou sombre. La carte de Snappy suit tout de suite un changement de langue."
+          }
+        }
+      ],
+      "date": "2026-11-08"
+    },
     {
       "version": "0.18",
       "date": "2026-10-31",
@@ -15,17 +169,33 @@
           "color": "#bf5af2",
           "edge": "linear-gradient(90deg, #bf5af2, #0a84ff)",
           "image": "../assets/ai-source-models.webp",
-          "tag": { "en": "Create", "fr": "Créer" },
-          "chip": {
-            "en": "STL and 3MF in AI", "fr": "STL et 3MF dans l’IA", "de": "STL und 3MF in der KI", "es": "STL y 3MF en la IA", "pt-BR": "STL e 3MF na IA",
-            "it": "STL e 3MF nell’IA", "ja": "AIでSTL・3MF", "zh-Hans": "AI 支持 STL 和 3MF", "ko": "AI에서 STL·3MF"
+          "tag": {
+            "en": "Create",
+            "fr": "Créer"
           },
-          "title": { "en": "Start from your own model", "fr": "Partir de votre propre modèle" },
+          "chip": {
+            "en": "STL and 3MF in AI",
+            "fr": "STL et 3MF dans l’IA",
+            "de": "STL und 3MF in der KI",
+            "es": "STL y 3MF en la IA",
+            "pt-BR": "STL e 3MF na IA",
+            "it": "STL e 3MF nell’IA",
+            "ja": "AIでSTL・3MF",
+            "zh-Hans": "AI 支持 STL 和 3MF",
+            "ko": "AI에서 STL·3MF"
+          },
+          "title": {
+            "en": "Start from your own model",
+            "fr": "Partir de votre propre modèle"
+          },
           "text": {
             "en": "Drop, choose or paste STL and 3MF files when you start an AI conversation or during one, up to three per message. Claude modifies them or builds on them; with a single model, the conversation starts from it. Drag and drop now works for images too, and a file that can’t be attached says why.",
             "fr": "Déposez, choisissez ou collez des fichiers STL et 3MF au début d’une conversation IA ou pendant, jusqu’à trois par message. Claude les modifie ou s’en sert de base ; avec un seul modèle, la conversation part de lui. Le glisser-déposer marche maintenant aussi pour les images, et un fichier qui ne peut pas être joint dit pourquoi."
           },
-          "alt": { "en": "The New Object sheet with two STL models attached", "fr": "La fenêtre Nouvel objet avec deux modèles STL joints" }
+          "alt": {
+            "en": "The New Object sheet with two STL models attached",
+            "fr": "La fenêtre Nouvel objet avec deux modèles STL joints"
+          }
         },
         {
           "id": "integrated-title-bar",
@@ -34,17 +204,33 @@
           "edge": "linear-gradient(90deg, #64d2ff, #0a84ff)",
           "image": "../assets/title-bar.webp",
           "position": "50% 0%",
-          "tag": { "en": "Window", "fr": "Fenêtre" },
-          "chip": {
-            "en": "Integrated title bar", "fr": "Barre de titre intégrée", "de": "Integrierte Titelleiste", "es": "Barra de título integrada", "pt-BR": "Barra de título integrada",
-            "it": "Barra del titolo integrata", "ja": "統合タイトルバー", "zh-Hans": "集成标题栏", "ko": "통합 제목 표시줄"
+          "tag": {
+            "en": "Window",
+            "fr": "Fenêtre"
           },
-          "title": { "en": "One title bar, on every system", "fr": "Une seule barre de titre, sur chaque système" },
+          "chip": {
+            "en": "Integrated title bar",
+            "fr": "Barre de titre intégrée",
+            "de": "Integrierte Titelleiste",
+            "es": "Barra de título integrada",
+            "pt-BR": "Barra de título integrada",
+            "it": "Barra del titolo integrata",
+            "ja": "統合タイトルバー",
+            "zh-Hans": "集成标题栏",
+            "ko": "통합 제목 표시줄"
+          },
+          "title": {
+            "en": "One title bar, on every system",
+            "fr": "Une seule barre de titre, sur chaque système"
+          },
           "text": {
             "en": "On Windows and Linux, the window buttons now sit in the app’s own top band, as on macOS: Windows 11 style on Windows, GNOME style with rounded corners on Linux. On Linux, Settings › Display brings the desktop’s title bar back.",
             "fr": "Sous Windows et Linux, les boutons de la fenêtre sont maintenant dans la bande du haut de l’app, comme sous macOS : style Windows 11 sous Windows, style GNOME aux coins arrondis sous Linux. Sous Linux, Réglages › Affichage remet la barre de titre du bureau."
           },
-          "alt": { "en": "The integrated title bar on Windows (top) and Ubuntu (bottom)", "fr": "La barre de titre intégrée sous Windows (en haut) et Ubuntu (en bas)" }
+          "alt": {
+            "en": "The integrated title bar on Windows (top) and Ubuntu (bottom)",
+            "fr": "La barre de titre intégrée sous Windows (en haut) et Ubuntu (en bas)"
+          }
         },
         {
           "id": "printer-multi-pick",
@@ -52,29 +238,53 @@
           "color": "#30d158",
           "edge": "linear-gradient(90deg, #30d158, #64d2ff)",
           "image": "../assets/printer-multi-pick.webp",
-          "tag": { "en": "Printer files", "fr": "Fichiers de l’imprimante" },
-          "chip": {
-            "en": "Pick several files", "fr": "Plusieurs fichiers", "de": "Mehrere Dateien", "es": "Varios archivos", "pt-BR": "Vários arquivos",
-            "it": "Più file", "ja": "複数ファイルを選択", "zh-Hans": "多选文件", "ko": "여러 파일 선택"
+          "tag": {
+            "en": "Printer files",
+            "fr": "Fichiers de l’imprimante"
           },
-          "title": { "en": "Several printer files, at a click", "fr": "Plusieurs fichiers de l’imprimante, d’un clic" },
+          "chip": {
+            "en": "Pick several files",
+            "fr": "Plusieurs fichiers",
+            "de": "Mehrere Dateien",
+            "es": "Varios archivos",
+            "pt-BR": "Vários arquivos",
+            "it": "Più file",
+            "ja": "複数ファイルを選択",
+            "zh-Hans": "多选文件",
+            "ko": "여러 파일 선택"
+          },
+          "title": {
+            "en": "Several printer files, at a click",
+            "fr": "Plusieurs fichiers de l’imprimante, d’un clic"
+          },
           "text": {
             "en": "In a printer’s Files, Ctrl-click (Cmd-click on macOS) adds or removes a file and Shift-click picks a range, as in the Files view, without Select mode. The selection bar and the right-click menu act on every file picked.",
             "fr": "Dans les Fichiers d’une imprimante, Ctrl-clic (Cmd-clic sous macOS) ajoute ou retire un fichier et Maj-clic choisit une plage, comme dans la vue Fichiers, sans passer par le mode Sélection. La barre de sélection et le menu du clic droit agissent sur tous les fichiers choisis."
           },
-          "alt": { "en": "Ten files picked in a printer’s Files, the selection bar and the delete confirmation", "fr": "Dix fichiers choisis dans les Fichiers d’une imprimante, la barre de sélection et la confirmation de suppression" }
+          "alt": {
+            "en": "Ten files picked in a printer’s Files, the selection bar and the delete confirmation",
+            "fr": "Dix fichiers choisis dans les Fichiers d’une imprimante, la barre de sélection et la confirmation de suppression"
+          }
         }
       ],
       "small": [
         {
-          "icon": "check", "color": "#30d158",
-          "title": { "en": "Fixes", "fr": "Corrections" },
+          "icon": "check",
+          "color": "#30d158",
+          "title": {
+            "en": "Fixes",
+            "fr": "Corrections"
+          },
           "text": {
             "en": "AI versions show right away. Presets made with Snapmaker Orca 2.3 slice again. Long file operations no longer freeze the window, and previews keep loading after an error in one file. Right-click › Delete on a printer deletes every picked file. An error message now says which file is at fault.",
             "fr": "Les versions IA s’affichent tout de suite. Les profils créés avec Snapmaker Orca 2.3 découpent de nouveau. Les longues opérations sur les fichiers ne bloquent plus la fenêtre, et les aperçus continuent de charger après une erreur sur un fichier. Clic droit › Supprimer sur une imprimante supprime tous les fichiers choisis. Un message d’erreur indique maintenant quel fichier pose problème."
           }
         }
-      ]
+      ],
+      "summary": {
+        "en": "Your own models in AI conversations, one title bar, several printer files at a click",
+        "fr": "Vos modèles dans les conversations IA, une barre de titre, plusieurs fichiers d’un clic"
+      }
     },
     {
       "version": "0.17",
@@ -83,7 +293,10 @@
         "en": "A new Prints page, one camera, and nine languages.",
         "fr": "Une nouvelle page Impressions, une seule caméra, et neuf langues."
       },
-      "summary": { "en": "The Prints page, one camera, nine languages, eight libraries", "fr": "La page Impressions, une seule caméra, neuf langues, huit bibliothèques" },
+      "summary": {
+        "en": "The Prints page, one camera, nine languages, eight libraries",
+        "fr": "La page Impressions, une seule caméra, neuf langues, huit bibliothèques"
+      },
       "features": [
         {
           "id": "prints-page",
@@ -92,17 +305,33 @@
           "edge": "linear-gradient(90deg, #0a84ff, #30d158)",
           "image": "../assets/print-job.webp",
           "position": "50% 0%",
-          "tag": { "en": "Prints", "fr": "Impressions" },
-          "chip": {
-            "en": "Prints page", "fr": "Page Impressions", "de": "Seite Drucke", "es": "Página Impresiones", "pt-BR": "Página Impressões",
-            "it": "Pagina Stampe", "ja": "造形ページ", "zh-Hans": "打印记录页面", "ko": "출력 페이지"
+          "tag": {
+            "en": "Prints",
+            "fr": "Impressions"
           },
-          "title": { "en": "Every print, and its story", "fr": "Chaque impression, et son histoire" },
+          "chip": {
+            "en": "Prints page",
+            "fr": "Page Impressions",
+            "de": "Seite Drucke",
+            "es": "Página Impresiones",
+            "pt-BR": "Página Impressões",
+            "it": "Pagina Stampe",
+            "ja": "造形ページ",
+            "zh-Hans": "打印记录页面",
+            "ko": "출력 페이지"
+          },
+          "title": {
+            "en": "Every print, and its story",
+            "fr": "Chaque impression, et son histoire"
+          },
           "text": {
             "en": "Prints on the left, by day. On the right, the record: camera and layers while it prints; timelapse, result and real time once done, with Reprint. History kept as long as you like.",
             "fr": "Les impressions à gauche, jour par jour. À droite, la fiche : caméra et couches pendant l’impression ; timelapse, résultat et durée réelle une fois terminée, avec Réimprimer. Un historique gardé aussi longtemps que vous voulez."
           },
-          "alt": { "en": "The Prints page: the list and a print’s record", "fr": "La page Impressions : la liste et la fiche d’une impression" }
+          "alt": {
+            "en": "The Prints page: the list and a print’s record",
+            "fr": "La page Impressions : la liste et la fiche d’une impression"
+          }
         },
         {
           "id": "one-camera",
@@ -111,17 +340,33 @@
           "edge": "linear-gradient(90deg, #ff9f0a, #ffd60a)",
           "image": "../assets/one-camera.webp",
           "position": "0% 0%",
-          "tag": { "en": "Camera", "fr": "Caméra" },
-          "chip": {
-            "en": "One camera", "fr": "Une seule caméra", "de": "Eine Kamera", "es": "Una sola cámara", "pt-BR": "Uma só câmera",
-            "it": "Una sola videocamera", "ja": "カメラを統一", "zh-Hans": "统一摄像头", "ko": "하나의 카메라"
+          "tag": {
+            "en": "Camera",
+            "fr": "Caméra"
           },
-          "title": { "en": "One camera, everywhere", "fr": "Une seule caméra, partout" },
+          "chip": {
+            "en": "One camera",
+            "fr": "Une seule caméra",
+            "de": "Eine Kamera",
+            "es": "Una sola cámara",
+            "pt-BR": "Uma só câmera",
+            "it": "Una sola videocamera",
+            "ja": "カメラを統一",
+            "zh-Hans": "统一摄像头",
+            "ko": "하나의 카메라"
+          },
+          "title": {
+            "en": "One camera, everywhere",
+            "fr": "Une seule caméra, partout"
+          },
           "text": {
             "en": "The printer page, Prints and Control show the same camera, with the same controls. The stream keeps going from one screen to the next.",
             "fr": "La page de l’imprimante, Impressions et Contrôle montrent la même caméra, avec les mêmes commandes. Le flux continue d’un écran à l’autre."
           },
-          "alt": { "en": "The live camera in a running print’s record", "fr": "La caméra en direct dans la fiche d’une impression en cours" }
+          "alt": {
+            "en": "The live camera in a running print’s record",
+            "fr": "La caméra en direct dans la fiche d’une impression en cours"
+          }
         },
         {
           "id": "languages",
@@ -130,17 +375,33 @@
           "edge": "linear-gradient(90deg, #bf5af2, #ff375f)",
           "image": "../assets/languages.webp",
           "position": "100% 0%",
-          "tag": { "en": "Languages", "fr": "Langues" },
-          "chip": {
-            "en": "9 languages", "fr": "9 langues", "de": "9 Sprachen", "es": "9 idiomas", "pt-BR": "9 idiomas",
-            "it": "9 lingue", "ja": "9言語", "zh-Hans": "9 种语言", "ko": "9개 언어"
+          "tag": {
+            "en": "Languages",
+            "fr": "Langues"
           },
-          "title": { "en": "Nine languages", "fr": "Neuf langues" },
+          "chip": {
+            "en": "9 languages",
+            "fr": "9 langues",
+            "de": "9 Sprachen",
+            "es": "9 idiomas",
+            "pt-BR": "9 idiomas",
+            "it": "9 lingue",
+            "ja": "9言語",
+            "zh-Hans": "9 种语言",
+            "ko": "9개 언어"
+          },
+          "title": {
+            "en": "Nine languages",
+            "fr": "Neuf langues"
+          },
           "text": {
             "en": "German, Spanish, Brazilian Portuguese, Italian, Japanese, Simplified Chinese and Korean join English and French. The app starts in your system’s language.",
             "fr": "Allemand, espagnol, portugais du Brésil, italien, japonais, chinois simplifié et coréen rejoignent l’anglais et le français. L’app démarre dans la langue du système."
           },
-          "alt": { "en": "The language picker in Settings › Application", "fr": "Le choix de la langue dans Réglages › Application" }
+          "alt": {
+            "en": "The language picker in Settings › Application",
+            "fr": "Le choix de la langue dans Réglages › Application"
+          }
         },
         {
           "id": "eight-libraries",
@@ -149,29 +410,59 @@
           "edge": "linear-gradient(90deg, #30d158, #64d2ff)",
           "image": "../assets/library.webp",
           "position": "50% 50%",
-          "tag": { "en": "Explore", "fr": "Explorer" },
-          "chip": {
-            "en": "8 libraries", "fr": "8 bibliothèques", "de": "8 Bibliotheken", "es": "8 bibliotecas", "pt-BR": "8 bibliotecas",
-            "it": "8 librerie", "ja": "8つのライブラリ", "zh-Hans": "8 个模型库", "ko": "8개 라이브러리"
+          "tag": {
+            "en": "Explore",
+            "fr": "Explorer"
           },
-          "title": { "en": "Eight model libraries", "fr": "Huit bibliothèques de modèles" },
+          "chip": {
+            "en": "8 libraries",
+            "fr": "8 bibliothèques",
+            "de": "8 Bibliotheken",
+            "es": "8 bibliotecas",
+            "pt-BR": "8 bibliotecas",
+            "it": "8 librerie",
+            "ja": "8つのライブラリ",
+            "zh-Hans": "8 个模型库",
+            "ko": "8개 라이브러리"
+          },
+          "title": {
+            "en": "Eight model libraries",
+            "fr": "Huit bibliothèques de modèles"
+          },
           "text": {
             "en": "MyMiniFactory, Thangs, Yeggi and GrabCAD join MakerWorld, Printables, Thingiverse and Cults3D. The Store stays one click away.",
             "fr": "MyMiniFactory, Thangs, Yeggi et GrabCAD rejoignent MakerWorld, Printables, Thingiverse et Cults3D. Le Store reste à un clic."
           },
-          "alt": { "en": "Explore with eight model libraries", "fr": "Explorer avec huit bibliothèques de modèles" }
+          "alt": {
+            "en": "Explore with eight model libraries",
+            "fr": "Explorer avec huit bibliothèques de modèles"
+          }
         }
       ],
       "small": [
         {
-          "icon": "printer", "color": "#64d2ff",
-          "title": { "en": "Printer offline", "fr": "Imprimante hors ligne" },
-          "text": { "en": "A printer that does not answer now says so in one short line, with Retry.", "fr": "Une imprimante qui ne répond pas le dit maintenant en une ligne, avec Réessayer." }
+          "icon": "printer",
+          "color": "#64d2ff",
+          "title": {
+            "en": "Printer offline",
+            "fr": "Imprimante hors ligne"
+          },
+          "text": {
+            "en": "A printer that does not answer now says so in one short line, with Retry.",
+            "fr": "Une imprimante qui ne répond pas le dit maintenant en une ligne, avec Réessayer."
+          }
         },
         {
-          "icon": "check", "color": "#30d158",
-          "title": { "en": "Fixes", "fr": "Corrections" },
-          "text": { "en": "On macOS, the AI setup finds Homebrew’s Python, not the system’s. Settings › About credits three.js and the U1 3D model.", "fr": "Sous macOS, l’installation de l’IA trouve le Python de Homebrew, pas celui du système. Réglages › À propos crédite three.js et le modèle 3D de la U1." }
+          "icon": "check",
+          "color": "#30d158",
+          "title": {
+            "en": "Fixes",
+            "fr": "Corrections"
+          },
+          "text": {
+            "en": "On macOS, the AI setup finds Homebrew’s Python, not the system’s. Settings › About credits three.js and the U1 3D model.",
+            "fr": "Sous macOS, l’installation de l’IA trouve le Python de Homebrew, pas celui du système. Réglages › À propos crédite three.js et le modèle 3D de la U1."
+          }
         }
       ]
     },
@@ -182,7 +473,10 @@
         "en": "Mixed colours, one tower per material, and a lighter slice sheet.",
         "fr": "Des couleurs mélangées, une tour par matériau, et une découpe plus légère."
       },
-      "summary": { "en": "Virtual heads, a tower per material, Basic / Advanced", "fr": "Têtes virtuelles, tour d’amorçage par matériau, Essentiel / Avancé" },
+      "summary": {
+        "en": "Virtual heads, a tower per material, Basic / Advanced",
+        "fr": "Têtes virtuelles, tour d’amorçage par matériau, Essentiel / Avancé"
+      },
       "features": [
         {
           "id": "virtual-heads",
@@ -191,14 +485,26 @@
           "edge": "linear-gradient(90deg, #0a84ff, #ffd60a)",
           "image": "../assets/virtual-heads.webp",
           "position": "50% 40%",
-          "tag": { "en": "Heads", "fr": "Têtes" },
-          "chip": { "en": "Virtual heads", "fr": "Têtes virtuelles" },
-          "title": { "en": "Mix two spools into a new colour", "fr": "Mélangez deux bobines en une nouvelle couleur" },
+          "tag": {
+            "en": "Heads",
+            "fr": "Têtes"
+          },
+          "chip": {
+            "en": "Virtual heads",
+            "fr": "Têtes virtuelles"
+          },
+          "title": {
+            "en": "Mix two spools into a new colour",
+            "fr": "Mélangez deux bobines en une nouvelle couleur"
+          },
           "text": {
             "en": "Like Snapmaker Orca’s Full Spectrum: in Heads and spools, pick two loaded spools and a ratio from 4:1 to 1:4. The heads alternate layer by layer.",
             "fr": "Comme le Full Spectrum de Snapmaker Orca : dans Têtes et bobines, choisissez deux bobines chargées et un ratio de 4:1 à 1:4. Les têtes alternent couche par couche."
           },
-          "alt": { "en": "A virtual head mixing white and black PLA, one layer of each", "fr": "Une tête virtuelle qui mélange du PLA blanc et noir, une couche de chaque" }
+          "alt": {
+            "en": "A virtual head mixing white and black PLA, one layer of each",
+            "fr": "Une tête virtuelle qui mélange du PLA blanc et noir, une couche de chaque"
+          }
         },
         {
           "id": "per-material-towers",
@@ -207,14 +513,26 @@
           "edge": "linear-gradient(90deg, #5856d6, #0a84ff)",
           "image": "../assets/per-material-towers.webp",
           "position": "0% 30%",
-          "tag": { "en": "Prepare", "fr": "Préparer" },
-          "chip": { "en": "Tower per material", "fr": "Tour par matériau" },
-          "title": { "en": "One prime tower per material", "fr": "Une tour d’amorçage par matériau" },
+          "tag": {
+            "en": "Prepare",
+            "fr": "Préparer"
+          },
+          "chip": {
+            "en": "Tower per material",
+            "fr": "Tour par matériau"
+          },
+          "title": {
+            "en": "One prime tower per material",
+            "fr": "Une tour d’amorçage par matériau"
+          },
           "text": {
             "en": "When the plate’s materials do not bond, choose Per material: one small tower for each group of materials, rebuilt at every slice.",
             "fr": "Quand les matériaux du plateau n’adhèrent pas entre eux, choisissez Par matériau : une petite tour par groupe de matériaux, refaite à chaque découpe."
           },
-          "alt": { "en": "Two prime towers on the plate, one per material", "fr": "Deux tours d’amorçage sur le plateau, une par matériau" }
+          "alt": {
+            "en": "Two prime towers on the plate, one per material",
+            "fr": "Deux tours d’amorçage sur le plateau, une par matériau"
+          }
         },
         {
           "id": "slice-levels",
@@ -223,14 +541,26 @@
           "edge": "linear-gradient(90deg, #0a84ff, #64d2ff)",
           "image": "../assets/slice-levels.webp",
           "position": "100% 0%",
-          "tag": { "en": "Slicing", "fr": "Découpe" },
-          "chip": { "en": "Basic / Advanced", "fr": "Essentiel / Avancé" },
-          "title": { "en": "Basic or Advanced settings", "fr": "Réglages Essentiel ou Avancé" },
+          "tag": {
+            "en": "Slicing",
+            "fr": "Découpe"
+          },
+          "chip": {
+            "en": "Basic / Advanced",
+            "fr": "Essentiel / Avancé"
+          },
+          "title": {
+            "en": "Basic or Advanced settings",
+            "fr": "Réglages Essentiel ou Avancé"
+          },
           "text": {
             "en": "The slice sheet opens in Basic, with the essentials. Advanced shows every setting; hidden ones still apply.",
             "fr": "La fenêtre de découpe s’ouvre en Essentiel. Avancé montre tous les réglages ; ceux qui sont masqués s’appliquent toujours."
           },
-          "alt": { "en": "The slice sheet in Basic", "fr": "La fenêtre de découpe en Essentiel" }
+          "alt": {
+            "en": "The slice sheet in Basic",
+            "fr": "La fenêtre de découpe en Essentiel"
+          }
         },
         {
           "id": "ai-sandbox",
@@ -239,26 +569,52 @@
           "edge": "linear-gradient(90deg, #bf5af2, #0a84ff)",
           "image": "../assets/ai-sandbox.webp",
           "position": "50% 0%",
-          "tag": { "en": "AI", "fr": "IA" },
-          "chip": { "en": "AI sandbox", "fr": "Bac à sable IA" },
-          "title": { "en": "A lighter AI sandbox", "fr": "Un bac à sable IA plus léger" },
+          "tag": {
+            "en": "AI",
+            "fr": "IA"
+          },
+          "chip": {
+            "en": "AI sandbox",
+            "fr": "Bac à sable IA"
+          },
+          "title": {
+            "en": "A lighter AI sandbox",
+            "fr": "Un bac à sable IA plus léger"
+          },
           "text": {
             "en": "On macOS and Linux, Claude now works in Claude Code’s own sandbox: no Docker, no yolobox, just Python. yolobox remains a choice.",
             "fr": "Sous macOS et Linux, Claude travaille maintenant dans le bac à sable de Claude Code : ni Docker ni yolobox, juste Python. yolobox reste un choix."
           },
-          "alt": { "en": "Settings › AI with the built-in sandbox", "fr": "Réglages › IA avec le bac à sable intégré" }
+          "alt": {
+            "en": "Settings › AI with the built-in sandbox",
+            "fr": "Réglages › IA avec le bac à sable intégré"
+          }
         }
       ],
       "small": [
         {
-          "icon": "create", "color": "#ff9f0a",
-          "title": { "en": "Images to start a conversation", "fr": "Des images pour commencer" },
-          "text": { "en": "Drop, paste or choose sketches and photos when you start an AI conversation.", "fr": "Déposez, collez ou choisissez croquis et photos en lançant une conversation IA." }
+          "icon": "create",
+          "color": "#ff9f0a",
+          "title": {
+            "en": "Images to start a conversation",
+            "fr": "Des images pour commencer"
+          },
+          "text": {
+            "en": "Drop, paste or choose sketches and photos when you start an AI conversation.",
+            "fr": "Déposez, collez ou choisissez croquis et photos en lançant une conversation IA."
+          }
         },
         {
-          "icon": "check", "color": "#30d158",
-          "title": { "en": "Fixes", "fr": "Corrections" },
-          "text": { "en": "“Check Again” in Settings › AI no longer stays stuck, and a dropped image no longer lands in recent folders.", "fr": "« Vérifier à nouveau » dans Réglages › IA ne reste plus bloqué, et une image déposée n’arrive plus dans les dossiers récents." }
+          "icon": "check",
+          "color": "#30d158",
+          "title": {
+            "en": "Fixes",
+            "fr": "Corrections"
+          },
+          "text": {
+            "en": "“Check Again” in Settings › AI no longer stays stuck, and a dropped image no longer lands in recent folders.",
+            "fr": "« Vérifier à nouveau » dans Réglages › IA ne reste plus bloqué, et une image déposée n’arrive plus dans les dossiers récents."
+          }
         }
       ]
     },
@@ -269,7 +625,10 @@
         "en": "The prime tower on the plate, and every slice setting at hand.",
         "fr": "La tour d’amorçage sur le plateau, et tous les réglages de découpe sous la main."
       },
-      "summary": { "en": "Prime tower in Prepare, slice settings in pictures", "fr": "Tour d’amorçage dans Préparer, réglages de découpe en images" },
+      "summary": {
+        "en": "Prime tower in Prepare, slice settings in pictures",
+        "fr": "Tour d’amorçage dans Préparer, réglages de découpe en images"
+      },
       "features": [
         {
           "id": "prime-tower",
@@ -278,14 +637,26 @@
           "edge": "linear-gradient(90deg, #5856d6, #0a84ff)",
           "image": "../assets/prime-tower.webp",
           "position": "0% 20%",
-          "tag": { "en": "Prepare", "fr": "Préparer" },
-          "chip": { "en": "Prime tower", "fr": "Tour d’amorçage" },
-          "title": { "en": "See the prime tower before slicing", "fr": "La tour d’amorçage visible avant la découpe" },
+          "tag": {
+            "en": "Prepare",
+            "fr": "Préparer"
+          },
+          "chip": {
+            "en": "Prime tower",
+            "fr": "Tour d’amorçage"
+          },
+          "title": {
+            "en": "See the prime tower before slicing",
+            "fr": "La tour d’amorçage visible avant la découpe"
+          },
           "text": {
             "en": "Turn the prime tower on in Prepare, off by default: it appears on the plate in a free corner, and you move and turn it like any part.",
             "fr": "Activez la tour d’amorçage dans Préparer, désactivée par défaut : elle apparaît sur le plateau dans un coin libre, et se déplace et pivote comme une pièce."
           },
-          "alt": { "en": "The prime tower on the plate in Prepare", "fr": "La tour d’amorçage sur le plateau dans Préparer" }
+          "alt": {
+            "en": "The prime tower on the plate in Prepare",
+            "fr": "La tour d’amorçage sur le plateau dans Préparer"
+          }
         },
         {
           "id": "slice-settings",
@@ -294,14 +665,26 @@
           "edge": "linear-gradient(90deg, #0a84ff, #64d2ff)",
           "image": "../assets/slice-settings.webp",
           "position": "100% 75%",
-          "tag": { "en": "Slicing", "fr": "Découpe" },
-          "chip": { "en": "Slice settings", "fr": "Réglages de découpe" },
-          "title": { "en": "More settings, shown in pictures", "fr": "Plus de réglages, en images" },
+          "tag": {
+            "en": "Slicing",
+            "fr": "Découpe"
+          },
+          "chip": {
+            "en": "Slice settings",
+            "fr": "Réglages de découpe"
+          },
+          "title": {
+            "en": "More settings, shown in pictures",
+            "fr": "Plus de réglages, en images"
+          },
           "text": {
             "en": "Quality, infill, walls and surfaces can now be tuned from the slice sheet, and styles such as supports or seams are picked from pictures.",
             "fr": "Qualité, remplissage, parois et surfaces se règlent maintenant depuis la fenêtre de découpe, et les styles comme les supports ou la couture se choisissent en images."
           },
-          "alt": { "en": "Surface patterns chosen from pictures", "fr": "Motifs de surface choisis en images" }
+          "alt": {
+            "en": "Surface patterns chosen from pictures",
+            "fr": "Motifs de surface choisis en images"
+          }
         },
         {
           "id": "spool-colours",
@@ -309,14 +692,26 @@
           "color": "#30d158",
           "edge": "linear-gradient(90deg, #30d158, #64d2ff)",
           "image": "../assets/spool-colours.webp",
-          "tag": { "en": "Heads", "fr": "Têtes" },
-          "chip": { "en": "Spool colours", "fr": "Couleurs des bobines" },
-          "title": { "en": "Pick a head by its colour", "fr": "Choisissez une tête par sa couleur" },
+          "tag": {
+            "en": "Heads",
+            "fr": "Têtes"
+          },
+          "chip": {
+            "en": "Spool colours",
+            "fr": "Couleurs des bobines"
+          },
+          "title": {
+            "en": "Pick a head by its colour",
+            "fr": "Choisissez une tête par sa couleur"
+          },
           "text": {
             "en": "Wherever you choose a head, it shows its spool’s colour and material instead of a plain name.",
             "fr": "Partout où vous choisissez une tête, elle montre la couleur et la matière de sa bobine plutôt qu’un simple nom."
           },
-          "alt": { "en": "Heads shown with their spool’s colour", "fr": "Les têtes avec la couleur de leur bobine" }
+          "alt": {
+            "en": "Heads shown with their spool’s colour",
+            "fr": "Les têtes avec la couleur de leur bobine"
+          }
         },
         {
           "id": "camera-close",
@@ -324,48 +719,94 @@
           "color": "#ff375f",
           "edge": "linear-gradient(90deg, #ff2d55, #ff9f0a)",
           "image": "../assets/camera-close.webp",
-          "tag": { "en": "Camera", "fr": "Caméra" },
-          "chip": { "en": "Camera", "fr": "Caméra" },
-          "title": { "en": "A camera that steps aside", "fr": "Une caméra qui s’efface" },
+          "tag": {
+            "en": "Camera",
+            "fr": "Caméra"
+          },
+          "chip": {
+            "en": "Camera",
+            "fr": "Caméra"
+          },
+          "title": {
+            "en": "A camera that steps aside",
+            "fr": "Une caméra qui s’efface"
+          },
           "text": {
             "en": "A close button turns the camera off, and a click beside the full-size picture puts it back where it was.",
             "fr": "Un bouton de fermeture éteint la caméra, et un clic à côté de l’image en plein écran la remet à sa place."
           },
-          "alt": { "en": "The printer’s camera in full size", "fr": "La caméra de l’imprimante en plein écran" }
+          "alt": {
+            "en": "The printer’s camera in full size",
+            "fr": "La caméra de l’imprimante en plein écran"
+          }
         }
       ],
       "small": [
         {
-          "icon": "shield", "color": "#ff9f0a",
-          "title": { "en": "Prime tower and materials", "fr": "Tour d’amorçage et matières" },
-          "text": { "en": "A warning when the tower would mix materials that do not stick together, with a fix in one click.", "fr": "Un avertissement quand la tour mélangerait des matières qui n’adhèrent pas entre elles, avec une correction en un clic." }
+          "icon": "shield",
+          "color": "#ff9f0a",
+          "title": {
+            "en": "Prime tower and materials",
+            "fr": "Tour d’amorçage et matières"
+          },
+          "text": {
+            "en": "A warning when the tower would mix materials that do not stick together, with a fix in one click.",
+            "fr": "Un avertissement quand la tour mélangerait des matières qui n’adhèrent pas entre elles, avec une correction en un clic."
+          }
         },
         {
-          "icon": "explore", "color": "#0a84ff",
-          "title": { "en": "Language with flags", "fr": "Langue avec drapeaux" },
-          "text": { "en": "Pick the app’s language by its flag, in Settings and on the welcome screen.", "fr": "Choisissez la langue de l’app par son drapeau, dans les Réglages et à l’accueil." }
+          "icon": "explore",
+          "color": "#0a84ff",
+          "title": {
+            "en": "Language with flags",
+            "fr": "Langue avec drapeaux"
+          },
+          "text": {
+            "en": "Pick the app’s language by its flag, in Settings and on the welcome screen.",
+            "fr": "Choisissez la langue de l’app par son drapeau, dans les Réglages et à l’accueil."
+          }
         },
         {
-          "icon": "tabs", "color": "#bf5af2",
-          "title": { "en": "Clearer choices", "fr": "Des choix plus clairs" },
-          "text": { "en": "Short lists become buttons side by side, and the AI modes say what each one does.", "fr": "Les listes courtes deviennent des boutons côte à côte, et les modes de l’IA disent ce que fait chacun." }
+          "icon": "tabs",
+          "color": "#bf5af2",
+          "title": {
+            "en": "Clearer choices",
+            "fr": "Des choix plus clairs"
+          },
+          "text": {
+            "en": "Short lists become buttons side by side, and the AI modes say what each one does.",
+            "fr": "Les listes courtes deviennent des boutons côte à côte, et les modes de l’IA disent ce que fait chacun."
+          }
         },
         {
-          "icon": "sliders", "color": "#64d2ff",
-          "title": { "en": "Easier numbers", "fr": "Des nombres plus simples" },
-          "text": { "en": "Number fields get larger arrows to step a value, or a double-click to type it.", "fr": "Les champs numériques ont de plus grandes flèches pour changer la valeur, ou un double-clic pour la saisir." }
+          "icon": "sliders",
+          "color": "#64d2ff",
+          "title": {
+            "en": "Easier numbers",
+            "fr": "Des nombres plus simples"
+          },
+          "text": {
+            "en": "Number fields get larger arrows to step a value, or a double-click to type it.",
+            "fr": "Les champs numériques ont de plus grandes flèches pour changer la valeur, ou un double-clic pour la saisir."
+          }
         }
       ]
     },
     {
       "version": "0.14",
       "date": "2026-10-23",
-      "patches": ["0.14.1", "0.14.2"],
+      "patches": [
+        "0.14.1",
+        "0.14.2"
+      ],
       "tagline": {
         "en": "The whole Snapmaker ecosystem one click away, and a plate that thinks in colours.",
         "fr": "Tout l’écosystème Snapmaker à portée de clic, et un plateau qui pense en couleurs."
       },
-      "summary": { "en": "Explore, colour modes, a new icon, Create", "fr": "Explorer, modes de couleur, nouvelle icône, Créer" },
+      "summary": {
+        "en": "Explore, colour modes, a new icon, Create",
+        "fr": "Explorer, modes de couleur, nouvelle icône, Créer"
+      },
       "features": [
         {
           "id": "explore",
@@ -373,14 +814,26 @@
           "color": "#ff9f0a",
           "edge": "linear-gradient(90deg, #ff9500, #ffcc00)",
           "image": "../assets/library-0.14.webp",
-          "tag": { "en": "Explore", "fr": "Explorer" },
-          "chip": { "en": "Explore", "fr": "Explorer" },
-          "title": { "en": "The whole Snapmaker world, in one place", "fr": "Tout l’univers Snapmaker, au même endroit" },
+          "tag": {
+            "en": "Explore",
+            "fr": "Explorer"
+          },
+          "chip": {
+            "en": "Explore",
+            "fr": "Explorer"
+          },
+          "title": {
+            "en": "The whole Snapmaker world, in one place",
+            "fr": "Tout l’univers Snapmaker, au même endroit"
+          },
           "text": {
             "en": "The Library becomes Explore: Space, Store, Wiki, Forum and your account join the model libraries, each in a tab. A model downloaded from any tab goes straight to the plate.",
             "fr": "La Bibliothèque devient Explorer : Space, Store, Wiki, Forum et votre compte rejoignent les bibliothèques de modèles, chacun dans un onglet. Un modèle téléchargé depuis un onglet arrive directement sur le plateau."
           },
-          "alt": { "en": "The Explore home", "fr": "L’accueil d’Explorer" }
+          "alt": {
+            "en": "The Explore home",
+            "fr": "L’accueil d’Explorer"
+          }
         },
         {
           "id": "colours",
@@ -389,14 +842,26 @@
           "edge": "linear-gradient(90deg, #5856d6, #0a84ff)",
           "image": "../assets/prime-tower.webp",
           "position": "0% 0%",
-          "tag": { "en": "Prepare", "fr": "Préparer" },
-          "chip": { "en": "Colour modes", "fr": "Modes de couleur" },
-          "title": { "en": "By object or by colour", "fr": "Par objet ou par couleur" },
+          "tag": {
+            "en": "Prepare",
+            "fr": "Préparer"
+          },
+          "chip": {
+            "en": "Colour modes",
+            "fr": "Modes de couleur"
+          },
+          "title": {
+            "en": "By object or by colour",
+            "fr": "Par objet ou par couleur"
+          },
           "text": {
             "en": "Assign heads object by object, or once for all the plate’s colours, as Snapmaker Orca does. The switch sits in the object list’s header.",
             "fr": "Assignez les têtes objet par objet, ou une fois pour toutes les couleurs du plateau, comme dans Snapmaker Orca. Le choix se fait en tête de la liste des objets."
           },
-          "alt": { "en": "Prepare and its object list", "fr": "Préparer et sa liste des objets" }
+          "alt": {
+            "en": "Prepare and its object list",
+            "fr": "Préparer et sa liste des objets"
+          }
         },
         {
           "id": "icon",
@@ -404,9 +869,18 @@
           "color": "#ff2d92",
           "edge": "var(--rb)",
           "stage": "icon",
-          "tag": { "en": "Icon", "fr": "Icône" },
-          "chip": { "en": "New icon", "fr": "Nouvelle icône" },
-          "title": { "en": "A new face", "fr": "Un nouveau visage" },
+          "tag": {
+            "en": "Icon",
+            "fr": "Icône"
+          },
+          "chip": {
+            "en": "New icon",
+            "fr": "Nouvelle icône"
+          },
+          "title": {
+            "en": "A new face",
+            "fr": "Un nouveau visage"
+          },
           "text": {
             "en": "A rainbow S on a graphite squircle. Since 0.14.1, macOS 26 shows it without a light frame in the Dock, and it is sharper everywhere.",
             "fr": "Un S arc-en-ciel sur un squircle graphite. Depuis la 0.14.1, macOS 26 l’affiche sans cadre clair dans le Dock, et il est plus net partout."
@@ -418,61 +892,136 @@
           "color": "#bf5af2",
           "edge": "linear-gradient(90deg, #af52de, #ff2d92)",
           "image": "../assets/ai-chat-0.14.webp",
-          "tag": { "en": "Create", "fr": "Créer" },
-          "chip": { "en": "Create", "fr": "Créer" },
-          "title": { "en": "The AI is now called Create", "fr": "L’IA s’appelle maintenant Créer" },
+          "tag": {
+            "en": "Create",
+            "fr": "Créer"
+          },
+          "chip": {
+            "en": "Create",
+            "fr": "Créer"
+          },
+          "title": {
+            "en": "The AI is now called Create",
+            "fr": "L’IA s’appelle maintenant Créer"
+          },
           "text": {
             "en": "The AI entry of the sidebar, and its view, now read Create: describe a part and Claude models it, with a live 3D preview.",
             "fr": "L’entrée IA de la barre latérale, et sa vue, deviennent Créer : décrivez une pièce et Claude la modélise, avec un aperçu 3D en direct."
           },
-          "alt": { "en": "A conversation in Create", "fr": "Une conversation dans Créer" }
+          "alt": {
+            "en": "A conversation in Create",
+            "fr": "Une conversation dans Créer"
+          }
         }
       ],
       "small": [
         {
-          "icon": "camera", "color": "#ff375f",
-          "title": { "en": "Camera, full size and pinned", "fr": "Caméra plein écran et épinglée" },
-          "text": { "en": "The printer’s camera can fill the app, or stay pinned in a small window on every screen; a click on it goes back to the printer.", "fr": "La caméra de l’imprimante peut occuper toute l’app, ou rester épinglée dans une petite fenêtre sur tous les écrans ; un clic dessus ramène à l’imprimante." }
+          "icon": "camera",
+          "color": "#ff375f",
+          "title": {
+            "en": "Camera, full size and pinned",
+            "fr": "Caméra plein écran et épinglée"
+          },
+          "text": {
+            "en": "The printer’s camera can fill the app, or stay pinned in a small window on every screen; a click on it goes back to the printer.",
+            "fr": "La caméra de l’imprimante peut occuper toute l’app, ou rester épinglée dans une petite fenêtre sur tous les écrans ; un clic dessus ramène à l’imprimante."
+          }
         },
         {
-          "icon": "progress", "color": "#64d2ff",
-          "title": { "en": "Slicing progress", "fr": "Progression de la découpe" },
-          "text": { "en": "The progress bar follows the engine stage by stage, up to 100 %, instead of staying near its start.", "fr": "La barre de progression suit le moteur étape par étape jusqu’à 100 %, au lieu de rester près du début." }
+          "icon": "progress",
+          "color": "#64d2ff",
+          "title": {
+            "en": "Slicing progress",
+            "fr": "Progression de la découpe"
+          },
+          "text": {
+            "en": "The progress bar follows the engine stage by stage, up to 100 %, instead of staying near its start.",
+            "fr": "La barre de progression suit le moteur étape par étape jusqu’à 100 %, au lieu de rester près du début."
+          }
         },
         {
-          "icon": "minus", "color": "#7d7aff",
-          "title": { "en": "Object list", "fr": "Liste des objets" },
-          "text": { "en": "A “−” takes an object off the plate; “Add 2 Objects” follows the selection.", "fr": "Un « − » retire un objet du plateau ; « Ajouter 2 objets » suit la sélection." }
+          "icon": "minus",
+          "color": "#7d7aff",
+          "title": {
+            "en": "Object list",
+            "fr": "Liste des objets"
+          },
+          "text": {
+            "en": "A “−” takes an object off the plate; “Add 2 Objects” follows the selection.",
+            "fr": "Un « − » retire un objet du plateau ; « Ajouter 2 objets » suit la sélection."
+          }
         },
         {
-          "icon": "tabs", "color": "#ff9f0a",
-          "title": { "en": "Explore’s tabs", "fr": "Onglets d’Explorer" },
-          "text": { "en": "No address bar any more: Back, Forward and Reload float over the page.", "fr": "Plus de barre d’adresse : Précédent, Suivant et Recharger flottent sur la page." }
+          "icon": "tabs",
+          "color": "#ff9f0a",
+          "title": {
+            "en": "Explore’s tabs",
+            "fr": "Onglets d’Explorer"
+          },
+          "text": {
+            "en": "No address bar any more: Back, Forward and Reload float over the page.",
+            "fr": "Plus de barre d’adresse : Précédent, Suivant et Recharger flottent sur la page."
+          }
         },
         {
-          "icon": "camera", "color": "#ff375f",
-          "title": { "en": "Camera", "fr": "Caméra" },
-          "text": { "en": "A camera that failed to start is no longer retried every second.", "fr": "Une caméra qui n’a pas démarré n’est plus relancée chaque seconde." }
+          "icon": "camera",
+          "color": "#ff375f",
+          "title": {
+            "en": "Camera",
+            "fr": "Caméra"
+          },
+          "text": {
+            "en": "A camera that failed to start is no longer retried every second.",
+            "fr": "Une caméra qui n’a pas démarré n’est plus relancée chaque seconde."
+          }
         },
         {
-          "icon": "stop", "color": "#64d2ff",
-          "title": { "en": "Slicing", "fr": "Découpe" },
-          "text": { "en": "Stop also works during the preparation, without waiting for the engine.", "fr": "Arrêter fonctionne aussi pendant la préparation, sans attendre le moteur." }
+          "icon": "stop",
+          "color": "#64d2ff",
+          "title": {
+            "en": "Slicing",
+            "fr": "Découpe"
+          },
+          "text": {
+            "en": "Stop also works during the preparation, without waiting for the engine.",
+            "fr": "Arrêter fonctionne aussi pendant la préparation, sans attendre le moteur."
+          }
         },
         {
-          "icon": "printer", "color": "#30d158",
-          "title": { "en": "Printers", "fr": "Imprimantes" },
-          "text": { "en": "A print refused by the printer is reported as such, never started a second way.", "fr": "Une impression refusée par l’imprimante est signalée comme telle, sans être relancée autrement." }
+          "icon": "printer",
+          "color": "#30d158",
+          "title": {
+            "en": "Printers",
+            "fr": "Imprimantes"
+          },
+          "text": {
+            "en": "A print refused by the printer is reported as such, never started a second way.",
+            "fr": "Une impression refusée par l’imprimante est signalée comme telle, sans être relancée autrement."
+          }
         },
         {
-          "icon": "folder", "color": "#0a84ff",
-          "title": { "en": "Saved G-code", "fr": "G-code enregistré" },
-          "text": { "en": "A saved G-code never overwrites an existing one: it is numbered.", "fr": "Un G-code enregistré n’en écrase jamais un autre : il est numéroté." }
+          "icon": "folder",
+          "color": "#0a84ff",
+          "title": {
+            "en": "Saved G-code",
+            "fr": "G-code enregistré"
+          },
+          "text": {
+            "en": "A saved G-code never overwrites an existing one: it is numbered.",
+            "fr": "Un G-code enregistré n’en écrase jamais un autre : il est numéroté."
+          }
         },
         {
-          "icon": "windows", "color": "#ffd60a",
-          "title": { "en": "Windows", "fr": "Windows" },
-          "text": { "en": "The slice sheet and the save messages show the file’s name, not its whole path.", "fr": "La feuille de découpe et les messages d’enregistrement affichent le nom du fichier, pas tout son chemin." }
+          "icon": "windows",
+          "color": "#ffd60a",
+          "title": {
+            "en": "Windows",
+            "fr": "Windows"
+          },
+          "text": {
+            "en": "The slice sheet and the save messages show the file’s name, not its whole path.",
+            "fr": "La feuille de découpe et les messages d’enregistrement affichent le nom du fichier, pas tout son chemin."
+          }
         }
       ]
     },
@@ -483,7 +1032,10 @@
         "en": "Your U1 at your fingertips: drive it without G-code, and see it in 3D.",
         "fr": "Votre U1 sous la main : pilotez-le sans G-code, et voyez-le en 3D."
       },
-      "summary": { "en": "Printer control, the U1 in 3D", "fr": "Contrôle de l’imprimante, le U1 en 3D" },
+      "summary": {
+        "en": "Printer control, the U1 in 3D",
+        "fr": "Contrôle de l’imprimante, le U1 en 3D"
+      },
       "features": [
         {
           "id": "control",
@@ -491,14 +1043,26 @@
           "color": "#ff9f0a",
           "edge": "linear-gradient(90deg, #ff9500, #ffcc00)",
           "image": "../assets/control-0.13.webp",
-          "tag": { "en": "Care & Tuning", "fr": "Entretien et réglages" },
-          "chip": { "en": "Control", "fr": "Contrôle" },
-          "title": { "en": "Drive the printer without G-code", "fr": "Pilotez l’imprimante sans G-code" },
+          "tag": {
+            "en": "Care & Tuning",
+            "fr": "Entretien et réglages"
+          },
+          "chip": {
+            "en": "Control",
+            "fr": "Contrôle"
+          },
+          "title": {
+            "en": "Drive the printer without G-code",
+            "fr": "Pilotez l’imprimante sans G-code"
+          },
           "text": {
             "en": "Home, move the axes from 0.1 to 50 mm, heat, load and unload each head, the bed, fans, light and camera, and the emergency stop. During a print, only the emergency stop, the light and the camera stay at hand.",
             "fr": "Origine, déplacements de 0,1 à 50 mm, chauffe, chargement et déchargement de chaque tête, plateau, ventilateurs, lumière, caméra et arrêt d’urgence. Pendant une impression, seuls l’arrêt d’urgence, la lumière et la caméra restent accessibles."
           },
-          "alt": { "en": "Care & Tuning › Control", "fr": "Entretien et réglages › Contrôle" }
+          "alt": {
+            "en": "Care & Tuning › Control",
+            "fr": "Entretien et réglages › Contrôle"
+          }
         },
         {
           "id": "printer-3d",
@@ -506,14 +1070,26 @@
           "color": "#0a84ff",
           "edge": "linear-gradient(90deg, #0a84ff, #64d2ff)",
           "image": "../assets/printer-0.13.webp",
-          "tag": { "en": "Printer", "fr": "Imprimante" },
-          "chip": { "en": "The U1 in 3D", "fr": "Le U1 en 3D" },
-          "title": { "en": "Your U1, in 3D", "fr": "Votre U1, en 3D" },
+          "tag": {
+            "en": "Printer",
+            "fr": "Imprimante"
+          },
+          "chip": {
+            "en": "The U1 in 3D",
+            "fr": "Le U1 en 3D"
+          },
+          "title": {
+            "en": "Your U1, in 3D",
+            "fr": "Votre U1, en 3D"
+          },
           "text": {
             "en": "The printer’s page shows the U1 in 3D. Click a spool, a head, the bed or the light for its quick controls: the view turns to face what you picked.",
             "fr": "La page de l’imprimante montre le U1 en 3D. Cliquez une bobine, une tête, le plateau ou la lumière pour ses commandes rapides : la vue se tourne vers ce que vous avez choisi."
           },
-          "alt": { "en": "The U1 in 3D on the printer’s page", "fr": "Le U1 en 3D sur la page de l’imprimante" }
+          "alt": {
+            "en": "The U1 in 3D on the printer’s page",
+            "fr": "Le U1 en 3D sur la page de l’imprimante"
+          }
         },
         {
           "id": "spools",
@@ -523,136 +1099,295 @@
           "image": "../assets/control-0.13.webp",
           "position": "100% 30%",
           "zoom": 1.55,
-          "tag": { "en": "Spools", "fr": "Bobines" },
-          "chip": { "en": "Material & colour", "fr": "Matériau et couleur" },
-          "title": { "en": "Every head knows its spool", "fr": "Chaque tête connaît sa bobine" },
+          "tag": {
+            "en": "Spools",
+            "fr": "Bobines"
+          },
+          "chip": {
+            "en": "Material & colour",
+            "fr": "Matériau et couleur"
+          },
+          "title": {
+            "en": "Every head knows its spool",
+            "fr": "Chaque tête connaît sa bobine"
+          },
           "text": {
             "en": "Declare a head’s material and colour from the printer’s own list, as on its screen. A spool without an RFID tag is asked for before loading, so the printer heats to the right temperature.",
             "fr": "Déclarez le matériau et la couleur d’une tête depuis la liste de l’imprimante, comme sur son écran. Une bobine sans étiquette RFID vous est demandée avant le chargement, pour que l’imprimante chauffe à la bonne température."
           },
-          "alt": { "en": "One card per head, in its spool’s colour", "fr": "Une carte par tête, à la couleur de sa bobine" }
+          "alt": {
+            "en": "One card per head, in its spool’s colour",
+            "fr": "Une carte par tête, à la couleur de sa bobine"
+          }
         }
       ],
       "small": [
         {
-          "icon": "send", "color": "#ff375f",
-          "title": { "en": "Send options", "fr": "Options d’envoi" },
-          "text": { "en": "Timelapse, automatic bed leveling and flow calibration now really reach the U1.", "fr": "Timelapse, nivellement automatique et calibration du débit arrivent maintenant vraiment au U1." }
+          "icon": "send",
+          "color": "#ff375f",
+          "title": {
+            "en": "Send options",
+            "fr": "Options d’envoi"
+          },
+          "text": {
+            "en": "Timelapse, automatic bed leveling and flow calibration now really reach the U1.",
+            "fr": "Timelapse, nivellement automatique et calibration du débit arrivent maintenant vraiment au U1."
+          }
         },
         {
-          "icon": "shield", "color": "#30d158",
-          "title": { "en": "Safer site tabs", "fr": "Onglets plus sûrs" },
-          "text": { "en": "Sites opened in the app’s tabs can no longer read your local files.", "fr": "Les sites ouverts dans les onglets de l’app ne peuvent plus lire vos fichiers locaux." }
+          "icon": "shield",
+          "color": "#30d158",
+          "title": {
+            "en": "Safer site tabs",
+            "fr": "Onglets plus sûrs"
+          },
+          "text": {
+            "en": "Sites opened in the app’s tabs can no longer read your local files.",
+            "fr": "Les sites ouverts dans les onglets de l’app ne peuvent plus lire vos fichiers locaux."
+          }
         },
         {
-          "icon": "prepare", "color": "#7d7aff",
-          "title": { "en": "Prepare’s shortcuts", "fr": "Raccourcis de Préparer" },
-          "text": { "en": "Over the slice preview, Backspace no longer removes the objects just sliced.", "fr": "Sur l’aperçu de découpe, Retour arrière ne supprime plus les objets tout juste découpés." }
+          "icon": "prepare",
+          "color": "#7d7aff",
+          "title": {
+            "en": "Prepare’s shortcuts",
+            "fr": "Raccourcis de Préparer"
+          },
+          "text": {
+            "en": "Over the slice preview, Backspace no longer removes the objects just sliced.",
+            "fr": "Sur l’aperçu de découpe, Retour arrière ne supprime plus les objets tout juste découpés."
+          }
         },
         {
-          "icon": "mirror", "color": "#bf5af2",
-          "title": { "en": "Mirrored objects", "fr": "Objets en miroir" },
-          "text": { "en": "A mirrored object is sliced as it looks, no longer with scrambled triangles.", "fr": "Un objet en miroir est découpé tel qu’il apparaît, sans triangles mélangés." }
+          "icon": "mirror",
+          "color": "#bf5af2",
+          "title": {
+            "en": "Mirrored objects",
+            "fr": "Objets en miroir"
+          },
+          "text": {
+            "en": "A mirrored object is sliced as it looks, no longer with scrambled triangles.",
+            "fr": "Un objet en miroir est découpé tel qu’il apparaît, sans triangles mélangés."
+          }
         },
         {
-          "icon": "tabs", "color": "#ff9f0a",
-          "title": { "en": "Sheets over a site", "fr": "Feuilles sur un site" },
-          "text": { "en": "A sheet opened while a Library site is shown no longer hides under it, blocking the app.", "fr": "Une feuille ouverte sur un site de la Bibliothèque ne se cache plus dessous en bloquant l’app." }
+          "icon": "tabs",
+          "color": "#ff9f0a",
+          "title": {
+            "en": "Sheets over a site",
+            "fr": "Feuilles sur un site"
+          },
+          "text": {
+            "en": "A sheet opened while a Library site is shown no longer hides under it, blocking the app.",
+            "fr": "Une feuille ouverte sur un site de la Bibliothèque ne se cache plus dessous en bloquant l’app."
+          }
         },
         {
-          "icon": "check", "color": "#8e8e93",
-          "title": { "en": "Sturdier", "fr": "Plus robuste" },
-          "text": { "en": "A damaged stored setting no longer stops the app at launch, and an odd colour name no longer breaks slicing.", "fr": "Un réglage enregistré abîmé n’empêche plus l’app de démarrer, et un nom de couleur inattendu ne fait plus échouer la découpe." }
+          "icon": "check",
+          "color": "#8e8e93",
+          "title": {
+            "en": "Sturdier",
+            "fr": "Plus robuste"
+          },
+          "text": {
+            "en": "A damaged stored setting no longer stops the app at launch, and an odd colour name no longer breaks slicing.",
+            "fr": "Un réglage enregistré abîmé n’empêche plus l’app de démarrer, et un nom de couleur inattendu ne fait plus échouer la découpe."
+          }
         }
       ]
     },
     {
       "version": "0.12",
       "date": "2026-10-21",
-      "summary": { "en": "Prepare reworked, ten display themes, bed leveling", "fr": "Préparer repensé, dix thèmes d’affichage, nivellement du plateau" },
+      "summary": {
+        "en": "Prepare reworked, ten display themes, bed leveling",
+        "fr": "Préparer repensé, dix thèmes d’affichage, nivellement du plateau"
+      },
       "image": "../assets/display-0.12.webp",
-      "alt": { "en": "Settings › Display and its themes", "fr": "Réglages › Affichage et ses thèmes" },
+      "alt": {
+        "en": "Settings › Display and its themes",
+        "fr": "Réglages › Affichage et ses thèmes"
+      },
       "highlights": [
         {
-          "title": { "en": "Prepare, reworked", "fr": "Préparer repensé" },
-          "text": { "en": "placement, rotation and scale as sliders, objects on or off the plate, range and rubber-band selection.", "fr": "position, rotation et échelle en curseurs, objets sur ou hors du plateau, sélection par plage et au lasso." }
+          "title": {
+            "en": "Prepare, reworked",
+            "fr": "Préparer repensé"
+          },
+          "text": {
+            "en": "placement, rotation and scale as sliders, objects on or off the plate, range and rubber-band selection.",
+            "fr": "position, rotation et échelle en curseurs, objets sur ou hors du plateau, sélection par plage et au lasso."
+          }
         },
         {
-          "title": { "en": "Display settings", "fr": "Réglages d’affichage" },
-          "text": { "en": "light, dark or system, ten themes with live previews, an accent colour and colour-blind safe colours.", "fr": "clair, sombre ou système, dix thèmes avec aperçu en direct, une couleur d’accent et des couleurs adaptées au daltonisme." }
+          "title": {
+            "en": "Display settings",
+            "fr": "Réglages d’affichage"
+          },
+          "text": {
+            "en": "light, dark or system, ten themes with live previews, an accent colour and colour-blind safe colours.",
+            "fr": "clair, sombre ou système, dix thèmes avec aperçu en direct, une couleur d’accent et des couleurs adaptées au daltonisme."
+          }
         },
         {
-          "title": { "en": "Care & Tuning › Bed Leveling", "fr": "Entretien et réglages › Nivellement" },
-          "text": { "en": "the bed’s mesh kept over time, a measuring assistant, and what to do with the knobs under the bed.", "fr": "le maillage du plateau suivi dans le temps, un assistant de mesure, et quoi faire avec les molettes sous le plateau." }
+          "title": {
+            "en": "Care & Tuning › Bed Leveling",
+            "fr": "Entretien et réglages › Nivellement"
+          },
+          "text": {
+            "en": "the bed’s mesh kept over time, a measuring assistant, and what to do with the knobs under the bed.",
+            "fr": "le maillage du plateau suivi dans le temps, un assistant de mesure, et quoi faire avec les molettes sous le plateau."
+          }
         },
         {
-          "title": { "en": "Dense models", "fr": "Modèles denses" },
-          "text": { "en": "very detailed models no longer show full of holes in the 3D views.", "fr": "les modèles très détaillés ne s’affichent plus troués dans les vues 3D." }
+          "title": {
+            "en": "Dense models",
+            "fr": "Modèles denses"
+          },
+          "text": {
+            "en": "very detailed models no longer show full of holes in the 3D views.",
+            "fr": "les modèles très détaillés ne s’affichent plus troués dans les vues 3D."
+          }
         }
       ]
     },
     {
       "version": "0.11",
       "date": "2026-10-20",
-      "summary": { "en": "A printer’s files, sharing by QR code, print speed", "fr": "Fichiers de l’imprimante, partage par QR code, vitesse d’impression" },
+      "summary": {
+        "en": "A printer’s files, sharing by QR code, print speed",
+        "fr": "Fichiers de l’imprimante, partage par QR code, vitesse d’impression"
+      },
       "image": "../assets/printer-files-0.11.webp",
-      "alt": { "en": "A printer’s files", "fr": "Les fichiers d’une imprimante" },
+      "alt": {
+        "en": "A printer’s files",
+        "fr": "Les fichiers d’une imprimante"
+      },
       "highlights": [
         {
-          "title": { "en": "A printer’s files", "fr": "Fichiers de l’imprimante" },
-          "text": { "en": "print files read live from the printer, as a list or a grid, with print, rename and delete; timelapses with a player.", "fr": "les fichiers d’impression lus en direct sur l’imprimante, en liste ou en grille, pour imprimer, renommer ou supprimer ; les timelapses avec un lecteur." }
+          "title": {
+            "en": "A printer’s files",
+            "fr": "Fichiers de l’imprimante"
+          },
+          "text": {
+            "en": "print files read live from the printer, as a list or a grid, with print, rename and delete; timelapses with a player.",
+            "fr": "les fichiers d’impression lus en direct sur l’imprimante, en liste ou en grille, pour imprimer, renommer ou supprimer ; les timelapses avec un lecteur."
+          }
         },
         {
-          "title": { "en": "Share", "fr": "Partager" },
-          "text": { "en": "a print file or a timelapse through the share menu, or a QR code to download it on a phone on the same Wi-Fi.", "fr": "un fichier ou un timelapse par le menu de partage, ou un QR code pour le télécharger sur un téléphone du même Wi-Fi." }
+          "title": {
+            "en": "Share",
+            "fr": "Partager"
+          },
+          "text": {
+            "en": "a print file or a timelapse through the share menu, or a QR code to download it on a phone on the same Wi-Fi.",
+            "fr": "un fichier ou un timelapse par le menu de partage, ou un QR code pour le télécharger sur un téléphone du même Wi-Fi."
+          }
         },
         {
-          "title": { "en": "Speed", "fr": "Vitesse" },
-          "text": { "en": "one slider in the slice sheet, 50 to 120 % of the profile, with the details on request.", "fr": "un curseur dans la feuille de découpe, de 50 à 120 % du profil, avec le détail sur demande." }
+          "title": {
+            "en": "Speed",
+            "fr": "Vitesse"
+          },
+          "text": {
+            "en": "one slider in the slice sheet, 50 to 120 % of the profile, with the details on request.",
+            "fr": "un curseur dans la feuille de découpe, de 50 à 120 % du profil, avec le détail sur demande."
+          }
         }
       ]
     },
     {
       "version": "0.10",
       "date": "2026-10-20",
-      "summary": { "en": "Spool check before sending, AI conversations reworked", "fr": "Vérification des bobines avant l’envoi, conversations IA repensées" },
+      "summary": {
+        "en": "Spool check before sending, AI conversations reworked",
+        "fr": "Vérification des bobines avant l’envoi, conversations IA repensées"
+      },
       "highlights": [
         {
-          "title": { "en": "Spool check", "fr": "Vérification des bobines" },
-          "text": { "en": "before a print starts, each colour is compared with the spool on its head, with another head offered when they differ.", "fr": "avant une impression, chaque couleur est comparée à la bobine de sa tête, et une autre tête est proposée si elles diffèrent." }
+          "title": {
+            "en": "Spool check",
+            "fr": "Vérification des bobines"
+          },
+          "text": {
+            "en": "before a print starts, each colour is compared with the spool on its head, with another head offered when they differ.",
+            "fr": "avant une impression, chaque couleur est comparée à la bobine de sa tête, et une autre tête est proposée si elles diffèrent."
+          }
         },
         {
-          "title": { "en": "AI conversations", "fr": "Conversations IA" },
-          "text": { "en": "a list with search, pins and groups by date; preview and chat side by side; Stop Claude in the message field.", "fr": "une liste avec recherche, épingles et groupes par date ; aperçu et discussion côte à côte ; Arrêter Claude dans le champ de message." }
+          "title": {
+            "en": "AI conversations",
+            "fr": "Conversations IA"
+          },
+          "text": {
+            "en": "a list with search, pins and groups by date; preview and chat side by side; Stop Claude in the message field.",
+            "fr": "une liste avec recherche, épingles et groupes par date ; aperçu et discussion côte à côte ; Arrêter Claude dans le champ de message."
+          }
         },
         {
-          "title": { "en": "Queued print", "fr": "Impression en file" },
-          "text": { "en": "“Print on” with one chip per printer and its state.", "fr": "« Imprimer sur » avec une pastille par imprimante et son état." }
+          "title": {
+            "en": "Queued print",
+            "fr": "Impression en file"
+          },
+          "text": {
+            "en": "“Print on” with one chip per printer and its state.",
+            "fr": "« Imprimer sur » avec une pastille par imprimante et son état."
+          }
         },
         {
-          "title": { "en": "Real switches", "fr": "De vrais interrupteurs" },
-          "text": { "en": "every on/off setting uses a switch, announced as such to screen readers.", "fr": "chaque réglage marche/arrêt est un interrupteur, annoncé comme tel aux lecteurs d’écran." }
+          "title": {
+            "en": "Real switches",
+            "fr": "De vrais interrupteurs"
+          },
+          "text": {
+            "en": "every on/off setting uses a switch, announced as such to screen readers.",
+            "fr": "chaque réglage marche/arrêt est un interrupteur, annoncé comme tel aux lecteurs d’écran."
+          }
         }
       ]
     },
     {
       "version": "0.9",
       "date": "2026-10-18",
-      "summary": { "en": "Maintenance per printer, choice of the Claude model", "fr": "Entretien par imprimante, choix du modèle Claude" },
+      "summary": {
+        "en": "Maintenance per printer, choice of the Claude model",
+        "fr": "Entretien par imprimante, choix du modèle Claude"
+      },
       "image": "../assets/maintenance-0.9.webp",
-      "alt": { "en": "A printer’s maintenance", "fr": "L’entretien d’une imprimante" },
+      "alt": {
+        "en": "A printer’s maintenance",
+        "fr": "L’entretien d’une imprimante"
+      },
       "highlights": [
         {
-          "title": { "en": "Maintenance", "fr": "Entretien" },
-          "text": { "en": "a view per printer: usage, head counters, tasks by urgency with Snapmaker’s guide and video, and a log of what was done.", "fr": "une vue par imprimante : utilisation, compteurs des têtes, tâches par urgence avec le guide et la vidéo de Snapmaker, et un journal." }
+          "title": {
+            "en": "Maintenance",
+            "fr": "Entretien"
+          },
+          "text": {
+            "en": "a view per printer: usage, head counters, tasks by urgency with Snapmaker’s guide and video, and a log of what was done.",
+            "fr": "une vue par imprimante : utilisation, compteurs des têtes, tâches par urgence avec le guide et la vidéo de Snapmaker, et un journal."
+          }
         },
         {
-          "title": { "en": "Claude model", "fr": "Modèle Claude" },
-          "text": { "en": "choose the Claude model of an AI conversation.", "fr": "choisissez le modèle Claude d’une conversation IA." }
+          "title": {
+            "en": "Claude model",
+            "fr": "Modèle Claude"
+          },
+          "text": {
+            "en": "choose the Claude model of an AI conversation.",
+            "fr": "choisissez le modèle Claude d’une conversation IA."
+          }
         },
         {
-          "title": { "en": "Small fixes", "fr": "Petites corrections" },
-          "text": { "en": "trackpad pan, the update badge and the camera controls.", "fr": "déplacement au trackpad, pastille de mise à jour et commandes de la caméra." }
+          "title": {
+            "en": "Small fixes",
+            "fr": "Petites corrections"
+          },
+          "text": {
+            "en": "trackpad pan, the update badge and the camera controls.",
+            "fr": "déplacement au trackpad, pastille de mise à jour et commandes de la caméra."
+          }
         }
       ]
     }
