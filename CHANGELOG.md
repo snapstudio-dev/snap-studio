@@ -11,7 +11,7 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
-## [0.19.0] — 2026-11-07
+## [0.19.0] — 2026-11-08
 
 ### Added
 - **Snappy, the workshop assistant**: its icon is always there, at the end
