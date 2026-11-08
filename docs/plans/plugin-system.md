@@ -1,7 +1,48 @@
 # Plugin system
 
-Plan only (draft PR). No plugin runtime is implemented, and no
-architecture below is chosen yet: the options are laid out for the owner.
+Plan only (draft PR). No plugin runtime is implemented. The owner set the
+direction on 2026-11-08 (next section); the detailed options further down
+are kept as background.
+
+## Direction (owner, 2026-11-08)
+
+Two ideas shape the whole system:
+
+1. **The app's own features become plugins.** Like VS Code or Obsidian's
+   core plugins, Snap Studio's existing features (Prepare, Control,
+   Calibration, Maintenance, Favorites, bed mesh…) are rebuilt on the same
+   plugin API, which then serves as the base for third-party plugins. The
+   API is exercised every day by our own code before outside authors
+   rely on it, and a user can turn off features they do not use.
+2. **Users can write plugins live, inside the app.** An editor in
+   Settings › Plugins › New; saving reloads the plugin at once. Snappy can
+   write one from a sentence ("add a pause at layer 50").
+
+What follows from it:
+
+- **One API, two trust levels.** *Built-in* plugins ship with the app,
+  are signed by the project and get every permission. *User* plugins
+  (written in the app or installed) run isolated, with only the
+  permissions the user granted. Same API and manifest for both.
+- **Gradual, not a rewrite.** Define a minimal API, then move one small,
+  self-contained feature first (Maintenance, Favorites or the bed mesh
+  view), adjust the API, then the larger ones. Each move is its own PR
+  with no visible change for users.
+- **JavaScript is the main runtime.** Live editing needs code that reloads
+  without a build step: user plugins are JavaScript in a sandboxed origin
+  (option B below), talking to the app only through messages.
+  WebAssembly (option C) stays an option later for heavy processing
+  (G-code, meshes).
+- **Live-written plugins stay local.** They are marked "personal",
+  unsigned, and run with the permissions the user grants them; sharing
+  goes through the signed index. This is the developer mode of question 5,
+  made a normal user feature, still isolated.
+- **Snappy shares the API** (question 7): each plugin action is a tool
+  the assistant can call, under the same permissions.
+
+First step proposed: write the minimal API (manifest, lifecycle,
+permissions, the first actions) and move one existing feature onto it to
+validate it.
 
 Asked on 2026-11-05, from the day's watch: OrcaSlicer and PrusaSlicer both
 open their slicers to plugins; Snap Studio should too.
@@ -116,21 +157,24 @@ Notes:
 
 ## Decisions / open questions for the owner
 
-1. First version: A only (data recipes), or A + one code runtime (B or C)?
-2. Runtime for code: JavaScript sandbox, WebAssembly, Python (as Orca), or
-   none for now?
+Decided on 2026-11-08 (see *Direction*):
+- 1 and 2: the first version is the plugin API itself, used by a built-in
+  feature; the code runtime is JavaScript in a sandbox (WebAssembly maybe
+  later).
+- 5: yes, as live in-app editing of local, isolated "personal" plugins.
+- 7: yes, Snappy uses the same action API.
+
+Still open:
 3. Who signs: only the project's key (curated list), or publishers' own
    keys listed in a project-signed index?
 4. Where the index lives (GitHub repo / Pages) and who reviews plugins.
-5. Is a developer mode for unsigned local plugins acceptable?
 6. Name in the UI: "Plugins" / « Modules » or « Extensions »?
-7. Should the in-app assistant idea (one action API for "do it for me")
-   share the plugins' action API? Raised in chat on 2026-11-05, not
-   decided.
+8. Which existing feature moves first (Maintenance, Favorites, bed mesh)?
 
 ## Out of scope
 
 - Any runtime, API, loader, index or UI code (this PR is the plan).
+- Moving existing features onto the API (one PR per feature, later).
 - A hosted marketplace with accounts and payments.
 - Plugins inside the slicing engine itself (Snapmaker Orca's own code).
 
