@@ -1,0 +1,7 @@
+/* German texts of the permission prompts (see Info.plist). */
+NSLocalNetworkUsageDescription = "Snap Studio sucht Snapmaker-Drucker in Ihrem lokalen Netzwerk.";
+NSDownloadsFolderUsageDescription = "Snap Studio zeigt die 3D-Modelle in diesem Ordner an und bereitet sie vor.";
+NSDocumentsFolderUsageDescription = "Snap Studio zeigt die 3D-Modelle in diesem Ordner an und bereitet sie vor.";
+NSDesktopFolderUsageDescription = "Snap Studio zeigt die 3D-Modelle in diesem Ordner an und bereitet sie vor.";
+NSRemovableVolumesUsageDescription = "Snap Studio zeigt die 3D-Modelle auf diesem Datenträger an und bereitet sie vor.";
+NSNetworkVolumesUsageDescription = "Snap Studio zeigt die 3D-Modelle auf diesem Netzwerkvolume an und bereitet sie vor.";

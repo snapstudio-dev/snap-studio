@@ -15,10 +15,41 @@ const AIS = {
   pending: null,
 };
 
-/* The choice: "container", "local", "both" or "off". Not chosen yet (an
-   older install, the assistant skipped) counts as "both": every ready mode
-   stays usable. */
+/* The choice: "container" (the Sandbox side), "local", "both" or "off".
+   Not chosen yet (an older install, the assistant skipped) counts as
+   "both": every ready mode stays usable. */
 const aiChoice = () => state.aiModes || "both";
+
+/* The Sandbox side's engine: Claude Code's built-in sandbox or yolobox
+   (ai-logic.js). Decided once, at the first start that needs it, from
+   what was used before: a yolobox user keeps yolobox. */
+const AI_OS = /Windows/i.test(navigator.userAgent) ? "windows" : /Mac/i.test(navigator.userAgent) ? "macos" : "linux";
+const aiSandbox = () => (AI_SANDBOXES.includes(state.aiSandbox) ? state.aiSandbox : "builtin");
+AIS.init = (async () => {
+  const list = await invoke("ia_list").catch(() => []);
+  AIS.containers = (list || []).filter((c) => c.engine === "container").length;
+  if (AI_SANDBOXES.includes(state.aiSandbox)) return;
+  state.aiSandbox = aiSandboxDefault({ saved: state.aiSandbox, aiModes: state.aiModes, containerConversations: AIS.containers, os: AI_OS });
+  save();
+})();
+
+/* What the Sandbox choice uses, in words (welcome, Settings). */
+const aiSandboxSub = () => (aiSandbox() === "yolobox" ? "welcome.ai.container.sub" : "welcome.ai.sandbox.sub");
+
+/* Another sandbox for new conversations; the existing ones keep theirs. */
+function aiSetSandbox(sandbox) {
+  if (!AI_SANDBOXES.includes(sandbox) || sandbox === state.aiSandbox) return;
+  state.aiSandbox = sandbox;
+  save();
+  // Checked again with the new scope, after a check already under way.
+  (AIS.pending || Promise.resolve()).then(() => aiCheck(true));
+  window.dispatchEvent(new Event("aichange"));
+}
+
+/* yolobox and its engines are only checked when they matter: chosen, or
+   holding a conversation. */
+const aiYoloboxScope = () =>
+  aiSandbox() === "yolobox" || AIS.containers > 0 || (typeof IA !== "undefined" && (IA.list || []).some((c) => c.engine === "container"));
 
 function aiSetChoice(choice) {
   state.aiModes = choice;
@@ -26,8 +57,7 @@ function aiSetChoice(choice) {
   window.dispatchEvent(new Event("aichange"));
 }
 
-const aiWanted = (choice = aiChoice()) =>
-  choice === "off" ? [] : choice === "both" ? ["container", "local"] : [choice];
+const aiWanted = (choice = aiChoice()) => aiWantedFor(choice, aiSandbox());
 
 /* The modes a conversation may use now. */
 function aiAllowed() {
@@ -36,22 +66,25 @@ function aiAllowed() {
   return aiWanted().filter((m) => r.ready[m]);
 }
 
+/* A conversation's engine is usable: its side chosen, its engine ready. */
+const aiEngineReady = (engine) => !!AIS.report?.ready[engine] && aiWantedFor(aiChoice(), aiSandbox()).map(aiSide).includes(aiSide(engine));
+
 /* Runs the checks; `force` runs them again even if a report exists. */
 function aiCheck(force = false) {
   if (AIS.pending) return AIS.pending;
   if (AIS.report && !force) return Promise.resolve(AIS.report);
-  AIS.pending = invoke("ai_check")
-    .then((r) => {
-      AIS.report = r;
-      window.dispatchEvent(new Event("aichange"));
-      return r;
-    })
+  AIS.pending = AIS.init
+    .then(() => invoke("ai_check", { scope: { yolobox: aiYoloboxScope() } }))
+    .then((r) => (AIS.report = r))
     .catch((e) => {
       toast(String(e), true);
       return AIS.report;
     })
     .finally(() => {
+      // Cleared first: a view redrawn on "aichange" no longer shows the
+      // check as running, even when it failed.
       AIS.pending = null;
+      window.dispatchEvent(new Event("aichange"));
     });
   return AIS.pending;
 }
@@ -87,11 +120,13 @@ const AIS_LINKS = {
   orbstack: "https://orbstack.dev",
   podman: "https://podman.io",
   python: "https://www.python.org/downloads/",
+  sandboxing: "https://code.claude.com/docs/en/sandboxing",
 };
 
 const AIS_MODULES = ["trimesh", "manifold3d", "numpy"];
 
 /* Rows to show for the chosen modes: the modules are folded into one. */
+const AIS_HOST = ["local", "sandbox"];
 function aisRows(report, choice) {
   const wanted = aiWanted(choice);
   const rows = [];
@@ -100,15 +135,19 @@ function aisRows(report, choice) {
     if (AIS_MODULES.includes(it.key)) continue;
     rows.push({ ...it });
   }
-  if (wanted.includes("local")) {
+  if (wanted.some((m) => AIS_HOST.includes(m))) {
     const mods = report.items.filter((i) => AIS_MODULES.includes(i.key));
     const missing = mods.filter((i) => i.state !== "ok");
     const skipped = mods.every((i) => i.state === "skipped");
     rows.push({
       key: "modules",
-      modes: ["local"],
+      modes: AIS_HOST,
       state: skipped ? "skipped" : missing.length ? "missing" : "ok",
       detail: missing.length && !skipped ? missing.map((i) => i.key).join(", ") : null,
+      // Python's error for a module that is there but does not import (a
+      // library it lacks, a build for another Python); "No module named"
+      // is what "missing" already says.
+      errors: missing.filter((i) => i.detail && !/^ModuleNotFoundError: No module named '?\w+'?$/.test(i.detail)).map((i) => `${i.key}: ${i.detail}`),
     });
   }
   return rows;
@@ -178,6 +217,17 @@ function aisHelp(row, report) {
     }
     case "runtime:unsupported":
       return { text: tr("ais.help.unsupported"), items: [] };
+    case "builtin:unsupported":
+      return { text: tr("ais.help.builtin_unsupported"), items: [] };
+    case "seatbelt:missing":
+      return { text: tr("ais.help.seatbelt"), items: [link(AIS_LINKS.sandboxing, tr("ais.link.sandboxing"))] };
+    case "bwrap:missing":
+    case "socat:missing":
+      // Installed is all the check sees; AppArmor may still stop bwrap.
+      return {
+        text: tr("ais.help.bwrap"),
+        items: [cmd("sudo apt-get install bubblewrap socat"), cmd("sudo dnf install bubblewrap socat"), cmd("sudo pacman -S bubblewrap socat"), link(AIS_LINKS.sandboxing, tr("ais.link.apparmor"))],
+      };
     case "python:missing":
       return {
         text: tr("ais.help.python"),
@@ -192,9 +242,12 @@ function aisHelp(row, report) {
       return {
         text: tr(report.python_managed ? "ais.help.modules_managed" : "ais.help.modules"),
         items: [
+          ...(row.errors || []).map((e) => ({ note: e })),
           cmd(
             `python3 -m pip install --user${report.python_managed ? " --break-system-packages" : ""} ${AIS_MODULES.join(" ")}`
           ),
+          // A Python newer than manifold3d's wheels builds it, which needs TBB.
+          ...(os === "macos" ? [{ note: tr("ais.help.modules_tbb") }, cmd("brew install tbb")] : []),
         ],
       };
   }
@@ -214,7 +267,8 @@ function aisGroups(rows, choice) {
   if (wanted.length < 2) return [{ title: null, rows }];
   return [
     { title: tr("ais.group.common"), rows: both },
-    { title: tr("ais.group.container"), rows: rest.filter((r) => r.modes.includes("container")), mode: "container" },
+    // The Sandbox side: the built-in sandbox or the container, as chosen.
+    ...wanted.filter((m) => m !== "local").map((m) => ({ title: tr("ais.group.container"), rows: rest.filter((r) => r.modes.includes(m)), mode: m })),
     { title: tr("ais.group.local"), rows: rest.filter((r) => r.modes.includes("local")), mode: "local" },
   ];
 }
@@ -253,7 +307,9 @@ function aiRenderChecks(box, choice = aiChoice()) {
         <span class="ais-status">${esc(aisStatus(row, r))}</span>
         ${help ? `<div class="ais-help"><p>${esc(help.text)}</p>${help.items
           .map((h) =>
-            h.cmd
+            h.note
+              ? `<p>${esc(h.note)}</p>`
+              : h.cmd
               ? `<div class="ais-cmd"><code>${esc(h.cmd)}</code><button class="btn small" data-copy="${esc(h.cmd)}">${esc(tr("ais.copy"))}</button></div>`
               : h.url
                 ? `<button class="w-link" data-url="${esc(h.url)}">${esc(h.label)} ↗</button>`

@@ -1,10 +1,11 @@
 "use strict";
 /* AI tab: the conversation view.
 
-   Claude Code runs in its structured mode (src-tauri/src/chat.rs): its events
-   arrive as the "ia-chat" event, already slimmed; the past comes from the
-   conversation's own log (workspace/chat.jsonl) or, for older conversations,
-   from Claude's transcript. This view renders both the same way.
+   Claude Code runs interactively, read from its transcript
+   (src-tauri/src/claude_pty.rs, chat.rs): its events arrive as the
+   "ia-chat" event, already slimmed; the past comes from the conversation's
+   own log (workspace/chat.jsonl) or, for older conversations, from Claude's
+   transcript. This view renders both the same way.
 
    Adapted from claude-chat-panel's page (web/chat.js,
    https://github.com/simscorpbs/claude-chat-panel, MIT License,
@@ -22,15 +23,19 @@ const CHAT = {
   /* tool_use id → row; request_id → permission card. */
   tools: new Map(),
   perms: new Map(),
-  model: "",
-  cost: 0,
-  /* Images waiting to leave with the next message. */
+  /* Images and models (attach-logic.js) waiting to leave with the next
+     message. */
   attach: [],
   /* Initial requests already sent, so a reopening does not send them twice. */
   autoSent: new Set(),
+  /* Conversation id → images and models added in the creation sheet, which
+     leave with its initial request. */
+  firstAttach: new Map(),
+  /* The turn of the conversation shown: "" | "answering" | "stopping". */
+  phase: "",
 };
 
-const CHAT_MAX_IMAGES = 5;
+const CHAT_MAX_IMAGES = ATTACH_MAX_IMAGES;
 /* Longest side sent to Claude: beyond it, the model scales images down anyway. */
 const CHAT_MAX_SIDE = 1568;
 const INTERRUPTED = "[Request interrupted by user]";
@@ -38,11 +43,6 @@ const INTERRUPTED = "[Request interrupted by user]";
 const chatList = $("chat-list");
 
 /* ------------------------------------------------------------ rendering */
-
-marked.setOptions({ gfm: true, breaks: true });
-/* Text can carry what third parties wrote (tool results, web pages):
-   sanitized before it shows. */
-const chatMd = (text) => DOMPurify.sanitize(marked.parse(text || ""));
 
 const chatNearBottom = () => chatList.scrollHeight - chatList.scrollTop - chatList.clientHeight < 80;
 
@@ -90,13 +90,6 @@ function chatDecorate(el) {
   });
 }
 
-function chatWorking() {
-  const w = chatDiv("chat-working");
-  w.setAttribute("aria-label", tr("chat.working"));
-  w.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
-  return w;
-}
-
 /* The working dots always stay last. */
 function chatMoveWorkingDown() {
   const w = chatList.querySelector(".chat-working");
@@ -106,34 +99,51 @@ function chatMoveWorkingDown() {
   }
 }
 
-/* While a turn runs, Stop stands where Send was. */
+/* While a turn runs, Stop stands where Send was, with its word. Stopping
+   only interrupts the turn: the session stays, and the next message
+   resumes it. */
 function chatSetBusy(on) {
   if (CHAT.id) on ? CHAT.busy.add(CHAT.id) : CHAT.busy.delete(CHAT.id);
   $("chat-stop").classList.toggle("hidden", !on);
+  $("chat-stop").disabled = false;
   $("chat-send").classList.toggle("hidden", on);
+  // The terminal view has the same Stop.
+  $("ia-term-stop").classList.toggle("hidden", !on);
   chatList.querySelector(".chat-working")?.remove();
-  if (on) chatAdd(chatWorking());
+  if (on) {
+    chatAdd(chatWorking());
+    if (CHAT.id) IA.failed.delete(CHAT.id);
+  }
+  CHAT.phase = on ? "answering" : "";
+  iaStatusChanged();
+}
+
+/* Stop button and Esc: interrupt the turn; the button waits until it is
+   done. */
+function chatStop() {
+  if (!CHAT.id || !CHAT.busy.has(CHAT.id) || CHAT.phase === "stopping") return;
+  CHAT.phase = "stopping";
+  $("chat-stop").disabled = true;
+  invoke("ia_chat_stop", { id: CHAT.id }).catch((e) => {
+    CHAT.phase = "answering";
+    $("chat-stop").disabled = false;
+    toast(String(e), true);
+  });
 }
 
 /* A conversation whose mode is not ready: its history only. */
 function chatSetLocked(on) {
-  for (const id of ["chat-input", "chat-send", "chat-add", "chat-mode"]) $(id).disabled = on;
+  for (const id of ["chat-input", "chat-send", "chat-add", "chat-model"]) $(id).disabled = on;
   $("chat-input").placeholder = tr(on ? "chat.placeholder_locked" : "chat.placeholder");
-}
-
-function chatStatus() {
-  const cost = CHAT.cost
-    ? fmtNum(CHAT.cost, { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : "";
-  $("chat-status").textContent = [CHAT.model, cost].filter(Boolean).join(" · ");
 }
 
 /* An image of the conversation folder, served by the thumbnail protocol. */
 const chatAttachmentUrl = (name) =>
-  `thumb://localhost/ia?ia=${encodeURIComponent(CHAT.id)}&att=${encodeURIComponent(name)}`;
+  schemeUrl("thumb", `/ia?ia=${encodeURIComponent(CHAT.id)}&att=${encodeURIComponent(name)}`);
 
-/* A user message: images first, then the text. `images` are URLs. */
-function chatUserBubble(text, images = []) {
+/* A user message: images first, then the models, then the text. `images`
+   are URLs; `models` as their chips show them ({ name, parts, size_mm }). */
+function chatUserBubble(text, images = [], models = []) {
   chatClearEmpty();
   const d = chatDiv("chat-msg user");
   if (images.length) {
@@ -145,6 +155,11 @@ function chatUserBubble(text, images = []) {
       img.onerror = () => img.remove();
       row.appendChild(img);
     }
+    d.appendChild(row);
+  }
+  if (models.length) {
+    const row = chatDiv("chat-models");
+    for (const m of models) row.appendChild(chatModelChip(m));
     d.appendChild(row);
   }
   if (text) {
@@ -437,13 +452,7 @@ function chatVersion(n) {
 function chatHandle(ev, live) {
   switch (ev.type) {
     case "system":
-      if (ev.subtype === "init") {
-        CHAT.model = ev.model || CHAT.model;
-        chatStatus();
-        if (ev.mode) chatModeShow(ev.mode);
-      } else if (ev.subtype === "mode") {
-        chatModeShow(ev.mode);
-      } else if (ev.subtype === "api_retry" && live && ev.error !== "authentication_failed") {
+      if (ev.subtype === "api_retry" && live && ev.error !== "authentication_failed") {
         chatNote(tr("chat.retry", { n: ev.attempt, max: ev.max_retries }), "muted");
       }
       break;
@@ -489,13 +498,15 @@ function chatHandle(ev, live) {
       const content = ev.message?.content;
       const blocks = typeof content === "string" ? [{ type: "text", text: content }] : content || [];
       const images = [];
+      const models = [];
       let text = "";
       for (const block of blocks) {
         if (block.type === "tool_result") chatToolResult(block.tool_use_id, block.content, block.is_error);
         else if (block.type === "attachment") images.push(chatAttachmentUrl(block.name));
+        else if (block.type === "model") models.push({ name: block.original || block.name, parts: block.parts, size_mm: block.size_mm });
         else if (block.type === "text" && block.text.trim() && block.text !== INTERRUPTED) text += block.text;
       }
-      if (text || images.length) chatUserBubble(text, images);
+      if (text || images.length || models.length) chatUserBubble(text, images, models);
       break;
     }
     case "control_request":
@@ -511,27 +522,26 @@ function chatHandle(ev, live) {
       chatSeen(ev.tool_use_id, ev.name);
       break;
     case "result":
-      if (typeof ev.total_cost_usd === "number") {
-        CHAT.cost = ev.total_cost_usd;
-        chatStatus();
-      }
       if (CHAT.streaming && CHAT.streamText) chatAssistant(CHAT.streamText, CHAT.streaming);
       CHAT.streaming = null;
       CHAT.streamText = "";
+      if (live && ev.is_error && ev.subtype !== "error_during_execution" && CHAT.id) IA.failed.add(CHAT.id);
       if (live) chatSetBusy(false);
       if (ev.is_error && ev.subtype === "error_during_execution") chatNote(tr("chat.stopped"), "muted");
       else if (ev.is_error && ev.result) chatNote(String(ev.result), "error");
       break;
     case "exited":
-      if (CHAT.busy.has(CHAT.id)) chatNote(tr("chat.exited"), "muted");
+      if (CHAT.busy.has(CHAT.id)) {
+        chatNote(tr("chat.exited"), "muted");
+        // What the process said on stderr: the reason, when it failed to start.
+        if (ev.stderr) chatNote(String(ev.stderr), "muted pre");
+        // A sandbox that could not start, in words (chat.rs).
+        if (ev.message) chatNote(String(ev.message), "error");
+      }
       chatSetBusy(false);
       break;
     case "auth_failed":
       if (live) chatAuthFailed();
-      break;
-    case "error":
-      chatSetBusy(false);
-      chatNote(ev.text, "error");
       break;
   }
 }
@@ -539,8 +549,13 @@ function chatHandle(ev, live) {
 listen("ia-chat", (e) => {
   const { id, events } = e.payload;
   for (const ev of events) {
-    if (id === CHAT.id) chatHandle(ev, true);
-    else if (ev.type === "result" || ev.type === "exited") CHAT.busy.delete(id);
+    if (id === CHAT.id && CHAT.loading === id) CHAT.early.push(ev);
+    else if (id === CHAT.id) chatHandle(ev, true);
+    else if (ev.type === "result" || ev.type === "exited") {
+      CHAT.busy.delete(id);
+      if (ev.type === "result" && ev.is_error && ev.subtype !== "error_during_execution") IA.failed.add(id);
+      iaStatusChanged();
+    }
   }
 });
 
@@ -550,30 +565,30 @@ listen("ia-mesh", (e) => {
   if (e.payload.id === CHAT.id) chatVersion(e.payload.version);
 });
 
-/* ------------------------------------------------------------ mode */
+/* ------------------------------------------------------------ model */
 
-/* Modes offered: locally, from the most autonomous to plan only; in the
-   sandbox, everything is allowed already, so only plan mode is a choice. */
-const CHAT_MODES = {
-  local: ["acceptEdits", "default", "plan"],
-  container: ["bypassPermissions", "plan"],
-};
+/* Models a conversation may choose (chat.rs `MODELS`), with their names;
+   "" is the account's default. */
+const CHAT_MODELS = [
+  ["claude-opus-5-5", "Opus 5.5"],
+  ["claude-sonnet-5-5", "Sonnet 5.5"],
+  ["claude-haiku-4-5-20251001", "Haiku 4.5"],
+];
+const chatModelName = (id) => CHAT_MODELS.find(([m]) => id && id.startsWith(m.replace(/-\d{8}$/, "")))?.[1] || id || "";
 
-function chatModeFill(c) {
-  const sel = $("chat-mode");
-  const modes = CHAT_MODES[c.engine === "container" ? "container" : "local"];
-  sel.innerHTML = modes.map((m) => `<option value="${m}">${esc(tr("chat.mode." + m))}</option>`).join("");
-  sel.value = modes[0];
+function chatModelFill(c) {
+  const sel = $("chat-model");
+  sel.innerHTML = [["", tr("chat.model.default")], ...CHAT_MODELS].map(([v, n]) => `<option value="${v}">${esc(n)}</option>`).join("");
+  sel.value = CHAT_MODELS.some(([m]) => m === c.model) ? c.model : "";
 }
 
-/* The mode Claude reports — after our change, or when it leaves plan mode. */
-function chatModeShow(mode) {
-  const sel = $("chat-mode");
-  if ([...sel.options].some((o) => o.value === mode)) sel.value = mode;
-}
-
-$("chat-mode").addEventListener("change", (e) => {
-  if (CHAT.id) invoke("ia_chat_mode", { id: CHAT.id, mode: e.target.value }).catch((err) => toast(String(err), true));
+$("chat-model").addEventListener("change", (e) => {
+  if (!CHAT.id) return;
+  const model = e.target.value || null;
+  if (CHAT.conv) CHAT.conv.model = model;
+  invoke("ia_chat_model", { id: CHAT.id, model })
+    .then(() => toast(tr("chat.model.changed", { model: model ? chatModelName(model) : tr("chat.model.default") })))
+    .catch((err) => toast(String(err), true));
 });
 
 /* ------------------------------------------------------------ opening */
@@ -584,27 +599,36 @@ function chatReset() {
   CHAT.perms.clear();
   CHAT.streaming = null;
   CHAT.streamText = "";
-  CHAT.model = "";
-  CHAT.cost = 0;
-  chatStatus();
 }
 
 /* Shows a conversation: its past, then — for a brand new one — its initial
    request as the first message. */
 async function chatOpen(c) {
   CHAT.id = c.id;
+  CHAT.conv = c;
   chatReset();
   chatClearAttachments();
-  chatModeFill(c);
+  chatModelFill(c);
   let past = [];
+  // Live events of this conversation wait while its past is read: the log
+  // is written before an event is sent, so one arriving now may already be
+  // in the past; rendered twice, a tool row or a message would double.
+  CHAT.loading = c.id;
+  CHAT.early = [];
   try {
     past = (await invoke("ia_chat_history", { id: c.id })) || [];
   } catch {}
   if (CHAT.id !== c.id) return;
   for (const ev of past) chatHandle(ev, false);
+  const seen = new Set(past.map((ev) => JSON.stringify(ev)));
+  const early = CHAT.early.filter((ev) => !seen.has(JSON.stringify(ev)));
+  CHAT.loading = null;
+  CHAT.early = [];
+  for (const ev of early) chatHandle(ev, true);
   chatList.scrollTop = chatList.scrollHeight;
   const busy = CHAT.busy.has(c.id);
   CHAT.busy.delete(c.id);
+  CHAT.phase = "";
   chatSetBusy(busy);
   // Claude may still be waiting on a permission asked while the conversation
   // was not shown: its card becomes answerable again.
@@ -615,26 +639,39 @@ async function chatOpen(c) {
   chatSetLocked(!!IA.locked);
   if (!past.length) {
     chatList.appendChild(chatDiv("chat-empty", tr(iaIsCreation(c) ? "chat.empty_create" : "chat.empty")));
-    if (c.prompt && !c.started && !CHAT.autoSent.has(c.id) && !IA.locked) {
+    const attach = CHAT.firstAttach.get(c.id) || [];
+    if ((c.prompt || attach.length) && !c.started && !CHAT.autoSent.has(c.id) && !IA.locked) {
       CHAT.autoSent.add(c.id);
-      chatSend(c.prompt, []);
+      CHAT.firstAttach.delete(c.id);
+      chatSend(c.prompt || "", attach);
     }
   }
   $("chat-input").focus();
 }
 
 function chatLeave() {
+  const id = CHAT.id;
   CHAT.id = null;
   chatClearAttachments();
+  // An idle Claude is not kept running (nor its sandbox) while the
+  // conversation is not shown: the next message resumes it. One that is
+  // answering goes on, and its end is still reported to the list.
+  if (id && !CHAT.busy.has(id)) invoke("ia_chat_close", { id }).catch(() => {});
 }
 
 /* ------------------------------------------------------------ sending */
 
+/* `attachments`: images and models (attach-logic.js). Models leave as the
+   paths of the user's files: the app copies them into the conversation's
+   folder. */
 async function chatSend(text, attachments) {
   const id = CHAT.id;
   if (!id || (!text && !attachments.length)) return;
   const c = IA.list.find((x) => x.id === id);
-  chatUserBubble(text, attachments.map((a) => a.url));
+  const images = attachments.filter((a) => a.kind !== "model");
+  const models = attachments.filter((a) => a.kind === "model");
+  // As the history will show them: no weight.
+  chatUserBubble(text, images.map((a) => a.url), models.map(({ name, parts, size_mm }) => ({ name, parts, size_mm })));
   chatList.scrollTop = chatList.scrollHeight;
   chatSetBusy(true);
   // The first start of the sandbox builds its image: say so, it takes a while.
@@ -645,7 +682,8 @@ async function chatSend(text, attachments) {
     await invoke("ia_chat_send", {
       id,
       text,
-      images: attachments.map(({ name, media_type, data }) => ({ name, media_type, data })),
+      images: images.map(({ name, media_type, data }) => ({ name, media_type, data })),
+      models: models.map((m) => m.path),
     });
     if (c) c.started = true;
   } catch (e) {
@@ -653,7 +691,10 @@ async function chatSend(text, attachments) {
       chatSetBusy(false);
       chatNote(String(e), "error");
     } else {
+      // Left meanwhile: the card in the list must still show the failure.
       CHAT.busy.delete(id);
+      IA.failed.add(id);
+      iaStatusChanged();
     }
   }
 }
@@ -661,6 +702,8 @@ async function chatSend(text, attachments) {
 function chatSubmit() {
   const input = $("chat-input");
   const text = input.value.trim();
+  // A file still being checked would miss the message (Enter too).
+  if (ATTACH_CHECKING) return;
   if (!text && !CHAT.attach.length) return;
   const attachments = CHAT.attach;
   CHAT.attach = [];
@@ -670,11 +713,17 @@ function chatSubmit() {
   chatSend(text, attachments);
 }
 
+/* The field grows with its text. Empty, it stays one line: measured with
+   only its placeholder, while the column is still narrow or hidden, it
+   came out two lines tall and the placeholder sat too high. */
 function chatGrow() {
   const input = $("chat-input");
-  input.style.height = "auto";
-  input.style.height = Math.min(input.scrollHeight, 220) + "px";
-  $("chat-send").disabled = !input.value.trim() && !CHAT.attach.length;
+  if (!input.value) input.style.height = "";
+  else {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 220) + "px";
+  }
+  $("chat-send").disabled = ATTACH_CHECKING > 0 || (!input.value.trim() && !CHAT.attach.length);
 }
 
 /* ------------------------------------------------------------ attachments */
@@ -715,26 +764,177 @@ function chatReadImage(file) {
   });
 }
 
-async function chatAddFiles(files) {
-  for (const f of files) {
-    if (!f.type.startsWith("image/")) continue;
-    if (CHAT.attach.length >= CHAT_MAX_IMAGES) {
-      toast(tr("chat.too_many", { n: CHAT_MAX_IMAGES }), true);
-      break;
+/* Reads images into `list`, up to CHAT_MAX_IMAGES: the message being
+   written, or the creation sheet's (ia.js). */
+/* Files being checked or read: a message or a new conversation waits for
+   them (chatSubmit, iaCreate), or it would leave without them. */
+let ATTACH_CHECKING = 0;
+async function chatAttachWait(fn) {
+  ATTACH_CHECKING++;
+  chatGrow();
+  try {
+    return await fn();
+  } finally {
+    ATTACH_CHECKING--;
+    chatGrow();
+  }
+}
+
+/* `target()` gives the list files go to: re-read after every wait, and a
+   different list (another conversation, the sheet opened again) means the
+   user left, so the rest is dropped. */
+function chatReadImages(files, target) {
+  const list = target();
+  return chatAttachWait(async () => {
+    for (const f of files) {
+      if (attachRoom(list, "image") <= 0) {
+        toast(tr("chat.too_many", { n: CHAT_MAX_IMAGES }), true);
+        break;
+      }
+      try {
+        const img = await chatReadImage(f);
+        if (target() !== list) return;
+        list.push(img);
+      } catch (e) {
+        toast(e.message, true);
+      }
     }
-    try {
-      CHAT.attach.push(await chatReadImage(f));
-    } catch (e) {
-      toast(e.message, true);
+  });
+}
+
+/* Files given by their paths — dropped on the window, chosen in the dialog,
+   pasted from a file manager — checked by the app (ia_attach.rs), then
+   added to the list `target()` gives (see chatReadImages): images scaled
+   like any other, models as chips. A file refused says why; none is
+   skipped silently. */
+function chatAttachPaths(paths, target) {
+  if (!paths?.length) return Promise.resolve();
+  return chatAttachWait(() => chatAttachStaged(paths, target));
+}
+async function chatAttachStaged(paths, target) {
+  const list = target();
+  let staged = [];
+  try {
+    staged = await invoke("ia_attach_files", { paths });
+  } catch (e) {
+    toast(String(e), true);
+    return;
+  }
+  // Checking a big model takes seconds: the user may have left meanwhile.
+  if (target() !== list) return;
+  for (const s of staged) {
+    if (s.kind === "rejected") {
+      const [key, params] = attachRejectMessage(s);
+      if (s.reason === "size") params.max = fmtSize(s.max);
+      toast(tr(key, params), true);
+    } else if (s.kind === "model") {
+      if (attachRoom(list, "model") <= 0) {
+        toast(tr("chat.too_many_models", { n: ATTACH_MAX_MODELS }), true);
+        continue;
+      }
+      list.push(s);
+      if (attachOddScale(s.size_mm)) toast(tr("chat.model_scale", { name: s.name, size: chatModelDims(s) }));
+    } else if (attachRoom(list, "image") <= 0) {
+      toast(tr("chat.too_many", { n: CHAT_MAX_IMAGES }), true);
+    } else {
+      const bytes = Uint8Array.from(atob(s.data), (ch) => ch.charCodeAt(0));
+      try {
+        const img = await chatReadImage(new File([bytes], s.name, { type: s.media_type }));
+        if (target() !== list) return;
+        list.push(img);
+      } catch (e) {
+        toast(e.message, true);
+      }
     }
   }
-  chatRenderAttachments();
+}
+
+/* The native dialog, for images and models: paths, as a drop gives. */
+async function chatPickFiles() {
+  const all = [...ATTACH_IMAGE_EXT, ...ATTACH_MODEL_EXT];
+  try {
+    const picked = await window.__TAURI__.dialog.open({
+      multiple: true,
+      filters: [
+        { name: tr("chat.filter_all"), extensions: all },
+        { name: tr("chat.filter_images"), extensions: ATTACH_IMAGE_EXT },
+        { name: tr("chat.filter_models"), extensions: ATTACH_MODEL_EXT },
+      ],
+    });
+    return picked == null ? [] : [].concat(picked);
+  } catch (e) {
+    toast(String(e), true);
+    return [];
+  }
+}
+
+/* A paste in a message field: images from the clipboard (a screenshot), or
+   files copied in a file manager, which some systems give as paths
+   (text/uri-list). A copied file without its path cannot be read here: the
+   message says to drop or choose it. Plain text pastes as usual. */
+function chatPaste(e, target, after) {
+  const paths = pathsFromUriList(e.clipboardData?.getData("text/uri-list"));
+  const files = [...(e.clipboardData?.files || [])];
+  if (!paths.length && !files.length) return;
+  e.preventDefault();
+  if (paths.length) {
+    chatAttachPaths(paths, target).then(after);
+    return;
+  }
+  const images = files.filter((f) => f.type.startsWith("image/"));
+  for (const f of files) if (!f.type.startsWith("image/")) toast(tr("chat.paste_choose", { name: f.name || "?" }), true);
+  if (images.length) chatReadImages(images, target).then(after);
+}
+
+/* Width × depth × height of a model, as its chip says it. */
+function chatModelDims(m) {
+  const [x, y, z] = attachDims(m.size_mm);
+  return tr("chat.model_dims", { x, y, z });
+}
+
+/* A model's chip: its name, parts, size (and weight while it waits to
+   leave); a ✕ when `onRemove` is given. No preview: the 3D pane shows the
+   result. */
+function chatModelChip(m, onRemove) {
+  const chip = chatDiv("chat-model-chip");
+  chip.title = m.name;
+  const icon = document.createElement("span");
+  icon.className = "chat-model-icon";
+  icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 7v10l9 5 9-5V7zm0 2.3L18.8 8 12 11.7 5.2 8zM5 9.7l6 3.3v6.6l-6-3.3zm8 9.9V13l6-3.3v6.6z"/></svg>';
+  const meta = [tr("chat.model_parts", { n: m.parts || 1 }), chatModelDims(m)];
+  if (m.bytes) meta.unshift(fmtSize(m.bytes));
+  const body = chatDiv("chat-model-body");
+  body.append(chatDiv("chat-model-name", m.name), chatDiv("chat-model-meta", meta.join(" · ")));
+  chip.append(icon, body);
+  if (onRemove) {
+    const x = document.createElement("button");
+    x.type = "button";
+    x.textContent = "✕";
+    x.title = tr("common.delete");
+    x.onclick = onRemove;
+    chip.appendChild(x);
+  }
+  return chip;
 }
 
 function chatRenderAttachments() {
-  const box = $("chat-attach");
+  chatRenderThumbs($("chat-attach"), CHAT.attach, chatRenderAttachments);
+  chatGrow();
+}
+
+/* `list`'s images and models into `box`, each with its ✕; `again` redraws. */
+function chatRenderThumbs(box, list, again) {
   box.innerHTML = "";
-  CHAT.attach.forEach((a, i) => {
+  list.forEach((a, i) => {
+    if (a.kind === "model") {
+      box.appendChild(
+        chatModelChip(a, () => {
+          list.splice(i, 1);
+          again();
+        })
+      );
+      return;
+    }
     const t = chatDiv("chat-thumb");
     const img = document.createElement("img");
     img.src = a.url;
@@ -743,14 +943,13 @@ function chatRenderAttachments() {
     x.textContent = "✕";
     x.title = tr("common.delete");
     x.onclick = () => {
-      CHAT.attach.splice(i, 1);
-      chatRenderAttachments();
+      list.splice(i, 1);
+      again();
     };
     t.append(img, x);
     box.appendChild(t);
   });
-  box.classList.toggle("hidden", !CHAT.attach.length);
-  chatGrow();
+  box.classList.toggle("hidden", !list.length);
 }
 
 function chatClearAttachments() {
@@ -761,39 +960,49 @@ function chatClearAttachments() {
 /* ------------------------------------------------------------ controls */
 
 $("chat-input").addEventListener("input", chatGrow);
+// A wider or narrower column rewraps the text: its height follows.
+let chatInputW = 0;
+new ResizeObserver(([e]) => {
+  const w = Math.round(e.contentRect.width);
+  if (w === chatInputW) return;
+  chatInputW = w;
+  if ($("chat-input").value) chatGrow();
+}).observe($("chat-input"));
 $("chat-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
     if (!CHAT.busy.has(CHAT.id)) chatSubmit();
   } else if (e.key === "Escape" && CHAT.busy.has(CHAT.id)) {
     e.preventDefault();
-    invoke("ia_chat_stop", { id: CHAT.id }).catch(() => {});
+    chatStop();
   }
 });
-$("chat-input").addEventListener("paste", (e) => {
-  const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith("image/"));
-  if (files.length) {
-    e.preventDefault();
-    chatAddFiles(files);
-  }
-});
+$("chat-input").addEventListener("paste", (e) => chatPaste(e, () => CHAT.attach, chatRenderAttachments));
 $("chat-send").addEventListener("click", chatSubmit);
-$("chat-stop").addEventListener("click", () => invoke("ia_chat_stop", { id: CHAT.id }).catch(() => {}));
-$("chat-add").addEventListener("click", () => $("chat-file").click());
-$("chat-file").addEventListener("change", (e) => {
-  chatAddFiles([...e.target.files]);
-  e.target.value = "";
+$("chat-stop").addEventListener("click", chatStop);
+/* Esc stops Claude from anywhere in the conversation view, not only from the
+   message field — unless a sheet or menu has it. */
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !CHAT.id || !CHAT.busy.has(CHAT.id) || e.defaultPrevented) return;
+  if ($("view-ia").classList.contains("hidden")) return;
+  // Fields keep their Esc; the terminal's own hidden field does not count.
+  if (document.querySelector(".modal:not(.hidden)") || (e.target.closest?.("input, select, textarea") && !e.target.closest(".xterm"))) return;
+  // The preview enlarged out of its pane: Esc puts it back (viewer.js).
+  const v = $("viewer");
+  if (!v.classList.contains("hidden") && !v.classList.contains("docked")) return;
+  e.preventDefault();
+  chatStop();
 });
-$("ia-chat").addEventListener("dragover", (e) => {
-  if ([...(e.dataTransfer?.items || [])].some((i) => i.type.startsWith("image/"))) e.preventDefault();
-});
-$("ia-chat").addEventListener("drop", (e) => {
-  const files = [...(e.dataTransfer?.files || [])].filter((f) => f.type.startsWith("image/"));
-  if (files.length) {
-    e.preventDefault();
-    chatAddFiles(files);
+$("chat-add").addEventListener("click", async () => {
+  const paths = await chatPickFiles();
+  // The conversation may have changed while the dialog was open.
+  if (paths.length && CHAT.id) {
+    await chatAttachPaths(paths, () => CHAT.attach);
+    chatRenderAttachments();
   }
 });
+/* Files dropped on the window reach the conversation through app.js: with
+   Tauri's drop on, the page's own drop never gets them. */
 
 /* Links open in the browser, never in the app's window. */
 chatList.addEventListener("click", (e) => {
@@ -810,5 +1019,8 @@ chatList.addEventListener("click", (e) => {
 /* A new language: the conversation is drawn again from its past. */
 window.addEventListener("langchange", () => {
   const c = CHAT.id && IA.list.find((x) => x.id === CHAT.id);
-  if (c && !CHAT.busy.has(c.id)) chatOpen(c);
+  // Redrawn even while answering (notes, permission cards and labels
+  // change language); only a text being streamed is left alone, it
+  // would lose its partial text until the next piece.
+  if (c && !CHAT.streaming) chatOpen(c);
 });

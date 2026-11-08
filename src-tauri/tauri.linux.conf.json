@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "create": false,
+        "title": "Snap Studio",
+        "width": 1380,
+        "height": 900,
+        "minWidth": 900,
+        "minHeight": 600,
+        "center": true,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": true,
+        "dragDropEnabled": true
+      }
+    ]
+  }
+}

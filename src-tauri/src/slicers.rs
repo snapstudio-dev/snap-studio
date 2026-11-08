@@ -27,12 +27,7 @@ const KNOWN: &[Known] = &[
         win: &[r"Snapmaker_Orca\snapmaker-orca.exe", r"Snapmaker Orca\snapmaker-orca.exe"],
         linux: &["snapmaker-orca", "Snapmaker_Orca"],
     },
-    Known {
-        name: "OrcaSlicer",
-        mac: &["OrcaSlicer.app"],
-        win: &[r"OrcaSlicer\orca-slicer.exe"],
-        linux: &["orca-slicer", "OrcaSlicer"],
-    },
+    Known { name: "OrcaSlicer", mac: &["OrcaSlicer.app"], win: &[r"OrcaSlicer\orca-slicer.exe"], linux: &["orca-slicer", "OrcaSlicer"] },
     Known {
         name: "Bambu Studio",
         mac: &["BambuStudio.app", "Bambu Studio.app"],
@@ -57,18 +52,8 @@ const KNOWN: &[Known] = &[
         win: &[],
         linux: &["cura", "UltiMaker-Cura"],
     },
-    Known {
-        name: "Creality Print",
-        mac: &["Creality Print.app"],
-        win: &[],
-        linux: &["CrealityPrint"],
-    },
-    Known {
-        name: "Snapmaker Luban",
-        mac: &["Snapmaker Luban.app"],
-        win: &[],
-        linux: &[],
-    },
+    Known { name: "Creality Print", mac: &["Creality Print.app"], win: &[], linux: &["CrealityPrint"] },
+    Known { name: "Snapmaker Luban", mac: &["Snapmaker Luban.app"], win: &[], linux: &[] },
 ];
 
 #[derive(Serialize, Clone)]
@@ -85,27 +70,17 @@ fn candidates(k: &Known) -> Vec<PathBuf> {
     if let Some(home) = dirs::home_dir() {
         roots.push(home.join("Applications"));
     }
-    k.mac
-        .iter()
-        .flat_map(|b| roots.iter().map(move |r| r.join(b)))
-        .filter(|p| p.is_dir())
-        .collect()
+    k.mac.iter().flat_map(|b| roots.iter().map(move |r| r.join(b))).filter(|p| p.is_dir()).collect()
 }
 
 #[cfg(windows)]
 fn candidates(k: &Known) -> Vec<PathBuf> {
-    let mut roots: Vec<PathBuf> = ["ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"]
-        .iter()
-        .filter_map(|v| std::env::var_os(v).map(PathBuf::from))
-        .collect();
+    let mut roots: Vec<PathBuf> =
+        ["ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"].iter().filter_map(|v| std::env::var_os(v).map(PathBuf::from)).collect();
     if let Some(local) = dirs::data_local_dir() {
         roots.push(local.join("Programs"));
     }
-    k.win
-        .iter()
-        .flat_map(|e| roots.iter().map(move |r| r.join(e)))
-        .filter(|p| p.is_file())
-        .collect()
+    k.win.iter().flat_map(|e| roots.iter().map(move |r| r.join(e))).filter(|p| p.is_file()).collect()
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -122,8 +97,7 @@ fn candidates(k: &Known) -> Vec<PathBuf> {
         let Ok(rd) = std::fs::read_dir(&d) else { continue };
         for e in rd.flatten() {
             let n = e.file_name().to_string_lossy().to_lowercase();
-            let hit = n.ends_with(".appimage")
-                && k.linux.iter().any(|p| n.starts_with(&p.to_lowercase()));
+            let hit = n.ends_with(".appimage") && k.linux.iter().any(|p| n.starts_with(&p.to_lowercase()));
             if hit && e.path().is_file() {
                 out.push(e.path());
             }
@@ -144,10 +118,7 @@ pub fn list() -> Vec<Slicer> {
                 .map(|c| c.to_string_lossy().to_lowercase())
                 .unwrap_or_else(|_| p.to_string_lossy().to_lowercase());
             if seen.insert(key) {
-                out.push(Slicer {
-                    name: k.name.to_string(),
-                    path: p.to_string_lossy().to_string(),
-                });
+                out.push(Slicer { name: k.name.to_string(), path: p.to_string_lossy().to_string() });
             }
         }
     }
@@ -159,15 +130,32 @@ pub fn executable(app: &Path) -> Result<PathBuf> {
     #[cfg(target_os = "macos")]
     {
         let macos = app.join("Contents/MacOS");
-        for e in std::fs::read_dir(&macos)?.flatten() {
-            let p = e.path();
-            // The main executable carries the application's name, the bundle's other
-            // binaries are utilities.
-            if p.is_file() && p.file_name().map(|n| n != "crashpad_handler").unwrap_or(false) {
+        // The bundle names its main executable (`CFBundleExecutable`); the
+        // other binaries in the folder are utilities, and `read_dir` has
+        // no order to rely on.
+        let plist = std::fs::read_to_string(app.join("Contents/Info.plist")).unwrap_or_default();
+        if let Some(name) = plist_string(&plist, "CFBundleExecutable") {
+            let p = macos.join(name);
+            if p.is_file() {
                 return Ok(p);
             }
         }
-        Err(anyhow!(crate::t!("err.no_executable_in", path = macos.display())))
+        // No plist to read: the binary named like the app, else any that is
+        // not the crash handler.
+        let stem = app.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let mut any = None;
+        for e in std::fs::read_dir(&macos)?.flatten() {
+            let p = e.path();
+            let Some(n) = p.file_name().map(|n| n.to_string_lossy().into_owned()) else { continue };
+            if !p.is_file() || n == "crashpad_handler" {
+                continue;
+            }
+            if n == stem {
+                return Ok(p);
+            }
+            any.get_or_insert(p);
+        }
+        any.ok_or_else(|| anyhow!(crate::t!("err.no_executable_in", path = macos.display())))
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -194,9 +182,7 @@ pub fn resources(app: &Path) -> Option<PathBuf> {
 /// AppImage, extracted once into the cache.
 #[cfg(all(unix, not(target_os = "macos")))]
 fn linux_resources(app: &Path) -> Option<PathBuf> {
-    let is_appimage = app
-        .extension()
-        .is_some_and(|e| e.to_string_lossy().eq_ignore_ascii_case("appimage"));
+    let is_appimage = app.extension().is_some_and(|e| e.to_string_lossy().eq_ignore_ascii_case("appimage"));
     if is_appimage {
         return appimage_resources(app);
     }
@@ -214,17 +200,9 @@ fn linux_resources(app: &Path) -> Option<PathBuf> {
 #[cfg(all(unix, not(target_os = "macos")))]
 fn appimage_resources(app: &Path) -> Option<PathBuf> {
     let meta = std::fs::metadata(app).ok()?;
-    let stamp = meta
-        .modified()
-        .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+    let stamp = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0);
     let key = crate::util::fnv1a(&[format!("{}|{}|{}", app.display(), meta.len(), stamp).as_bytes()]);
-    let root = dirs::cache_dir()?
-        .join("fr.carlini.snapstudio")
-        .join("engine")
-        .join(format!("{key:016x}"));
+    let root = dirs::cache_dir()?.join("fr.carlini.snapstudio").join("engine").join(format!("{key:016x}"));
     let res = root.join("squashfs-root/resources");
     if res.join("profiles").is_dir() {
         return Some(res);
@@ -237,11 +215,7 @@ fn appimage_resources(app: &Path) -> Option<PathBuf> {
         if let Some(p) = pattern {
             cmd.arg(p);
         }
-        let ok = cmd
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .is_ok_and(|s| s.success());
+        let ok = cmd.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status().is_ok_and(|s| s.success());
         if ok && res.join("profiles").is_dir() {
             return Some(res);
         }
@@ -263,5 +237,31 @@ mod tests {
         // Nothing installed on a build machine: only check consistency, not
         // presence.
         assert!(l.iter().all(|s| KNOWN.iter().any(|k| k.name == s.name)));
+    }
+}
+
+/// The string under `key` in an Info.plist (`<key>K</key><string>V</string>`),
+/// read without an XML parser: the file is small and regular.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn plist_string(plist: &str, key: &str) -> Option<String> {
+    let needle = format!("<key>{key}</key>");
+    let after = &plist[plist.find(&needle)? + needle.len()..];
+    let start = after.find("<string>")? + "<string>".len();
+    let end = after[start..].find("</string>")? + start;
+    let v = after[start..end].trim();
+    (!v.is_empty() && !v.contains(['/', '\\'])).then(|| v.to_string())
+}
+
+#[cfg(test)]
+mod plist_tests {
+    use super::plist_string;
+
+    #[test]
+    fn the_bundle_names_its_executable() {
+        let p = "<plist><dict>\n<key>CFBundleName</key>\n<string>Snapmaker Orca</string>\n<key>CFBundleExecutable</key>\n<string>Snapmaker_Orca</string>\n</dict></plist>";
+        assert_eq!(plist_string(p, "CFBundleExecutable").as_deref(), Some("Snapmaker_Orca"));
+        assert_eq!(plist_string(p, "CFBundleName").as_deref(), Some("Snapmaker Orca"));
+        assert_eq!(plist_string(p, "Missing"), None);
+        assert_eq!(plist_string("<key>CFBundleExecutable</key><string>../x</string>", "CFBundleExecutable"), None);
     }
 }

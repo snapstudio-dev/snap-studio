@@ -58,10 +58,7 @@ fn os_version() -> String {
 fn os_version() -> String {
     std::fs::read_to_string("/etc/os-release")
         .ok()
-        .and_then(|s| {
-            s.lines()
-                .find_map(|l| l.strip_prefix("PRETTY_NAME=").map(|v| v.trim_matches('"').to_string()))
-        })
+        .and_then(|s| s.lines().find_map(|l| l.strip_prefix("PRETTY_NAME=").map(|v| v.trim_matches('"').to_string())))
         .unwrap_or_else(|| "Linux".into())
 }
 
@@ -85,12 +82,7 @@ pub async fn update_check(app: AppHandle, pending: State<'_, Pending>) -> Result
     if cfg!(debug_assertions) {
         return Err(crate::t!("err.update_dev"));
     }
-    let update = app
-        .updater()
-        .map_err(|e| e.to_string())?
-        .check()
-        .await
-        .map_err(|e| e.to_string())?;
+    let update = app.updater().map_err(crate::util::ui_err)?.check().await.map_err(crate::util::ui_err)?;
     let out = update.as_ref().map(|u| Available {
         version: u.version.clone(),
         current: u.current_version.clone(),
@@ -105,12 +97,7 @@ pub async fn update_check(app: AppHandle, pending: State<'_, Pending>) -> Result
 /// Progress goes to the UI (`update-progress`).
 #[tauri::command]
 pub async fn update_install(app: AppHandle, pending: State<'_, Pending>) -> Result<(), String> {
-    let update = pending
-        .0
-        .lock()
-        .unwrap()
-        .take()
-        .ok_or_else(|| crate::t!("err.update_none"))?;
+    let update = pending.0.lock().unwrap().take().ok_or_else(|| crate::t!("err.update_none"))?;
     let emitter = app.clone();
     let mut done = 0u64;
     update
@@ -122,7 +109,7 @@ pub async fn update_install(app: AppHandle, pending: State<'_, Pending>) -> Resu
             || {},
         )
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(crate::util::ui_err)?;
     app.restart()
 }
 

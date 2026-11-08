@@ -24,6 +24,8 @@ import numpy as np
 import trimesh
 
 DEFAULT_COLOR = "#C4CAD6"
+# Snapmaker U1 plate, in millimeters: where written objects are placed.
+BED = (270.0, 270.0)
 
 NAMES = {
     "white": "#F2F2F2", "black": "#151515", "grey": "#8C8C8C", "gray": "#8C8C8C",
@@ -236,8 +238,13 @@ def write(path, parts, name="object"):
     lines.append("   </components>")
     lines.append("  </object>")
     lines.append(" </resources>")
+    # Centered on the plate and resting on it, through the placement: the
+    # meshes stay as modeled (often around the origin, the plate's corner).
+    allv = np.vstack([b[2] for b in bodies])
+    lo, hi = allv.min(axis=0), allv.max(axis=0)
+    tx, ty, tz = BED[0] / 2 - (lo[0] + hi[0]) / 2, BED[1] / 2 - (lo[1] + hi[1]) / 2, -lo[2]
     lines.append(" <build>")
-    lines.append(f'  <item objectid="{whole}" transform="1 0 0 0 1 0 0 0 1 0 0 0"/>')
+    lines.append(f'  <item objectid="{whole}" transform="1 0 0 0 1 0 0 0 1 {tx:.6f} {ty:.6f} {tz:.6f}"/>')
     lines.append(" </build>")
     lines.append("</model>")
 

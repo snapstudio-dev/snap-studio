@@ -49,6 +49,11 @@ async function authSandboxState() {
 function authRefresh() {
   authLocalState();
   authSandboxState();
+  // The container's own token only matters with yolobox: the built-in
+  // sandbox signs in as this computer.
+  const yolobox = aiYoloboxScope();
+  $("auth-box-title").classList.toggle("hidden", !yolobox);
+  $("auth-box-group").classList.toggle("hidden", !yolobox);
 }
 
 /* `engine`: the conversation that failed, to say which side to fix. */

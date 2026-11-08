@@ -18,15 +18,19 @@ use crate::pty::Tools;
 use anyhow::{anyhow, Result};
 use serde::Serialize;
 use serde_json::Value;
-use tauri::{AppHandle, Emitter};
 #[cfg(target_os = "macos")]
 use std::io::Write;
+use tauri::{AppHandle, Emitter};
 
+use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 /// Keychain item of the sandbox token: Snap Studio's, apart from Claude's.
+#[cfg(target_os = "macos")]
 const SERVICE: &str = "fr.carlini.snapstudio.claude-sandbox";
+#[cfg(target_os = "macos")]
 const ACCOUNT: &str = "sandbox";
 
 /// Width of the `setup-token` terminal: a token is about 110 characters.
@@ -39,30 +43,21 @@ pub const TERM_KEY: &str = "auth";
 
 /// A token as `claude setup-token` prints it.
 pub fn is_token(s: &str) -> bool {
-    s.starts_with("sk-ant-oat")
-        && s.len() > 40
-        && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    s.starts_with("sk-ant-oat") && s.len() > 40 && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 /// Outside macOS there is no `security`: a file only its owner can read.
 #[cfg(not(target_os = "macos"))]
 fn token_file() -> std::path::PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("fr.carlini.snapstudio")
-        .join("claude-sandbox-token")
+    dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio").join("claude-sandbox-token")
 }
 
 /// Runs `security` in interactive mode with `command` on its input: the
 /// secret never shows in the process list, unlike an argument.
 #[cfg(target_os = "macos")]
 fn security(command: &str) -> Result<()> {
-    let mut child = Command::new("/usr/bin/security")
-        .arg("-i")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()?;
+    let mut child =
+        Command::new("/usr/bin/security").arg("-i").stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn()?;
     child.stdin.take().ok_or_else(|| anyhow!("no stdin"))?.write_all(format!("{command}\n").as_bytes())?;
     let out = child.wait_with_output()?;
     let err = String::from_utf8_lossy(&out.stderr);
@@ -105,12 +100,19 @@ pub fn set_sandbox_token(token: &str) -> Result<()> {
         if let Some(d) = p.parent() {
             std::fs::create_dir_all(d)?;
         }
-        std::fs::write(&p, token)?;
+        // Created readable by its owner only, from the first byte: a file
+        // written then chmod'ed is readable by all in between.
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
+            use std::io::Write;
+            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+            let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&p)?;
+            f.write_all(token.as_bytes())?;
+            // An existing file keeps its old mode on open: set anyway.
             std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600))?;
         }
+        #[cfg(not(unix))]
+        std::fs::write(&p, token)?;
         Ok(())
     }
 }
@@ -135,9 +137,7 @@ pub fn sandbox_env(engine: &str) -> Vec<(String, String)> {
     if engine != "container" {
         return Vec::new();
     }
-    sandbox_token()
-        .map(|t| vec![("CLAUDE_CODE_OAUTH_TOKEN".to_string(), t)])
-        .unwrap_or_default()
+    sandbox_token().map(|t| vec![("CLAUDE_CODE_OAUTH_TOKEN".to_string(), t)]).unwrap_or_default()
 }
 
 // ------------------------------------------------------------ status, check
@@ -158,23 +158,13 @@ pub struct Status {
 
 /// The command for a side: Claude itself, or Claude through yolobox.
 fn argv(engine: &str, tools: &Tools, claude_args: &[&str]) -> Result<Vec<String>> {
-    let claude = tools
-        .claude
-        .as_ref()
-        .ok_or_else(|| anyhow!(crate::t!("err.no_claude")))?
-        .to_string_lossy()
-        .to_string();
+    let claude = tools.claude.as_ref().ok_or_else(|| anyhow!(crate::t!("err.no_claude")))?.to_string_lossy().to_string();
     if engine != "container" {
         let mut v = vec![claude];
         v.extend(claude_args.iter().map(|s| s.to_string()));
         return Ok(v);
     }
-    let yolobox = tools
-        .yolobox
-        .as_ref()
-        .ok_or_else(|| anyhow!(crate::t!("err.no_yolobox")))?
-        .to_string_lossy()
-        .to_string();
+    let yolobox = tools.yolobox.as_ref().ok_or_else(|| anyhow!(crate::t!("err.no_yolobox")))?.to_string_lossy().to_string();
     let mut v = vec![yolobox, "run".into(), "--claude-config".into()];
     v.extend(crate::setup::runtime_args());
     v.push("claude".into());
@@ -185,13 +175,13 @@ fn argv(engine: &str, tools: &Tools, claude_args: &[&str]) -> Result<Vec<String>
 /// Runs a command with a deadline; returns its standard output, up to the
 /// line for which `enough` says so (the command is then stopped).
 fn run(argv: &[String], envs: &[(String, String)], deadline: Duration, enough: impl Fn(&str) -> bool) -> Result<String> {
-    let cwd = dirs::home_dir().unwrap_or_else(std::env::temp_dir);
+    // An empty folder of our own, not the home: in container mode yolobox
+    // mounts the working directory into the sandbox, and a sign-in check
+    // has no business seeing the user's files (nor a stray CLAUDE.md).
+    let cwd = crate::ia::root().join(".auth-check");
+    std::fs::create_dir_all(&cwd)?;
     let mut cmd = Command::new(&argv[0]);
-    cmd.args(&argv[1..])
-        .current_dir(cwd)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+    cmd.args(&argv[1..]).current_dir(cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
     if let Some(p) = crate::pty::child_path() {
         cmd.env("PATH", p);
     }
@@ -245,8 +235,9 @@ fn run(argv: &[String], envs: &[(String, String)], deadline: Duration, enough: i
 /// to the container), forced after a moment.
 fn stop(child: &mut std::process::Child) {
     #[cfg(unix)]
-    unsafe {
-        libc::killpg(child.id() as i32, libc::SIGTERM);
+    if let Ok(pgid) = libc::pid_t::try_from(child.id()) {
+        // SAFETY: plain signal to the process group we created.
+        unsafe { libc::killpg(pgid, libc::SIGTERM) };
     }
     let end = Instant::now() + Duration::from_secs(3);
     while Instant::now() < end {
@@ -269,10 +260,7 @@ fn first_json(out: &str) -> Option<Value> {
 pub fn status(engine: &str) -> Status {
     let tools = Tools::detect();
     let envs = sandbox_env(engine);
-    let mut s = Status {
-        sandbox_token: engine == "container" && !envs.is_empty(),
-        ..Default::default()
-    };
+    let mut s = Status { sandbox_token: engine == "container" && !envs.is_empty(), ..Default::default() };
     let deadline = Duration::from_secs(if engine == "container" { 180 } else { 20 });
     match argv(engine, &tools, &["auth", "status", "--json"]).and_then(|a| run(&a, &envs, deadline, |_| false)) {
         Ok(out) => match first_json(&out) {
@@ -284,7 +272,7 @@ pub fn status(engine: &str) -> Status {
             }
             None => s.error = Some(crate::t!("err.auth_unreadable")),
         },
-        Err(e) => s.error = Some(e.to_string()),
+        Err(e) => s.error = Some(crate::util::ui_err(e)),
     }
     s
 }
@@ -296,55 +284,117 @@ pub struct Check {
 }
 
 /// A real check: one tiny call to the model. `auth status` cannot tell a
-/// dead token from a good one. Streamed, so that a refused sign-in ends the
-/// check at once instead of after Claude's ten retries.
+/// dead token from a good one. Through the shared engine (`claude_pty.rs`),
+/// as any conversation: interactive, read from its transcript, and a
+/// refused sign-in ends the check at once instead of after Claude's ten
+/// retries. The check's own session is removed afterwards.
 pub fn verify(engine: &str) -> Check {
-    let tools = Tools::detect();
-    let envs = sandbox_env(engine);
-    let args = [
-        "-p",
-        "Reply with the single word OK.",
-        "--model",
-        "haiku",
-        "--output-format",
-        "stream-json",
-        "--verbose",
-    ];
+    let id = uuid::Uuid::new_v4().to_string();
+    let cwd = crate::ia::root().join(".auth-check");
     let deadline = Duration::from_secs(if engine == "container" { 240 } else { 90 });
-    let decisive = |line: &str| {
-        serde_json::from_str::<Value>(line).is_ok_and(|v| v["type"] == "result" || crate::chat::auth_failed(&v))
-    };
-    let out = match argv(engine, &tools, &args).and_then(|a| run(&a, &envs, deadline, decisive)) {
-        Ok(out) => out,
-        Err(e) => return Check { ok: false, message: e.to_string() },
-    };
-    check_of(&out)
+    let got: Arc<Mutex<Vec<Value>>> = Arc::default();
+    let sink = got.clone();
+    let started = check_launch(engine, &Tools::detect(), &id, &cwd)
+        .and_then(|l| crate::claude_pty::start(l, Arc::new(move |e| sink.lock().unwrap().push(e)), None));
+    if let Err(e) = started {
+        return Check { ok: false, message: crate::util::ui_err(e) };
+    }
+    let end = Instant::now() + deadline;
+    let key = format!("auth-{id}");
+    let decisive = |e: &Value| matches!(e["type"].as_str(), Some("result" | "exited"));
+    let mut screen_says = None;
+    while !got.lock().unwrap().iter().any(decisive) && Instant::now() < end {
+        // Signed out, Claude shows its sign-in (or first-run) screen and
+        // writes nothing: the screen says it.
+        if let Some(why) = signed_out(&crate::claude_pty::screen_text(&crate::claude_pty::screen(&key))) {
+            screen_says = Some(why);
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    crate::claude_pty::close(&key);
+    // Give a refused sign-in's result its moment after the auth_failed.
+    if got.lock().unwrap().iter().any(|e| e["type"] == "auth_failed") && !got.lock().unwrap().iter().any(decisive) {
+        std::thread::sleep(Duration::from_millis(600));
+    }
+    let _ = std::fs::remove_file(crate::ia::session_file_in(&cwd, &id));
+    if let Some(why) = screen_says {
+        return Check { ok: false, message: why };
+    }
+    let events = got.lock().unwrap().clone();
+    if !events.iter().any(|e| decisive(e) || e["type"] == "auth_failed") {
+        return Check { ok: false, message: crate::t!("err.auth_timeout") };
+    }
+    check_of(&events)
 }
 
-/// The verdict of a streamed check: its result, or the refused sign-in
-/// that cut it short.
-fn check_of(out: &str) -> Check {
-    let last = out.lines().rev().find_map(|l| serde_json::from_str::<Value>(l).ok());
-    match last {
-        Some(v) if v["type"] == "result" && v["is_error"] == false => Check { ok: true, message: crate::t!("auth.check_ok") },
-        Some(v) if v["type"] == "result" => Check { ok: false, message: v["result"].as_str().unwrap_or("?").to_string() },
-        Some(v) if crate::chat::auth_failed(&v) => Check {
-            ok: false,
-            message: format!("API Error: {} {}", v["error_status"], v["error"].as_str().unwrap_or_default()),
-        },
+/// What a signed-out Claude's screen says: its sign-in or first-run
+/// screen, or a refused key.
+fn signed_out(screen: &str) -> Option<String> {
+    let flat: String = screen.chars().filter(|c| !c.is_whitespace()).collect::<String>().to_lowercase();
+    let signs = ["selectloginmethod", "pleaserun/login", "notloggedin", "invalidapikey", "choosethetextstyle", "loginwithyourclaude"];
+    signs.iter().any(|s| flat.contains(s)).then(|| crate::t!("auth.check_signed_out"))
+}
+
+/// The engine's launch of a sign-in check, in an empty folder of our own,
+/// not the home: in container mode yolobox mounts the working directory
+/// into the sandbox, and a sign-in check has no business seeing the user's
+/// files (nor a stray CLAUDE.md).
+fn check_launch(engine: &str, tools: &Tools, id: &str, cwd: &Path) -> Result<crate::claude_pty::Launch> {
+    std::fs::create_dir_all(cwd)?;
+    if let Err(e) = crate::claude_pty::pretrust(cwd) {
+        eprintln!("[auth] folder not pre-trusted: {e}");
+    }
+    let mut program = argv(engine, tools, &[])?;
+    let mut sentinel_dir = crate::claude_pty::host_sentinel_dir(id);
+    if engine == "container" {
+        // `yolobox claude`, as conversations run (its hook files in the
+        // mounted folder).
+        program = vec![program[0].clone(), "claude".into(), "--claude-config".into()];
+        program.extend(crate::setup::runtime_args());
+        sentinel_dir = cwd.join(".snapstudio-run");
+    }
+    Ok(crate::claude_pty::Launch {
+        key: format!("auth-{id}"),
+        program,
+        args: vec!["--model".into(), "haiku".into()],
+        settings: Value::Null,
+        session_id: id.to_string(),
+        resume: false,
+        prompt: "Reply with the single word OK.".into(),
+        cwd: cwd.to_path_buf(),
+        envs: sandbox_env(engine),
+        clean_env: false,
+        sentinel_dir,
+        transcript: crate::ia::session_file_in(cwd, id),
+        ask: false,
+    })
+}
+
+/// The verdict of a check: its result, or the refused sign-in that cut it
+/// short, or why Claude ended.
+fn check_of(events: &[Value]) -> Check {
+    if let Some(r) = events.iter().find(|e| e["type"] == "result") {
+        if r["is_error"] == false {
+            return Check { ok: true, message: crate::t!("auth.check_ok") };
+        }
+        return Check { ok: false, message: r["result"].as_str().filter(|s| !s.is_empty()).unwrap_or("?").to_string() };
+    }
+    if events.iter().any(|e| e["type"] == "auth_failed") {
+        return Check { ok: false, message: crate::t!("auth.check_signed_out") };
+    }
+    match events.iter().find(|e| e["type"] == "exited") {
+        Some(e) if e["stderr"].as_str().is_some_and(|s| !s.is_empty()) => {
+            Check { ok: false, message: e["stderr"].as_str().unwrap().to_string() }
+        }
         _ => Check { ok: false, message: crate::t!("err.auth_unreadable") },
     }
 }
 
 /// Whether a message from Claude says it could not sign in.
 pub fn is_auth_failure(text: &str) -> bool {
-    const SIGNS: [&str; 5] = [
-        "Failed to authenticate",
-        "Invalid API key",
-        "OAuth token has expired",
-        "Please run /login",
-        "OAuth access token is invalid",
-    ];
+    const SIGNS: [&str; 5] =
+        ["Failed to authenticate", "Invalid API key", "OAuth token has expired", "Please run /login", "OAuth access token is invalid"];
     SIGNS.iter().any(|s| text.contains(s))
 }
 
@@ -425,11 +475,7 @@ fn strip_ansi(s: &str) -> String {
 /// Mac, or a token for the sandbox.
 pub fn term_argv(kind: &str) -> Result<Vec<String>> {
     let tools = Tools::detect();
-    let claude = tools
-        .claude
-        .ok_or_else(|| anyhow!(crate::t!("err.no_claude")))?
-        .to_string_lossy()
-        .to_string();
+    let claude = tools.claude.ok_or_else(|| anyhow!(crate::t!("err.no_claude")))?.to_string_lossy().to_string();
     match kind {
         "login" => Ok(vec![claude, "auth".into(), "login".into()]),
         "setup" => Ok(vec![claude, "setup-token".into()]),
@@ -448,7 +494,7 @@ pub fn term_open(app: &AppHandle, kind: &str, cols: u16, rows: u16) -> Result<()
         let mut catcher = TokenCatcher::default();
         Box::new(move |bytes: &[u8]| {
             if let Some(token) = catcher.feed(bytes) {
-                let error = set_sandbox_token(&token).err().map(|e| e.to_string());
+                let error = set_sandbox_token(&token).err().map(crate::util::ui_err);
                 let _ = app.emit("auth-token", serde_json::json!({ "ok": error.is_none(), "error": error }));
             }
         }) as crate::pty::Tap
@@ -463,6 +509,7 @@ pub fn term_open(app: &AppHandle, kind: &str, cols: u16, rows: u16) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     const TOKEN: &str = "sk-ant-oat01-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcdefghijklmnopqrstuvwxyz";
 
@@ -500,12 +547,39 @@ mod tests {
 
     #[test]
     fn checks_end_on_a_result_or_a_refused_sign_in() {
-        let ok = "→ Syncing\n{\"type\":\"system\",\"subtype\":\"init\"}\n{\"type\":\"result\",\"is_error\":false,\"result\":\"OK\"}\n";
-        assert!(check_of(ok).ok);
-        let refused = "{\"type\":\"system\",\"subtype\":\"api_retry\",\"error_status\":401,\"error\":\"authentication_failed\"}\n";
-        let c = check_of(refused);
+        assert!(check_of(&[json!({ "type": "assistant" }), json!({ "type": "result", "is_error": false, "result": "OK" })]).ok);
+        let refused = [
+            json!({ "type": "auth_failed" }),
+            json!({ "type": "result", "is_error": true, "result": "Failed to authenticate. API Error: 401" }),
+        ];
+        let c = check_of(&refused);
         assert!(!c.ok && c.message.contains("401"));
-        assert!(!check_of("").ok);
+        let died = check_of(&[json!({ "type": "exited", "code": 1, "stderr": "claude: command failed" })]);
+        assert!(!died.ok && died.message.contains("command failed"));
+        assert!(!check_of(&[]).ok);
+    }
+
+    #[test]
+    fn a_signed_out_screen_ends_the_check() {
+        assert!(signed_out("Select login method:\n❯ 1. Claude account with subscription").is_some());
+        assert!(signed_out("Invalid API key · Please run /login").is_some());
+        assert!(signed_out("Choose the text style that looks best").is_some(), "first run");
+        assert!(signed_out("❯ Reply with the single word OK.\n⏺ OK").is_none());
+        // A refused sign-in without its result yet: still said as such.
+        assert!(!check_of(&[json!({ "type": "auth_failed" })]).ok);
+    }
+
+    #[test]
+    fn the_check_never_prints() {
+        let tools = Tools { claude: Some("/usr/local/bin/claude".into()), yolobox: Some("/usr/local/bin/yolobox".into()) };
+        let cwd = std::env::temp_dir().join(format!("snapstudio-authcheck-{}", std::process::id()));
+        let l = check_launch("local", &tools, "11111111-2222-3333-4444-555555555555", &cwd).unwrap();
+        let a = crate::claude_pty::argv(&l, Path::new("/tmp/p.pid"));
+        assert!(!a.iter().any(|x| x == "-p" || x == "--print" || x == "--output-format"), "{a:?}");
+        let c = check_launch("container", &tools, "11111111-2222-3333-4444-555555555555", &cwd).unwrap();
+        assert_eq!(&c.program[..3], ["/usr/local/bin/yolobox", "claude", "--claude-config"]);
+        assert!(c.sentinel_dir.starts_with(&cwd));
+        let _ = std::fs::remove_dir_all(&cwd);
     }
 
     #[test]
@@ -517,6 +591,16 @@ mod tests {
 
     /// Against the real Claude: `AUTH_REAL=1 cargo test --lib real_sign_in -- --ignored --nocapture`.
     /// Prints no secret, only what the window would show.
+    /// The built-in sandbox signs in as this computer: Claude itself, no
+    /// token of its own.
+    #[test]
+    fn the_builtin_sandbox_uses_this_computers_sign_in() {
+        assert!(sandbox_env("sandbox").is_empty());
+        let tools = Tools { claude: Some("/usr/local/bin/claude".into()), yolobox: Some("/usr/local/bin/yolobox".into()) };
+        let a = argv("sandbox", &tools, &["auth", "status"]).unwrap();
+        assert_eq!(a, ["/usr/local/bin/claude", "auth", "status"]);
+    }
+
     #[test]
     #[ignore]
     fn real_sign_in() {
@@ -525,7 +609,10 @@ mod tests {
         }
         for engine in ["local", "container"] {
             let s = status(engine);
-            println!("{engine}: logged_in={} method={:?} plan={:?} own_token={} error={:?}", s.logged_in, s.method, s.plan, s.sandbox_token, s.error);
+            println!(
+                "{engine}: logged_in={} method={:?} plan={:?} own_token={} error={:?}",
+                s.logged_in, s.method, s.plan, s.sandbox_token, s.error
+            );
             let c = verify(engine);
             println!("{engine}: check ok={} {}", c.ok, c.message);
         }

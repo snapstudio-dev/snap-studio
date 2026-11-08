@@ -1,14 +1,32 @@
 [package]
 name = "snap-studio"
-version = "0.6.0"
+version = "0.19.0"
 edition = "2021"
 description = "Desktop workshop for the Snapmaker U1: files, plate, slicing, printing, AI"
 license = "GPL-3.0-or-later"
-authors = ["Laurent Carlini"]
+authors = ["kameka22"]
+# `cargo run` starts the app; the simulator's own tool is `--bin u1-sim`.
+default-run = "snap-studio"
 
 [lib]
 name = "snap_studio_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+# Simulated printers for development (docs/DEVELOPMENT.md, "Simulated
+# printers"). Only in a development build: `src/sim/mod.rs` refuses to
+# compile without debug assertions, and the release workflow checks that
+# its binary carries none of it.
+[features]
+sim = ["dep:axum", "dep:hyper", "dep:hyper-util", "tokio/net", "tokio/sync", "tokio/rt-multi-thread", "tokio/fs", "tokio/io-util"]
+
+[[bin]]
+name = "snap-studio"
+path = "src/main.rs"
+
+[[bin]]
+name = "u1-sim"
+path = "src/bin/u1-sim.rs"
+required-features = ["sim"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -43,9 +61,28 @@ futures-util = { version = "0.3", default-features = false, features = ["sink"] 
 portable-pty = "0.9.0"
 notify = "8.2.0"
 sys-locale = "0.3"
+# QR code of a file shared to a phone on the local network (SVG only).
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+# The simulated printers' Moonraker (feature `sim` only). The WebSocket
+# side upgrades through hyper onto `tokio-tungstenite` above.
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "json", "query", "multipart"], optional = true }
+hyper = { version = "1", features = ["server", "http1"], optional = true }
+hyper-util = { version = "0.1", features = ["tokio", "service"], optional = true }
+tauri-plugin-aptabase = "1.3"
+
+# Library tabs on Linux: their views are placed over the main view in GTK
+# directly (`library::gtk_layer`). Same versions as Tauri's.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+webkit2gtk = "2.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 window-vibrancy = "0.8"
+# Sharing a file: the system's share menu and the file pasteboard. Same
+# versions as Tauri's, only the classes used.
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSGeometry", "NSString", "NSURL", "NSObject"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSPasteboard", "NSResponder", "NSSharingService", "NSView", "NSWindow"] }
 
 [profile.release]
 opt-level = 3

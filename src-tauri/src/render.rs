@@ -20,11 +20,7 @@ fn norm(v: [f32; 3]) -> [f32; 3] {
 }
 #[inline]
 fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
+    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
 #[inline]
 fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
@@ -45,19 +41,11 @@ pub fn render_from(mesh: &MeshData, size: u32, eye: [f32; 3]) -> RgbaImage {
     let f = [-eye[0], -eye[1], -eye[2]];
     // Seen from straight above, the vertical can no longer serve as reference:
     // the Y axis is used instead, otherwise the camera frame collapses.
-    let axis = if f[0].abs() + f[1].abs() < 1e-3 {
-        [0., 1., 0.]
-    } else {
-        [0., 0., 1.]
-    };
+    let axis = if f[0].abs() + f[1].abs() < 1e-3 { [0., 1., 0.] } else { [0., 0., 1.] };
     let right = norm(cross(f, axis));
     let up = cross(right, f);
 
-    let c = [
-        (mesh.min[0] + mesh.max[0]) * 0.5,
-        (mesh.min[1] + mesh.max[1]) * 0.5,
-        (mesh.min[2] + mesh.max[2]) * 0.5,
-    ];
+    let c = [(mesh.min[0] + mesh.max[0]) * 0.5, (mesh.min[1] + mesh.max[1]) * 0.5, (mesh.min[2] + mesh.max[2]) * 0.5];
 
     // Framing: projection bounds.
     let (mut sx0, mut sy0, mut sx1, mut sy1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
@@ -89,34 +77,17 @@ pub fn render_from(mesh: &MeshData, size: u32, eye: [f32; 3]) -> RgbaImage {
         // Projection
         let mut p = [[0f32; 3]; 3];
         for i in 0..3 {
-            let rel = [
-                t.v[i][0] - c[0],
-                t.v[i][1] - c[1],
-                t.v[i][2] - c[2],
-            ];
-            p[i] = [
-                ox + dot(rel, right) * scale,
-                oy - dot(rel, up) * scale,
-                dot(rel, f),
-            ];
+            let rel = [t.v[i][0] - c[0], t.v[i][1] - c[1], t.v[i][2] - c[2]];
+            p[i] = [ox + dot(rel, right) * scale, oy - dot(rel, up) * scale, dot(rel, f)];
         }
-        let area = (p[1][0] - p[0][0]) * (p[2][1] - p[0][1])
-            - (p[2][0] - p[0][0]) * (p[1][1] - p[0][1]);
+        let area = (p[1][0] - p[0][0]) * (p[2][1] - p[0][1]) - (p[2][0] - p[0][0]) * (p[1][1] - p[0][1]);
         if area.abs() < 1e-6 {
             continue;
         }
 
         // World normal then camera frame, facing the viewer.
-        let e1 = [
-            t.v[1][0] - t.v[0][0],
-            t.v[1][1] - t.v[0][1],
-            t.v[1][2] - t.v[0][2],
-        ];
-        let e2 = [
-            t.v[2][0] - t.v[0][0],
-            t.v[2][1] - t.v[0][1],
-            t.v[2][2] - t.v[0][2],
-        ];
+        let e1 = [t.v[1][0] - t.v[0][0], t.v[1][1] - t.v[0][1], t.v[1][2] - t.v[0][2]];
+        let e2 = [t.v[2][0] - t.v[0][0], t.v[2][1] - t.v[0][1], t.v[2][2] - t.v[0][2]];
         let mut n = norm(cross(e1, e2));
         if dot(n, f) > 0.0 {
             n = [-n[0], -n[1], -n[2]];
@@ -134,11 +105,7 @@ pub fn render_from(mesh: &MeshData, size: u32, eye: [f32; 3]) -> RgbaImage {
         let spec = dot(nv, h).max(0.0).powi(26) * 0.30;
 
         let lit = amb + diff * 0.82 + fil;
-        let base = [
-            t.c[0] as f32 / 255.0,
-            t.c[1] as f32 / 255.0,
-            t.c[2] as f32 / 255.0,
-        ];
+        let base = [t.c[0] as f32 / 255.0, t.c[1] as f32 / 255.0, t.c[2] as f32 / 255.0];
         let rgb = [
             (base[0] * lit + spec + rim * 0.85).min(1.0),
             (base[1] * lit + spec + rim * 0.88).min(1.0),
@@ -158,12 +125,8 @@ pub fn render_from(mesh: &MeshData, size: u32, eye: [f32; 3]) -> RgbaImage {
             let py = y as f32 + 0.5;
             for x in minx..=maxx {
                 let px = x as f32 + 0.5;
-                let w0 = ((p[1][0] - p[0][0]) * (py - p[0][1])
-                    - (px - p[0][0]) * (p[1][1] - p[0][1]))
-                    * inv_area;
-                let w1 = ((px - p[0][0]) * (p[2][1] - p[0][1])
-                    - (p[2][0] - p[0][0]) * (py - p[0][1]))
-                    * inv_area;
+                let w0 = ((p[1][0] - p[0][0]) * (py - p[0][1]) - (px - p[0][0]) * (p[1][1] - p[0][1])) * inv_area;
+                let w1 = ((px - p[0][0]) * (p[2][1] - p[0][1]) - (p[2][0] - p[0][0]) * (py - p[0][1])) * inv_area;
                 if w0 < 0.0 || w1 < 0.0 || w0 + w1 > 1.0 {
                     continue;
                 }
@@ -198,12 +161,7 @@ pub fn render_from(mesh: &MeshData, size: u32, eye: [f32; 3]) -> RgbaImage {
             let cov = a / n;
             let px = if cov > 0.0 {
                 let k = 1.0 / a;
-                [
-                    (r * k * 255.0) as u8,
-                    (g * k * 255.0) as u8,
-                    (b * k * 255.0) as u8,
-                    (cov * 255.0) as u8,
-                ]
+                [(r * k * 255.0) as u8, (g * k * 255.0) as u8, (b * k * 255.0) as u8, (cov * 255.0) as u8]
             } else {
                 [0, 0, 0, 0]
             };
@@ -239,11 +197,7 @@ pub fn render_paths(segs: &[crate::gcode::Seg], min: [f32; 3], max: [f32; 3], si
     let f = [-eye[0], -eye[1], -eye[2]];
     let right = norm(cross(f, [0., 0., 1.]));
     let up = cross(right, f);
-    let c = [
-        (min[0] + max[0]) * 0.5,
-        (min[1] + max[1]) * 0.5,
-        (min[2] + max[2]) * 0.5,
-    ];
+    let c = [(min[0] + max[0]) * 0.5, (min[1] + max[1]) * 0.5, (min[2] + max[2]) * 0.5];
 
     let project = |p: &[f32; 3]| {
         let rel = [p[0] - c[0], p[1] - c[1], p[2] - c[2]];
@@ -294,11 +248,7 @@ pub fn render_paths(segs: &[crate::gcode::Seg], min: [f32; 3], max: [f32; 3], si
         // Higher layers are a little lighter: it gives relief.
         let t = ((s.a[2] - min[2]) / (max[2] - min[2] + 1e-3)).clamp(0.0, 1.0);
         let shade = 0.68 + 0.32 * t;
-        let rgb = [
-            base[0] as f32 / 255.0 * shade,
-            base[1] as f32 / 255.0 * shade,
-            base[2] as f32 / 255.0 * shade,
-        ];
+        let rgb = [base[0] as f32 / 255.0 * shade, base[1] as f32 / 255.0 * shade, base[2] as f32 / 255.0 * shade];
         for i in 0..=steps {
             let u = i as f32 / steps as f32;
             let px = x0 + (x1 - x0) * u;
@@ -341,12 +291,7 @@ pub fn render_paths(segs: &[crate::gcode::Seg], min: [f32; 3], max: [f32; 3], si
             let cov = a / n;
             let px = if cov > 0.0 {
                 let k = 1.0 / a;
-                [
-                    (r * k * 255.0) as u8,
-                    (g * k * 255.0) as u8,
-                    (b * k * 255.0) as u8,
-                    (cov * 255.0) as u8,
-                ]
+                [(r * k * 255.0) as u8, (g * k * 255.0) as u8, (b * k * 255.0) as u8, (cov * 255.0) as u8]
             } else {
                 [0, 0, 0, 0]
             };

@@ -30,6 +30,9 @@ its modules for the local mode (on the author's Mac `python3` has no
 
 ## What is checked, per mode
 
+(The built-in sandbox, now the default Sandbox on macOS and Linux, adds its
+own checks: see [ai-builtin-sandbox.md](ai-builtin-sandbox.md).)
+
 | Check | Sandbox | This Mac | How (fast, bounded) |
 |---|---|---|---|
 | Claude Code present | ✓ | ✓ | `which claude` |

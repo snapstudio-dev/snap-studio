@@ -1,0 +1,41 @@
+{
+  "version": "0.19",
+  "highlights": [
+    {
+      "id": "snappy",
+      "en": "Snappy",
+      "fr": "Snappy",
+      "de": "Snappy",
+      "es": "Snappy",
+      "pt-BR": "Snappy",
+      "it": "Snappy",
+      "ja": "Snappy",
+      "zh-Hans": "Snappy",
+      "ko": "Snappy"
+    },
+    {
+      "id": "supports-warning",
+      "en": "Supports warning",
+      "fr": "Avertissement supports",
+      "de": "Stützhinweis",
+      "es": "Aviso de soportes",
+      "pt-BR": "Aviso de suportes",
+      "it": "Avviso sui supporti",
+      "ja": "サポートの警告",
+      "zh-Hans": "支撑警告",
+      "ko": "서포트 경고"
+    },
+    {
+      "id": "plate-glue",
+      "en": "Glue on the plate",
+      "fr": "Colle sur le plateau",
+      "de": "Kleber auf der Platte",
+      "es": "Pegamento en la placa",
+      "pt-BR": "Cola na mesa",
+      "it": "Colla sul piano",
+      "ja": "プレートののり",
+      "zh-Hans": "热床涂胶",
+      "ko": "플레이트 접착제"
+    }
+  ]
+}

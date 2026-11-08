@@ -14,6 +14,7 @@ const P = {
   timer: null,
   editing: null,
   busy: false,
+  offErr: "",          // last offline error logged (once per change)
 };
 
 window.currentView = "files";
@@ -22,17 +23,34 @@ window.currentView = "files";
 
 function switchView(v) {
   window.currentView = v;
+  // A popover belongs to the screen it was opened on.
+  if (typeof closePicker === "function") closePicker();
   document.querySelectorAll(".views > .view").forEach((s) => {
     s.classList.toggle("hidden", s.id !== "view-" + v);
   });
-  if (v === "printers") startLive();
-  else {
+  // Explore's tab strip stands in for the toolbar.
+  document.body.classList.toggle("no-toolbar", v === "library");
+  if (typeof p3dVisible === "function") p3dVisible(v === "printers");
+  // The screens left first, the one entered after: the camera leaves with
+  // a screen (a pinned one goes on, in its window; full size belongs to
+  // the screen it was asked on) and the next one, drawn right away, keeps
+  // a stream of the same printer.
+  if (v !== "printers") {
     stopLive();
-    camStop();
+    camLeave();
+  }
+  // Leaving Care & Tuning stops Control's reads and its camera.
+  if (v !== "maint" && typeof ctLeave === "function") ctLeave();
+  // Leaving a printer's files stops its video.
+  if (v !== "pfiles" && typeof pflLeave === "function") pflLeave();
+  // Leaving Prints stops its camera and its timelapse.
+  if (v !== "prints" && typeof pjLeave === "function") pjLeave();
+  if (v === "printers") {
+    startLive();
+    prnCamHome();
   }
   if (v === "prints") pjRender();
-  else if (typeof pjCamStop === "function") pjCamStop();
-  // The Library's native views must only live in its tab.
+  // Explore's native views must only live in its tab.
   libSetVisible(v === "library");
   if (v === "settings") {
     refreshCacheSize();
@@ -47,12 +65,17 @@ function switchView(v) {
 }
 
 document.querySelectorAll(".sidebar .side-item[data-view]").forEach((b) =>
-  b.addEventListener("click", () => switchView(b.dataset.view))
+  b.addEventListener("click", () => {
+    // AI in the sidebar leads to the list of conversations, even from one
+    // that is open; its conversations below it open them.
+    if (b.dataset.view === "ia" && typeof IA !== "undefined" && IA.open) iaBack();
+    switchView(b.dataset.view);
+  })
 );
 /* Titles of the views that have nothing more specific to show. */
 function tbDefaults() {
   tbSet("prepare", tr("slice.plate"));
-  tbSet("library", tr("nav.library"));
+  tbSet("library", tr("nav.explore"));
   tbSet("printers", tr("nav.printers"));
   tbSet("settings", tr("nav.settings"));
 }
@@ -68,6 +91,12 @@ async function prnLoad(selectId) {
   prnRenderList();
   prnRenderDetail();
   if (window.currentView === "printers") startLive();
+  // At launch, Prepare may show before the printers are known.
+  if (window.currentView === "prepare" && typeof prRefreshSpools === "function") prRefreshSpools();
+  // Maintenance due on each printer: the sidebar's dots.
+  if (typeof mtCheckAll === "function") mtCheckAll();
+  // Filament theme: its accent follows the active printer's T0 spool.
+  displaySpoolSync(true);
 }
 
 function ledClass(st, id) {
@@ -79,6 +108,8 @@ function ledClass(st, id) {
   return "ok";
 }
 
+const SIDE_WRENCH = '<svg viewBox="0 0 24 24"><path d="M21.7 6.3a5.5 5.5 0 0 1-7.4 6.7L6.7 20.6a2 2 0 0 1-2.8-2.8L11.5 10.2a5.5 5.5 0 0 1 6.7-7.4l-3.4 3.4.7 2.8 2.8.7z"/></svg>';
+const SIDE_SPOOL = '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 6a3 3 0 1 1 0 6 3 3 0 0 1 0-6m0-4a7 7 0 0 1 6.9 6h-3a4 4 0 0 0-7.8 0h-3A7 7 0 0 1 12 5"/></svg>';
 const SIDE_PRINTER = '<svg viewBox="0 0 24 24"><path d="M7 3h10v4H7zm-2 6h14a2 2 0 0 1 2 2v5h-4v-3H7v3H3v-5a2 2 0 0 1 2-2m2 6h10v6H7z"/></svg>';
 
 /* Printers show in the sidebar, status light on the right. Statuses arrive
@@ -86,13 +117,17 @@ const SIDE_PRINTER = '<svg viewBox="0 0 24 24"><path d="M7 3h10v4H7zm-2 6h14a2 2
    without replacing the entries (a click in progress would be lost). */
 function prnRenderList() {
   const box = $("side-printers");
-  const items = [...box.children];
+  const items = [...box.querySelectorAll(":scope > .side-item[data-id]")];
   if (items.length === P.list.length && items.every((el, i) => el.dataset.id === P.list[i].id)) {
     items.forEach((el, i) => {
       const p = P.list[i];
       el.querySelector(".led").className = "led " + ledClass(P.status.get(p.id), p.id);
       el.querySelector(".lbl").textContent = p.name || p.host;
     });
+    box.querySelectorAll("[data-heads] .lbl").forEach((l) => (l.textContent = tr("heads.title")));
+    box.querySelectorAll("[data-maint] .lbl").forEach((l) => (l.textContent = tr("maint.title")));
+    box.querySelectorAll("[data-pfiles] .lbl").forEach((l) => (l.textContent = tr("pfiles.title")));
+    if (typeof pflSideCounts === "function") pflSideCounts();
     sideSync();
     return;
   }
@@ -104,7 +139,7 @@ function prnRenderList() {
     el.dataset.id = p.id;
     el.title = `${p.host}${p.port && p.port !== 80 ? ":" + p.port : ""}`;
     el.innerHTML = `<span class="glyph" style="color: #34C759">${SIDE_PRINTER}</span>
-      <span class="lbl">${esc(p.name || p.host)}</span><span class="led ${ledClass(st, p.id)}"></span>`;
+      <span class="lbl">${esc(p.name || p.host)}</span>${simBadge(p.id)}<span class="led ${ledClass(st, p.id)}"></span>`;
     el.onclick = () => {
       P.sel = p.id;
       prnRenderDetail();
@@ -118,7 +153,19 @@ function prnRenderList() {
         { id: "prn:remove:" + p.id, label: tr("common.delete") },
       ], e.clientX, e.clientY);
     box.appendChild(el);
+    // "Heads and spools" sub-item, under each printer.
+    const sub = document.createElement("div");
+    sub.className = "side-group side-sub";
+    sub.innerHTML = `<button class="side-item" data-heads="${esc(p.id)}"><span class="glyph" style="color: #34C759">${SIDE_SPOOL}</span><span class="lbl">${esc(tr("heads.title"))}</span></button>` +
+      `<button class="side-item" data-maint="${esc(p.id)}"><span class="glyph" style="color: #8E8E93">${SIDE_WRENCH}</span><span class="lbl">${esc(tr("maint.title"))}</span><span class="mt-dot hidden"></span></button>` +
+      `<button class="side-item" data-pfiles="${esc(p.id)}"><span class="glyph" style="color: #1E8CFF">${SIDE_FOLDER}</span><span class="lbl">${esc(tr("pfiles.title"))}</span><span class="count"></span></button>`;
+    sub.children[0].onclick = () => headsShow(p.id);
+    sub.children[1].onclick = () => maintShow(p.id);
+    sub.children[2].onclick = () => pflShow(p.id);
+    box.appendChild(sub);
   }
+  if (typeof mtSideDots === "function") mtSideDots();
+  if (typeof pflSideCounts === "function") pflSideCounts();
   sideSync();
 }
 
@@ -148,18 +195,47 @@ function current() {
   return P.list.find((p) => p.id === P.sel) || null;
 }
 
+/* A printer as the user named it (its address when it has no name); empty
+   when unknown. */
+function printerName(id) {
+  const p = P.list.find((x) => x.id === id);
+  return p ? p.name || p.host : "";
+}
+
+/* A printer that does not answer (or answers with an error), said the same
+   on each of its screens: Control's status, its red dot and "Not
+   connected", then why and a retry. `retry` is the button's attribute,
+   which the screen listens to. `inner` gives the line alone, for Control,
+   whose status card already shows the dot. */
+function offlineLine(text, retry, inner = false) {
+  const button = `<button class="btn small" ${retry}>${esc(tr("printers.offline.retry"))}</button>`;
+  if (inner) return `<span class="mt-stale-dot"></span><span>${esc(text)}</span>${button}`;
+  return `<div class="ct-status off-status" role="status"><span class="ct-state offline"><i></i><b>${esc(tr("ctl.st.offline"))}</b></span><span class="off-why">${esc(text)}</span>${button}</div>`;
+}
+
+/* The Camera section while the printer does not answer: hidden, unless a
+   pinned stream of this printer shows there (it says the printer does not
+   answer, camera.js). */
+function prnCamSection() {
+  const off = !$("prn-offline").classList.contains("hidden");
+  $("prn-cam").classList.toggle("hidden", off && !(CAM.on && CAM.id === P.sel));
+}
+
 function prnRenderDetail() {
   const p = current();
-  // The camera follows the printer shown: switching printer turns it off.
-  if (CAM.id && CAM.id !== p?.id) camStop();
   $("prn-empty").classList.toggle("hidden", !!p);
   $("prn-detail").classList.toggle("hidden", !p);
   $("prn-tools").classList.toggle("hidden", !p);
   if (!p) {
     tbSet("printers", tr("nav.printers"));
+    prnCamHome();
     return;
   }
-  tbSet("printers", p.name || p.host, `${p.host}:${p.port}${p.model ? " · " + p.model : ""}`);
+  tbSet("printers", p.name || p.host, `${p.host}:${p.port}${p.model ? " · " + p.model : ""}${simOf(p.id) ? " · " + window.SIM.label : ""}`);
+  if (typeof p3dShow === "function") p3dShow(p);
+  // The camera follows the printer shown (camera.js: switching printer
+  // turns it off, unless pinned).
+  prnCamHome();
   renderStatus(P.status.get(p.id));
 }
 
@@ -170,7 +246,11 @@ function setOffline(mode, st) {
   const on = !!mode;
   card.classList.toggle("hidden", !on);
   card.classList.toggle("connecting", mode === "connecting");
-  for (const id of ["prn-hero", "prn-filaments", "prn-temps"]) $(id).classList.toggle("hidden", on);
+  // Nor the model or the address (the address stays in the title bar), nor
+  // the camera unless a pinned stream shows it: nothing to read or watch
+  // until the printer answers.
+  for (const id of ["prn-hero", "prn-filaments", "prn-temps", "prn-info"]) $(id).classList.toggle("hidden", on);
+  prnCamSection();
   if (!on) {
     $("cam-toggle").disabled = false;
     return;
@@ -182,10 +262,17 @@ function setOffline(mode, st) {
   $("prn-offline-ico").classList.toggle("hidden", connecting);
   $("prn-offline-spin").classList.toggle("hidden", !connecting);
   setOfflineSeen(connecting ? null : P.seen.get(P.sel));
-  // No camera without a connection: stop it and disable the button.
-  if (CAM.on) camStop();
+  // No camera without a connection: stop it and disable its switch (a
+  // pinned one stays, saying the printer does not answer).
+  if (CAM.on && CAM.id === P.sel) CAM.pinned ? camOffline(true) : camStop();
   $("cam-toggle").disabled = true;
-  const err = (!connecting && st?.message) || "";
+  prnCamSection();
+  // The raw error under Details, without the address it tried (errNoUrl,
+  // control-logic.js); the whole of it goes to the console.
+  const raw = (!connecting && st?.message) || "";
+  if (raw && raw !== P.offErr) console.warn("printer offline", P.sel, raw);
+  P.offErr = raw;
+  const err = errNoUrl(raw);
   $("prn-offline-err").textContent = err;
   $("prn-offline-details").classList.toggle("hidden", !err);
 }
@@ -200,6 +287,7 @@ function renderStatus(st) {
     setOffline("connecting");
     $("prn-info").innerHTML = "";
     paintPrinter({ online: false, state: "offline", nozzles: [] });
+    if (typeof p3dStatus === "function") p3dStatus(null);
     updateFreshness();
     return;
   }
@@ -251,7 +339,10 @@ function renderStatus(st) {
   if (st.fan != null) chips.push(chip(tr("printers.fan"), Math.round(st.fan * 100) + " %"));
   $("prn-chips").innerHTML = chips.join("");
 
-  // Loaded filaments (U1) and temperatures
+  // Loaded filaments (U1) and temperatures. The live status is the spools'
+  // freshest source: the heads' own copy (heads.js, Control, the 3D view)
+  // follows it, or an unloaded spool would linger there.
+  if (st.online && Array.isArray(st.filaments) && P.sel) headsSetSlots(P.sel, st.filaments);
   renderFilaments(st);
   const rows = [];
   if (!(st.filaments || []).length) {
@@ -278,6 +369,8 @@ function renderStatus(st) {
   $("prn-info").innerHTML = info.join("");
 
   paintPrinter(st);
+  // The 3D view, when it can, replaces the hero (printer3d.js).
+  if (typeof p3dStatus === "function") p3dStatus(st);
   updateFreshness();
 }
 
@@ -316,6 +409,10 @@ function renderFilaments(st) {
     return a.index - b.index;
   });
 
+  // Filament profile of each head, as set in "Heads and spools".
+  const prof = {};
+  if (P.sel && !HD.listsNow[P.sel]) headsLists(P.sel).catch(() => {});
+  if (P.sel) for (const f of fils) prof[f.index] = headsProfile(P.sel, f.index, HD.listsNow[P.sel] || null).name || "";
   const rows = sorted.map((f) => {
     const on = f.index === ai;
     const n = (st.nozzles || []).find((x) => x.index === f.index);
@@ -343,13 +440,13 @@ function renderFilaments(st) {
     return `<div class="frow${on ? " on" : ""}">
       <span class="fbar"></span>
       <span class="fsw" style="${sw}"></span>
-      <span class="k"><b>T${f.index}</b><span class="sub">${bits.join(" · ")}</span></span>
+      <span class="k"><b>T${f.index}</b><span class="sub">${bits.join(" · ")}</span>${f.present && prof[f.index] ? `<span class="fprof">${esc(prof[f.index])}</span>` : ""}</span>
       <span class="ftags">${tags.join("")}<span class="ftemp">${esc(temp)}</span></span>
     </div>`;
   });
 
   box.innerHTML =
-    `<div class="ghead">${esc(tr("printers.loaded"))}<span class="note">${esc(tr("printers.slots", { n: fils.length }))}</span></div>` +
+    `<div class="ghead">${esc(tr("printers.loaded"))}<span class="note">${esc(tr("printers.slots", { n: fils.length }))}</span><button class="btn small" data-heads-open>${esc(tr("heads.configure"))}</button></div>` +
     rows.join("");
 }
 
@@ -471,15 +568,6 @@ async function refreshSelected() {
   }
 }
 
-async function refreshAll() {
-  if (P.busy) return;
-  P.busy = true;
-  await Promise.all(P.list.map(pollOne));
-  P.busy = false;
-  prnRenderList();
-  if (current()) renderStatus(P.status.get(P.sel));
-}
-
 /* Live feed: the printer pushes its changes over WebSocket (Moonraker
    JSON-RPC). Connections only live while this tab is shown. */
 function startLive() {
@@ -505,6 +593,8 @@ listen("printer-status", (e) => {
   if (live) P.seen.set(id, Date.now());
   prnRenderList();
   if (id === P.sel) renderStatus(status);
+  // The camera's printer gone: said over the camera, wherever it shows.
+  camPrinterStatus(id, status.online);
 });
 
 /* Time of the last data: time only today, date and time otherwise
@@ -523,23 +613,25 @@ function setOfflineSeen(seen) {
 function updateFreshness() {
   const seen = P.seen.get(P.sel);
   const live = P.live.get(P.sel);
-  const box = $("prn-updated");
   const st = P.status.get(P.sel);
+  // The footer, and its copy in the 3D view's details (printer3d.js).
+  const say = (t) => {
+    $("prn-updated").textContent = t;
+    $("p3d-fresh").textContent = t;
+  };
   // Offline: the card carries the last-connection time, no footer.
   if (st && !st.online) {
-    box.textContent = "";
+    say("");
     setOfflineSeen(seen);
     return;
   }
   if (!seen) {
-    box.textContent = live ? tr("printers.live.connecting") : "";
+    say(live ? tr("printers.live.connecting") : "");
     return;
   }
   const age = Math.round((Date.now() - seen) / 1000);
   // Printer answering HTTP but live feed down: the data may be stale.
-  box.textContent = live
-    ? tr("printers.live.age", { s: age })
-    : tr("printers.live.offline", { time: fmtSeen(seen) });
+  say(live ? tr("printers.live.age", { s: age }) : tr("printers.live.offline", { time: fmtSeen(seen) }));
 }
 
 /* ------------------------------------------------------------ form */
@@ -549,7 +641,9 @@ function updateFreshness() {
 /* "On the network" list, shared by the add sheet and the welcome assistant:
    one search at a time, shown in the last list opened. Printers arrive as
    they answer, one per address. */
-const DISC = { items: new Map(), running: false, error: null, picked: null, view: null };
+/* `search` numbers each search: a stopped one may still report a printer
+   or its end while the next runs, and those are ignored. */
+const DISC = { items: new Map(), running: false, error: null, picked: null, view: null, search: 0 };
 
 function discoveryList(box, onPick) {
   DISC.view = { box, onPick };
@@ -569,10 +663,12 @@ async function discoverStart() {
   DISC.picked = null;
   DISC.error = null;
   DISC.running = true;
+  const search = ++DISC.search;
   discRender();
   try {
-    await invoke("printer_discover_start");
+    await invoke("printer_discover_start", { search });
   } catch (e) {
+    if (search !== DISC.search) return; // another search has started since
     DISC.running = false;
     DISC.error = String(e);
     discRender();
@@ -588,11 +684,23 @@ function discoverStop() {
 /* Model suggested for a printer found. */
 const discModel = (f) => f.model || (f.service === "snapmaker" ? "Snapmaker U1" : "Klipper / Moonraker");
 
+/* A found printer's address: its host, and its port when the address
+   carries one ("host:port", printers sharing an address); Moonraker's
+   usual port otherwise. */
+function discAddr(f) {
+  const m = /^([^:]+):(\d+)$/.exec(f.ip);
+  return m ? { host: m[1], port: +m[2] } : { host: f.ip, port: 7125 };
+}
+
 /* Already saved: same address. */
-const discKnown = (f) => P.list.some((p) => p.host === f.ip);
+const discKnown = (f) => {
+  const a = discAddr(f);
+  return P.list.some((p) => p.host === f.ip || (p.host === a.host && p.port === a.port));
+};
 
 listen("printer-found", (e) => {
-  const f = e.payload;
+  const { search, printer: f } = e.payload;
+  if (search !== DISC.search) return; // a stopped search, still winding down
   const prev = DISC.items.get(f.ip);
   // A U1 sometimes announces itself twice (Snapmaker and Moonraker): the
   // richer Snapmaker record wins.
@@ -600,7 +708,8 @@ listen("printer-found", (e) => {
   DISC.items.set(f.ip, f);
   discRender();
 });
-listen("printer-discover-done", () => {
+listen("printer-discover-done", (e) => {
+  if (e.payload?.search !== DISC.search) return;
   DISC.running = false;
   discRender();
 });
@@ -657,9 +766,10 @@ function openForm(printer) {
   $("pf-disc").classList.toggle("hidden", !!printer);
   if (!printer) {
     discoveryList($("pf-disc"), (f) => {
+      const a = discAddr(f);
       $("pf-name").value = f.name;
-      $("pf-host").value = f.ip;
-      $("pf-port").value = 7125;
+      $("pf-host").value = a.host;
+      $("pf-port").value = a.port;
       $("pf-model").value = discModel(f);
       probeForm();
     });
@@ -674,13 +784,34 @@ function closeForm() {
   P.editing = null;
 }
 
+/* The port typed, 1 to 65535 (the field's `max` is not enforced while
+   typing, and Rust refuses anything else), or null. */
+function portOf(input) {
+  const n = Math.round(+input.value || 7125);
+  return n >= 1 && n <= 65535 ? n : null;
+}
+
 async function probeForm() {
   const host = $("pf-host").value.trim();
   if (!host) return;
   const box = $("pf-test");
+  const port = portOf($("pf-port"));
+  if (!port) {
+    box.className = "pf-test err";
+    box.textContent = tr("printers.form.port_invalid");
+    return;
+  }
   box.className = "pf-test";
   box.textContent = tr("printers.form.testing");
-  const r = await invoke("printer_probe", { host, port: +$("pf-port").value || 7125 });
+  // A slow answer for a host typed before must not fill in the fields now.
+  const seq = (P.probeSeq = (P.probeSeq || 0) + 1);
+  let r;
+  try {
+    r = await invoke("printer_probe", { host, port });
+  } catch (e) {
+    r = { ok: false, detail: String(e) };
+  }
+  if (seq !== P.probeSeq) return;
   box.className = "pf-test " + (r.ok ? "ok" : "err");
   box.textContent = r.detail;
   if (r.ok) {
@@ -707,10 +838,11 @@ async function saveForm() {
   try {
     P.list = await invoke("printer_save", { printer });
     const saved = P.list.find((x) => x.host === printer.host && x.port === printer.port);
+    const edited = !!P.editing; // closeForm forgets it
     closeForm();
     await prnLoad(printer.id || saved?.id);
     switchView("printers");
-    toast(tr(P.editing ? "printers.updated" : "printers.added"));
+    toast(tr(edited ? "printers.updated" : "printers.added"));
   } catch (e) {
     toast(tr("printers.form.save_failed", { err: e }), true);
   }
@@ -747,62 +879,31 @@ async function askRemove(target) {
 
 /* ------------------------------------------------------------ camera */
 
-/* As in Snapmaker Orca: the camera is woken by `camera.start_monitor` and
-   publishes a continuously renewed JPEG, read again in a loop; it switches
-   itself off unless restarted, hence the restart every 10 s. One read in
-   flight at a time: the next one starts on load. */
-const CAM = { id: null, on: false, n: 0, timer: 0, keep: 0 };
-
-async function camStart() {
+/* The camera (camera.js) on this page: the 3D view's corner, else the
+   Camera section, for the printer shown. */
+function prnCamHome() {
+  if (window.currentView !== "printers") return;
   const p = current();
-  if (!p) return;
-  camStop();
-  Object.assign(CAM, { id: p.id, on: true });
-  $("cam-toggle").textContent = tr("common.hide");
-  $("cam-note").textContent = tr("printers.cam.starting");
-  $("cam-box").classList.remove("hidden");
-  try {
-    await invoke("camera_start", { printerId: p.id });
-  } catch (e) {
-    if (CAM.id !== p.id) return;
-    camStop();
-    $("cam-note").textContent = String(e);
-    return;
-  }
-  if (!CAM.on || CAM.id !== p.id) return;
-  CAM.keep = setInterval(() => invoke("camera_start", { printerId: p.id }).catch(() => {}), 10000);
-  camNext();
+  if (!p) return camHome(null);
+  const home = $("prn-detail").classList.contains("p3d-on") ? $("p3d") : document.querySelector("#prn-detail .group.cam");
+  camHome(home, p.id, { enlarge: true });
 }
-
-function camNext() {
-  if (!CAM.on) return;
-  $("cam-img").src = `cam://localhost/f?id=${encodeURIComponent(CAM.id)}&n=${++CAM.n}`;
-}
-
-function camStop() {
-  clearTimeout(CAM.timer);
-  clearInterval(CAM.keep);
-  if (CAM.on && CAM.id) invoke("camera_stop", { printerId: CAM.id }).catch(() => {});
-  Object.assign(CAM, { id: null, on: false, timer: 0, keep: 0 });
-  $("cam-toggle").textContent = tr("common.show");
-  $("cam-note").textContent = "";
-  $("cam-box").classList.add("hidden");
-  $("cam-img").removeAttribute("src");
-}
-
-$("cam-img").addEventListener("load", () => {
-  if (!CAM.on) return;
-  $("cam-note").textContent = "";
-  CAM.timer = setTimeout(camNext, 200);
+// The Camera section's switch, and the 3D view's button, say its state.
+document.addEventListener("cam-change", () => {
+  $("cam-toggle").checked = CAM.on && CAM.id === P.sel;
+  prnCamSection();
+  if (window.currentView === "printers" && typeof p3dQuick === "function" && typeof P3 !== "undefined" && P3.pid) p3dQuick();
 });
-$("cam-img").addEventListener("error", () => {
-  if (!CAM.on) return;
-  $("cam-note").textContent = tr("printers.cam.retry");
-  CAM.timer = setTimeout(camNext, 1000);
-});
-$("cam-toggle").addEventListener("click", () => (CAM.on ? camStop() : camStart()));
-// Double-click: the image takes the full width of the printer pane.
-$("cam-box").addEventListener("dblclick", () => $("cam-box").classList.toggle("big"));
+$("cam-toggle").addEventListener("change", () => ($("cam-toggle").checked ? camStart(P.sel) : camStop()));
+// The pinned window's image leads back to its printer's page.
+function camOpenPrinter() {
+  if (!CAM.id) return;
+  P.sel = CAM.id;
+  prnRenderDetail();
+  switchView("printers");
+  prnRenderList();
+  refreshSelected();
+}
 
 /* ------------------------------------------------------------ events */
 
@@ -810,6 +911,9 @@ $("prn-add").addEventListener("click", () => openForm(null));
 $("prn-add2").addEventListener("click", () => openForm(null));
 $("prn-add3").addEventListener("click", () => openForm(null));
 $("prn-edit").addEventListener("click", () => openForm(current()));
+// The printer card's shortcut to Care & Tuning › Control, through its
+// opening (ctlOpen, as the quick panels' "All controls" will).
+$("prn-control").addEventListener("click", () => current() && ctlOpen(current().id));
 $("prn-del").addEventListener("click", () => askRemove());
 $("prn-refresh").addEventListener("click", () => { refreshSelected(); startLive(); });
 $("prn-offline-retry").addEventListener("click", () => { refreshSelected(); startLive(); });
@@ -817,7 +921,9 @@ $("pf-cancel").addEventListener("click", closeForm);
 $("pf-probe").addEventListener("click", probeForm);
 $("pf-save").addEventListener("click", saveForm);
 $("pmodal").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") saveForm();
+  // Enter in a field saves; on a button (Cancel, Test, a found printer)
+  // it is that button's click, not a save.
+  if (e.key === "Enter" && !e.target.closest("button")) saveForm();
   if (e.key === "Escape") closeForm();
 });
 document.addEventListener("keydown", (e) => {
@@ -826,11 +932,17 @@ document.addEventListener("keydown", (e) => {
 
 window.addEventListener("langchange", () => {
   tbDefaults();
+  prnRenderList();
   prnRenderDetail();
   discRender();
-  $("cam-toggle").textContent = tr(CAM.on ? "common.hide" : "common.show");
-  if (P.editing !== undefined && !$("pmodal").classList.contains("hidden"))
-    $("pmodal-title").textContent = tr(P.editing ? "printers.edit_title" : "printers.add");
+  if (!$("pmodal").classList.contains("hidden")) $("pmodal-title").textContent = tr(P.editing ? "printers.edit_title" : "printers.add");
 });
 
 prnLoad();
+
+$("prn-filaments").addEventListener("click", (e) => {
+  if (e.target.closest("[data-heads-open]") && P.sel) headsShow(P.sel);
+});
+window.addEventListener("headschange", (e) => {
+  if (window.currentView === "printers" && P.sel && (!e.detail?.pid || e.detail.pid === P.sel) && P.status.get(P.sel)) renderStatus(P.status.get(P.sel));
+});

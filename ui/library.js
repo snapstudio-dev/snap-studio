@@ -1,23 +1,46 @@
 "use strict";
-/* Library: browsing model sites.
+/* Explore: the Snapmaker spaces and the model sites, each in a tab.
    Each tab is a native web view laid over our interface. So we only draw
-   what surrounds it — tab bar, address bar — and tell it its rectangle. It
-   must be hidden as soon as something else comes in front: another sidebar
-   entry, a dialog, the 3D viewer.
+   what surrounds it — the tab strip, which stands in for the toolbar in
+   this view — and tell it its rectangle. It must be hidden as soon as
+   something else comes in front: another sidebar entry, a dialog, the 3D
+   viewer. Back, Forward and Reload float over the page (Rust lays a small
+   view of ours on top of the site's).
 
-   Two pinned pages come first: Home, the sites to open, and Favorites, the
-   models set aside. A site may be open in several tabs. */
+   Two pinned pages come first: Home, the places to open — the Snapmaker
+   ecosystem and the model libraries — and Favorites, the models set aside.
+   A site may be open in several tabs. Nothing is read from the sites
+   themselves but their favicon: each one is only shown, in its own view. */
 
 const LIB = {
   sites: [],
   favs: [],
+  icons: new Map(), // site id → data URL of its favicon
   restored: false,
   tabs: [],          // { id, site, title, url }
   active: "home",    // "home", "favs" or a tab id
-  visible: false,    // is the Library view on screen?
+  visible: false,    // is the Explore view on screen?
+  /* Sites pinned to the sidebar, under Snapmaker Space (ids). */
+  pins: new Set((() => {
+    try {
+      const v = JSON.parse(localStorage.getItem("snapstudio.libpins") || "[]");
+      return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+    } catch {
+      return [];
+    }
+  })()),
 };
 
 const libPinned = (id) => id === "home" || id === "favs";
+/* A Snapmaker space's name is translated ("Account"); a model site keeps its brand. */
+const siteName = (s) => (s ? (s.hub === "snapmaker" ? tr("snap.site." + s.id) : s.name) : "");
+const siteHost = (s) => {
+  try {
+    return new URL(s.url).host.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+};
 
 /* ------------------------------------------------------------ rectangle */
 
@@ -40,7 +63,7 @@ function pushRect() {
 /* ------------------------------------------------------------ tabs */
 
 const siteOf = (t) => LIB.sites.find((s) => s.id === t.site);
-const tabName = (t) => t.title || siteOf(t)?.name || t.site;
+const tabName = (t) => t.title || siteName(siteOf(t)) || t.site;
 
 function renderTabs() {
   document.querySelectorAll(".lib-tab.pin").forEach((el) => el.classList.toggle("on", el.dataset.tab === LIB.active));
@@ -49,8 +72,8 @@ function renderTabs() {
   for (const t of LIB.tabs) {
     const el = document.createElement("button");
     el.className = "lib-tab" + (t.id === LIB.active ? " on" : "");
-    el.title = `${siteOf(t)?.name || t.site} — ${t.url}`;
-    el.innerHTML = `<span class="x" title="${esc(tr("common.close"))}">✕</span>${brandIcon(siteOf(t)?.name || t.site, 14)}<span class="name">${esc(tabName(t))}</span>`;
+    el.title = `${siteName(siteOf(t)) || t.site} — ${t.url}`;
+    el.innerHTML = `<span class="x" title="${esc(tr("common.close"))}">✕</span>${siteIcon(siteOf(t), 14)}<span class="name">${esc(tabName(t))}</span>`;
     el.onclick = (e) => {
       if (e.target.classList.contains("x")) closeTab(t.id);
       else activateTab(t.id);
@@ -66,36 +89,24 @@ function renderTabs() {
     box.appendChild(el);
   }
   const browsing = !libPinned(LIB.active);
-  $("lib-bar").classList.toggle("hidden", !browsing);
+  // The star and "open in the browser" act on the site shown.
+  $("lib-actions").classList.toggle("hidden", !browsing);
   $("lib-home").classList.toggle("hidden", LIB.active !== "home");
   $("lib-favs").classList.toggle("hidden", LIB.active !== "favs");
-  libTitle();
-  if (browsing) {
-    const t = LIB.tabs.find((x) => x.id === LIB.active);
-    setUrl(t ? t.url : "");
-    libFavState();
-  }
+  libCounts();
+  if (browsing) libFavState();
   sideSync();
 }
 
-function setUrl(url) {
-  $("lib-url").textContent = url || "";
-  $("lib-url").title = url || "";
-}
-
-/* The address area doubles as a status line: a notification bubble would
-   show behind the native view. */
+/* A passing message (a download, a copied link) in the tab strip: a
+   notification bubble would show behind the native view. */
 let statusTimer = 0;
 function libStatus(text, ms = 3000) {
   clearTimeout(statusTimer);
-  const el = $("lib-url");
+  const el = $("lib-status");
   el.textContent = text;
-  if (ms) {
-    statusTimer = setTimeout(() => {
-      const t = LIB.tabs.find((x) => x.id === LIB.active);
-      setUrl(t ? t.url : "");
-    }, ms);
-  }
+  el.classList.toggle("hidden", !text);
+  if (ms) statusTimer = setTimeout(() => el.classList.add("hidden"), ms);
 }
 
 /* A new tab on a site, at its home page or at `url`. */
@@ -113,6 +124,13 @@ async function openSite(site, url = site.url) {
     toast(String(e), true);
   }
   pushRect();
+}
+
+/* The site's tab if one is open (the first), else a new one. */
+function showSite(site) {
+  const t = LIB.tabs.find((x) => x.site === site.id);
+  if (t) activateTab(t.id);
+  else openSite(site);
 }
 
 function activateTab(id) {
@@ -135,7 +153,7 @@ function saveTabs() {
 }
 
 /* Native views cost memory: they are only recreated on the first visit to
-   the Library, not at app startup. */
+   Explore, not at app startup. */
 async function restoreTabs() {
   if (LIB.restored) return;
   LIB.restored = true;
@@ -156,8 +174,8 @@ async function restoreTabs() {
     await openSite(site, url);
     if (typeof t === "object" && t.title) LIB.tabs[LIB.tabs.length - 1].title = t.title;
   }
-  // The sidebar's Favorites entry may have asked for a page meanwhile.
-  const a = saved.active;
+  // Before the hubs were merged, `active` could be an object (one per hub).
+  const a = saved.active && typeof saved.active === "object" ? saved.active.library : saved.active;
   const target = want !== "home" ? want : typeof a === "number" ? LIB.tabs[a]?.id || "home" : libPinned(a) ? a : "home";
   activateTab(target);
 }
@@ -176,7 +194,7 @@ function closeTab(id) {
 }
 
 function tabMenu(e, tab) {
-  const name = siteOf(tab)?.name || tab.site;
+  const name = siteName(siteOf(tab)) || tab.site;
   nativeMenu([
     { id: "tab:reload:" + tab.id, label: tr("library.reload") },
     { id: "tab:dup:" + tab.id, label: tr("library.duplicate_tab") },
@@ -189,6 +207,7 @@ function tabMenu(e, tab) {
     { id: "tab:others:" + tab.id, label: tr("library.close_others"), enabled: LIB.tabs.length > 1 },
   ], e.clientX, e.clientY);
 }
+
 onMenu("tab", async (arg) => {
   const i = arg.indexOf(":");
   const what = arg.slice(0, i), id = arg.slice(i + 1);
@@ -213,23 +232,48 @@ onMenu("tab", async (arg) => {
   }
 });
 
-/* ------------------------------------------------------------ favorites */
+/* ------------------------------------------------------------ icons */
 
 /* Brand icon: rounded square in the site's color, white or dark initial
    depending on the background luminance. Color derived from the name when
-   unknown. */
-const BRAND = { makerworld: "#00AE42", printables: "#FA6831", thingiverse: "#248BFB" };
+   unknown. The fallback of `siteIcon`, which prefers the site's favicon. */
+const BRAND = { makerworld: "#00AE42", printables: "#FA6831", thingiverse: "#248BFB", cults3d: "#7B3FE4", myminifactory: "#00C4A6", thangs: "#FFBC00", grabcad: "#E63B2D", space: "#1F6FEB", store: "#FF6B00", wiki: "#5856D6", forum: "#34C759", account: "#8E8E93" };
 const IOS_PALETTE = ["#FF3B30", "#FF9500", "#FFCC00", "#34C759", "#00C7BE", "#30B0C7", "#32ADE6", "#007AFF", "#5856D6", "#AF52DE", "#FF2D55", "#A2845E"];
-function brandIcon(name, size = 18) {
+function brandColor(name) {
   const key = String(name || "?").toLowerCase().replace(/[^a-z0-9]/g, "");
   let h = 0;
   for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  const bg = BRAND[key] || IOS_PALETTE[h % IOS_PALETTE.length];
+  return BRAND[key] || IOS_PALETTE[h % IOS_PALETTE.length];
+}
+function brandIcon(name, size = 18) {
+  const bg = brandColor(name);
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(bg.slice(i, i + 2), 16) / 255);
   const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
   const fg = lum > 0.72 ? "#1d1d1f" : "#fff";
   const initial = esc((String(name || "?").trim()[0] || "?").toUpperCase());
   return `<span class="brand" style="width:${size}px;height:${size}px;border-radius:${Math.round(size * 0.28)}px;background:${bg};color:${fg};font-size:${Math.round(size * 0.5)}px">${initial}</span>`;
+}
+/* The site's favicon once fetched (Rust keeps it), its brand initial until then. */
+function siteIcon(site, size = 18) {
+  if (!site) return brandIcon("?", size);
+  const data = LIB.icons.get(site.id);
+  if (data) return `<img class="favicon" src="${esc(data)}" alt="" style="width:${size}px;height:${size}px;border-radius:${Math.round(size * 0.22)}px" />`;
+  return brandIcon(site.id, size);
+}
+/* Favicons arrive one by one; the cards and tabs redraw as they do. */
+async function loadIcons() {
+  await Promise.all(
+    LIB.sites.map(async (s) => {
+      if (LIB.icons.has(s.id)) return;
+      const data = await invoke("lib_favicon", { id: s.id }).catch(() => null);
+      if (data) {
+        LIB.icons.set(s.id, data);
+        renderHome();
+        renderPins();
+        renderTabs();
+      }
+    })
+  );
 }
 
 const relDate = (secs) => {
@@ -241,23 +285,21 @@ const relDate = (secs) => {
   return new Date(secs * 1000).toLocaleDateString(locale());
 };
 
-/* Toolbar title: the page shown; the sidebar counts the favorites. */
-function libTitle() {
+/* The sidebar counts the favorites. */
+function libCounts() {
   const n = LIB.favs.length;
   $("count-favs").textContent = n ? String(n) : "";
-  const t = !libPinned(LIB.active) && LIB.tabs.find((x) => x.id === LIB.active);
-  if (t) tbSet("library", tabName(t), siteOf(t)?.name !== tabName(t) ? siteOf(t)?.name || "" : "");
-  else if (LIB.active === "favs") tbSet("library", tr("library.favorites"), n ? tr("library.fav_count", { n }) : "");
-  else tbSet("library", tr("nav.library"), "");
 }
 
-/* The toolbar star is filled when the page shown is a favorite. */
+/* The star is filled when the page shown is a favorite. */
 function libFavState() {
   const t = LIB.tabs.find((x) => x.id === LIB.active);
   const on = !!t && LIB.favs.some((f) => f.url === t.url);
   $("lib-fav").classList.toggle("on", on);
   $("lib-fav").title = tr(on ? "library.fav_already" : "library.fav");
 }
+
+/* ------------------------------------------------------------ favorites */
 
 async function favAct(what, id) {
   const f = LIB.favs.find((x) => x.id === id);
@@ -285,8 +327,8 @@ const shortUrl = (u) => u.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")
 function renderFavs() {
   const list = $("lib-grid");
   const has = LIB.favs.length > 0;
-  libTitle();
-  libFavState();
+  libCounts();
+  if (!libPinned(LIB.active)) libFavState();
   list.classList.toggle("hidden", !has);
   $("lib-empty").classList.toggle("hidden", has);
   if (!has) return;
@@ -295,7 +337,7 @@ function renderFavs() {
     const el = document.createElement("div");
     el.className = "fav-row";
     el.title = f.url;
-    el.innerHTML = `${brandIcon(f.site, 28)}
+    el.innerHTML = `${siteIcon(favSite(f), 28)}
       <div class="fav-text">
         <div class="fav-title">${esc(f.title)}</div>
         <div class="fav-sub">${esc(f.site)} · ${esc(relDate(f.added_at))} · <span class="fav-url">${esc(shortUrl(f.url))}</span></div>
@@ -317,16 +359,18 @@ function renderFavs() {
   }
 }
 
+/* The site a favorite was saved on: by its address's host. */
+function favSite(f) {
+  let host = "";
+  try {
+    host = new URL(f.url).host;
+  } catch {}
+  return LIB.sites.find((s) => host && (host.includes(s.id) || host === siteHost(s))) || null;
+}
+
 /* Opens a favorite in a new tab of its site. */
 async function openFavorite(f) {
-  const host = (() => {
-    try {
-      return new URL(f.url).host;
-    } catch {
-      return "";
-    }
-  })();
-  const site = LIB.sites.find((s) => host.includes(s.id)) || LIB.sites[0];
+  const site = favSite(f) || LIB.sites[0];
   if (!site) return;
   await openSite(site, f.url);
 }
@@ -349,7 +393,6 @@ $("lib-fav").addEventListener("click", async () => {
   const url = (await invoke("lib_url", { id: t.id }).catch(() => null)) || t.url;
   if (url !== t.url) {
     t.url = url;
-    setUrl(url);
     saveTabs();
   }
   if (LIB.favs.some((f) => f.url === url)) return activateTab("favs");
@@ -362,7 +405,21 @@ $("lib-fav").addEventListener("click", async () => {
   }
 });
 
-/* The sidebar's Favorites entry. */
+/* "Open in the browser": the page shown. */
+$("lib-ext").addEventListener("click", () => {
+  const t = LIB.tabs.find((x) => x.id === LIB.active);
+  if (t) invoke("plugin:opener|open_url", { url: t.url }).catch((err) => toast(String(err), true));
+});
+
+/* ------------------------------------------------------------ sidebar */
+
+/* Explore itself always lands on Home; its entries open a page. */
+document.querySelector('.sidebar .side-item[data-view="library"]').addEventListener("click", () => activateTab("home"));
+$("side-space").addEventListener("click", () => {
+  switchView("library");
+  const space = LIB.sites.find((s) => s.id === "space");
+  if (space) showSite(space);
+});
 $("side-favs").addEventListener("click", () => {
   switchView("library");
   activateTab("favs");
@@ -372,9 +429,13 @@ $("side-favs").addEventListener("click", () => {
 
 listen("lib-download", async (e) => {
   const { phase, path } = e.payload;
-  const name = (path || "").split("/").pop();
+  const name = (path || "").split(/[\\/]/).pop();
   if (phase === "started") {
     libStatus(tr("library.dl.started", { name }), 0);
+  } else if (phase === "finished" && /\.(3mf|stl)$/i.test(name) && typeof prepareModels === "function") {
+    // A model: straight to the plate.
+    libStatus(tr("library.dl.prepare", { name }), 2500);
+    await prepareModels([path]);
   } else if (phase === "finished") {
     libStatus(tr("library.dl.finished", { name }), 2500);
     // The file lands in Downloads: go and show it.
@@ -394,7 +455,7 @@ listen("lib-download", async (e) => {
 
 /* ------------------------------------------------------------ visibility */
 
-/* Called by the sidebar: the Library comes on or goes off screen. */
+/* Called by the sidebar: Explore comes on or goes off screen. */
 function libSetVisible(on) {
   LIB.visible = on;
   if (on) {
@@ -423,10 +484,7 @@ listen("lib-url", (e) => {
   if (!t) return;
   t.url = url;
   saveTabs();
-  if (LIB.active === id) {
-    setUrl(url);
-    libFavState();
-  }
+  if (LIB.active === id) libFavState();
 });
 
 listen("lib-title", (e) => {
@@ -438,48 +496,131 @@ listen("lib-title", (e) => {
   renderTabs();
 });
 
-$("lib-add").addEventListener("click", (e) =>
-  menuUnder(e.currentTarget, LIB.sites.map((s) => ({ id: "site:" + s.id, label: s.name })))
-);
-onMenu("site", (id) => {
-  const s = LIB.sites.find((x) => String(x.id) === id);
-  if (s) {
-    switchView("library");
-    openSite(s);
-  }
-});
-
 document.querySelectorAll(".lib-tab.pin").forEach((el) => el.addEventListener("click", () => activateTab(el.dataset.tab)));
-const libCmd = (what) => {
-  if (libPinned(LIB.active)) return;
-  invoke("lib_command", { id: LIB.active, what }).catch((e) => toast(String(e), true));
-};
-$("lib-back").addEventListener("click", () => libCmd("back"));
-$("lib-fwd").addEventListener("click", () => libCmd("forward"));
-$("lib-reload").addEventListener("click", () => libCmd("reload"));
 
 addEventListener("resize", () => LIB.visible && pushRect());
 new ResizeObserver(() => LIB.visible && pushRect()).observe($("lib-frame"));
 
-/* Home: one card per site. */
-function renderSites() {
-  const box = $("lib-sites");
+/* ------------------------------------------------------------ home */
+
+/* A site's card: icon, name, a line about it, its host; tinted with the
+   site's colour. `hero`: the wide card of Snapmaker Space. */
+function siteCard(s, hero = false) {
+  const color = brandColor(s.id);
+  return `<button type="button" class="ex-card${hero ? " hero" : ""}" data-site="${esc(s.id)}" style="--brand:${esc(color)}" title="${esc(s.url)}">
+      <span class="ex-icon">${siteIcon(s, hero ? 44 : 32)}</span>
+      <span class="ex-text">
+        <span class="ex-name">${esc(siteName(s))}</span>
+        <span class="ex-desc">${esc(tr("explore.desc." + s.id))}</span>
+        <span class="ex-host">${esc(siteHost(s))}</span>
+      </span>
+      ${hero ? `<span class="btn primary ex-go">${esc(tr("common.open"))}</span>` : ""}
+      ${s.id === "space" ? "" : `<span class="ex-pin${LIB.pins.has(s.id) ? " on" : ""}" data-pin="${esc(s.id)}" role="button" title="${esc(tr(LIB.pins.has(s.id) ? "explore.unpin" : "explore.pin"))}"><svg viewBox="0 0 24 24"><path d="M16 3v2h-1v6l3 3v2h-5v6l-1 1-1-1v-6H6v-2l3-3V5H8V3z"/></svg></span>`}
+    </button>`;
+}
+
+/* ------------------------------------------------------------ pins */
+
+/* A site pinned to the sidebar, under Snapmaker Space: one click opens its
+   tab, or brings it back. Snapmaker Space itself is always there. */
+function savePins() {
+  localStorage.setItem("snapstudio.libpins", JSON.stringify([...LIB.pins]));
+}
+function togglePin(id) {
+  if (id === "space") return;
+  if (LIB.pins.has(id)) LIB.pins.delete(id);
+  else LIB.pins.add(id);
+  savePins();
+  renderPins();
+  renderHome();
+}
+function renderPins() {
+  const box = $("side-pins");
   box.innerHTML = "";
-  for (const s of LIB.sites) {
+  for (const id of LIB.pins) {
+    const s = LIB.sites.find((x) => x.id === id);
+    if (!s) continue;
     const b = document.createElement("button");
-    b.className = "lib-site";
-    const host = (() => {
-      try {
-        return new URL(s.url).host.replace(/^www\./, "");
-      } catch {
-        return "";
-      }
-    })();
-    b.innerHTML = `${brandIcon(s.name, 36)}<span class="lib-site-name">${esc(s.name)}</span><span class="lib-site-host">${esc(host)}</span>`;
-    b.onclick = () => openSite(s);
+    b.className = "side-item";
+    b.dataset.site = s.id;
+    b.innerHTML = `<span class="glyph ex-glyph">${siteIcon(s, 16)}</span><span class="lbl">${esc(siteName(s))}</span>`;
+    b.onclick = () => {
+      switchView("library");
+      showSite(s);
+    };
+    b.oncontextmenu = (e) => {
+      e.preventDefault();
+      nativeMenu([{ id: "expin:open:" + s.id, label: tr("common.open") }, {}, { id: "expin:unpin:" + s.id, label: tr("explore.unpin") }], e.clientX, e.clientY);
+    };
     box.appendChild(b);
   }
+  sideSync();
 }
+onMenu("expin", (arg) => {
+  const i = arg.indexOf(":");
+  const what = arg.slice(0, i), id = arg.slice(i + 1);
+  const s = LIB.sites.find((x) => x.id === id);
+  if (!s) return;
+  if (what === "open") {
+    switchView("library");
+    openSite(s);
+  }
+  if (what === "pin" || what === "unpin") togglePin(id);
+});
+
+/* Home: the Snapmaker ecosystem (Space wide, the four others beside), then
+   the model libraries, in rows. The "+" picker lists the same cards,
+   smaller. */
+function renderHome() {
+  const snap = LIB.sites.filter((s) => s.hub === "snapmaker");
+  const libs = LIB.sites.filter((s) => s.hub === "library");
+  const space = snap.find((s) => s.id === "space");
+  const others = snap.filter((s) => s.id !== "space");
+  $("ex-snap").innerHTML = `${space ? siteCard(space, true) : ""}<div class="ex-grid ex-four">${others.map((s) => siteCard(s)).join("")}</div>`;
+  $("ex-libs").innerHTML = `<div class="ex-grid">${libs.map((s) => siteCard(s)).join("")}</div>`;
+  $("ex-pick-snap").innerHTML = snap.map((s) => siteCard(s)).join("");
+  $("ex-pick-libs").innerHTML = libs.map((s) => siteCard(s)).join("");
+}
+
+/* A card, on the home or in the picker: a new tab on that site; its pin
+   toggles the sidebar entry; a right click offers both. */
+for (const id of ["lib-home", "lib-picker"]) {
+  $(id).addEventListener("click", (e) => {
+    const pin = e.target.closest("[data-pin]");
+    if (pin) {
+      e.stopPropagation();
+      togglePin(pin.dataset.pin);
+      return;
+    }
+    const card = e.target.closest("[data-site]");
+    if (!card) return;
+    const s = LIB.sites.find((x) => x.id === card.dataset.site);
+    if (!s) return;
+    closeSheet($("lib-picker"));
+    openSite(s);
+  });
+  $(id).addEventListener("contextmenu", (e) => {
+    const card = e.target.closest("[data-site]");
+    if (!card) return;
+    e.preventDefault();
+    const s = LIB.sites.find((x) => x.id === card.dataset.site);
+    if (!s) return;
+    const items = [{ id: "expin:open:" + s.id, label: tr("common.open") }];
+    if (s.id !== "space") items.push({}, { id: "expin:" + (LIB.pins.has(s.id) ? "unpin" : "pin") + ":" + s.id, label: tr(LIB.pins.has(s.id) ? "explore.unpin" : "explore.pin") });
+    nativeMenu(items, e.clientX, e.clientY);
+  });
+}
+
+/* The "+" of the tab strip: the picker, a sheet under it. The native view
+   hides meanwhile, as for every sheet. */
+$("lib-add").addEventListener("click", () => openSheet($("lib-picker")));
+$("lib-picker").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) closeSheet(e.currentTarget);
+});
+$("lib-picker").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeSheet($("lib-picker"));
+});
+$("lib-picker-close").addEventListener("click", () => closeSheet($("lib-picker")));
 
 (async () => {
   try {
@@ -487,28 +628,32 @@ function renderSites() {
   } catch {
     LIB.sites = [];
   }
-  renderSites();
+  renderHome();
+  renderPins();
   renderTabs();
   await loadFavs();
+  loadIcons();
 })();
 
 window.addEventListener("langchange", () => {
+  renderHome();
+  renderPins();
   renderTabs();
   renderFavs();
 });
 
-/* Native views draw on top of everything: they are hidden while a dialog or
-   the viewer takes the screen, and brought back afterwards. */
-const OVERLAYS = ["smodal", "pmodal", "iamodal", "sendmodal", "viewer"];
+/* Native views draw on top of everything: they are hidden while a sheet,
+   the viewer or the welcome assistant takes the screen, and brought back
+   afterwards. Every sheet counts: one opened by an event (the queue's
+   next print, an update, a sign-in) would otherwise sit under the page,
+   invisible, its backdrop blocking the app. */
+const OVERLAY_SEL = ".modal, .viewer, .welcome";
 (() => {
   const check = () => {
-    const shown = OVERLAYS.some((id) => $(id) && !$(id).classList.contains("hidden"));
+    const shown = [...document.querySelectorAll(OVERLAY_SEL)].some((el) => !el.classList.contains("hidden"));
     if (shown) libSuspend();
     else libResume();
   };
   const obs = new MutationObserver(check);
-  for (const id of OVERLAYS) {
-    const el = $(id);
-    if (el) obs.observe(el, { attributes: true, attributeFilter: ["class"] });
-  }
+  for (const el of document.querySelectorAll(OVERLAY_SEL)) obs.observe(el, { attributes: true, attributeFilter: ["class"] });
 })();
