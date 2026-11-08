@@ -63,12 +63,10 @@ then `python3 scripts/whats-new.py`, which copies the highlights' names to
 `ui/whats-new.json` for the sidebar card. The page is published with the
 site; a patch version has no entry of its own.
 
-The 0.19.0 preparation is [plans/v0.19.md](plans/v0.19.md). This branch
-sets the app version to 0.19.0, dates the changelog **2026-11-07**, and
-sets What's new `current` to 0.19, with Snappy first. It does not publish.
-`scripts/release.sh` commits, pushes and starts `build.yml`;
-`scripts/engine.sh` starts the engine workflow. Neither is a dry run.
-Publishing 0.19.0 is a later step, after review.
+`scripts/release.sh` and `scripts/engine.sh` have no dry run: each pushes
+and starts its workflow. `pages.yml` publishes the site, What's new
+included, on every push to `main`: merge a version's What's new just before
+its release, not days ahead.
 
 ## Changing the engine version
 

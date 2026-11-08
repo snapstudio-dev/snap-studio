@@ -3,8 +3,8 @@
 Merged in [#90](https://github.com/kameka22/snap-studio/pull/90)
 (2026-11-04). [docs/privacy.md](../privacy.md), the README privacy FAQ and
 the site footer are in place (see [Implementation](#implementation)). The
-What's new entry is a small line on the coming 0.19 page
-([v0.19.md](v0.19.md)); `current` stays 0.18 until the release date.
+What's new entry is a small line on the 0.19 page
+([v0.19.md](v0.19.md)).
 [#95](https://github.com/kameka22/snap-studio/pull/95) is merged: the
 introduction order on main is Snappy, then this count. The first-launch
 section below is the earlier proposal and is kept as history.
@@ -216,9 +216,8 @@ submission) is enough.
   `docs/privacy.md`).
 - **Release workflow** (`.github/workflows/build.yml`): the secret
   `APTABASE_APP_KEY` given to the Build step only.
-- **What's new**: a small entry on the coming 0.19 page in
-  `versions.json`. `current` is still `0.18`, which is what the app's card
-  copies. The entry says the sheet comes after Snappy's introduction. The
+- **What's new**: a small entry on the 0.19 page in
+  `versions.json`. The entry says the sheet comes after Snappy's introduction. The
   earlier wording, kept here:
   - en: "**Anonymous usage count** — Snap Studio now sends one anonymous
     signal at start (version, system, language) to count its users,

@@ -192,8 +192,8 @@ A welcome assistant then sets up the language, the models folder, the U1 on your
 
 Since 2026-10-28, the opening of the Snapmaker Innovation Fund Phase 2. Updated with each release; full details are in the [CHANGELOG](../CHANGELOG.md).
 
-**0.19.0, 2026-11-07** (prepared in [#96](https://github.com/kameka22/snap-studio/pull/96); the packages are not published by that pull request)
-- Snappy ([#95](https://github.com/kameka22/snap-studio/pull/95)): the icon at the end of the sidebar separator and the floating card, on the shared Claude session. The What's new picture is the redacted open card (1230×1788) plus the icon at 92×96. Sidebar labels in that capture are covered. It is not an approval card.
+**0.19.0, 2026-11-07** ([#96](https://github.com/kameka22/snap-studio/pull/96))
+- Snappy ([#95](https://github.com/kameka22/snap-studio/pull/95)), the in-app workshop assistant: an animated icon at the end of the sidebar separator and a floating card, on a Claude session shared with Create. It acts through the app's own tools (printers, queue, Prepare and slicing, files, Create, Explore, settings), sees a printer's camera, the plate and attached images, and every change waits for the user's confirmation.
 - Supports hint ([#89](https://github.com/kameka22/snap-studio/pull/89)), plate and material warnings ([#16](https://github.com/kameka22/snap-studio/pull/16)), Explore's adaptive Back/Forward pill ([#88](https://github.com/kameka22/snap-studio/pull/88)), and one anonymous `app_started` at launch ([#90](https://github.com/kameka22/snap-studio/pull/90), [privacy.md](privacy.md)).
 - The printer simulator ([#87](https://github.com/kameka22/snap-studio/pull/87)) stays development and test only. Draft plans [#91](https://github.com/kameka22/snap-studio/pull/91)–[#94](https://github.com/kameka22/snap-studio/pull/94) are not in this version. The engine upgrade ([#86](https://github.com/kameka22/snap-studio/pull/86)) is not included.
 

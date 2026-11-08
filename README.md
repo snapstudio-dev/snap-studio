@@ -105,10 +105,9 @@ The U1 plate as in Orca — then slice.
   colors in red the faces that point down more than the profile's support
   angle, and hatches the ones hidden behind the model. After a slice
   without supports, the engine's own warning is shown, with **Turn supports
-  on and slice again**. The picture above is the plate, not this warning.
-  The crop below is the warning only: it does not show the overhang view.
+  on and slice again**.
 
-<img src="docs/screenshots/supports-warning.png" width="662" height="216" alt="The supports warning: a model probably needs supports because parts start in the air, with Turn supports on. The overhang view is not shown." style="max-width:100%;height:auto">
+<img src="docs/screenshots/supports-warning.png" width="460" alt="The supports warning: parts start in the air, with Turn supports on">
 
 <br clear="both">
 
@@ -161,21 +160,33 @@ Claude modifies a part or creates one from a description.
 
 ### ✦ Snappy
 
-<img src="docs/screenshots/snappy-avatar.png" width="92" height="96" alt="Snappy's icon at its real size">
-<img src="docs/screenshots/snappy.png" width="1230" height="1788" alt="Snappy's card beside the sidebar, with a question and Snappy's answer. Some sidebar labels are covered. Not an approval card." style="max-width:min(100%,420px);height:auto">
+<img align="right" width="40%" hspace="12" src="docs/screenshots/snappy.png" alt="Snappy's card beside the sidebar, answering what it can do" />
 
-The workshop assistant. The icon stays at the end of the sidebar's
-separator, above Settings, and opens a card that floats beside the sidebar.
+The workshop assistant, built into the app. Its icon sits at the end of the
+sidebar's separator, above Settings, and comes alive while it works; it
+opens a card that floats beside the sidebar. Ask a question, or ask it to
+do the job:
 
-- It needs the AI. With the AI off, its switch stays locked. The welcome
-  assistant offers it; if you already had the app, a sheet does at the next
-  launch, before the anonymous-count sheet.
-- You type in the card. Snappy asks before it changes anything, and does
-  not ask for a read. Anything other than a yes is a no.
-- The model, the memory (read, edit or clear) and a new conversation are
-  in Settings › AI.
-- The pictures are the icon, at its real size, and the open card with one
-  answer. Names in the sidebar are covered. It is not an approval card.
+- **Printers**: status, temperatures and spools; home, jog, heat, load or
+  unload, fans and light; pause, resume or cancel a print; bed meshes and
+  maintenance.
+- **Prepare and slicing**: add files to the plate, arrange, orient, scale,
+  change the slice settings, slice, then send to a printer or its queue.
+- **Queue, history and files**: reorder or start queued prints, requeue a
+  past one, find, sort and manage files on your computer and your printers.
+- **Create and Explore**: start or continue an AI design, open a site.
+- **It sees**: a printer's camera (after you allow it), the plate as the
+  3D view shows it, and the images you attach to a message.
+- **It asks**: anything that changes something waits for your **Allow**;
+  anything else is a no. When it needs a choice, it asks with a few
+  answers to pick from. **Esc** stops it.
+- **It remembers** what is worth keeping from one conversation to the
+  next, in a memory you can read, edit or clear in Settings › AI, where the
+  model, how full the conversation is and **New conversation** are too.
+
+Snappy needs the AI (Claude Code). It is offered at first launch, and once
+to those who already had the app. Its context never carries a printer
+serial number, an IP address, a hostname or a file path.
 
 <br clear="both">
 
@@ -359,11 +370,10 @@ also opened from the printer's page (**Control**).
   it is flagged when a spool is declared. A chip suggests the bed
   temperature from the filament profiles for that plate (the highest when
   several materials are loaded) and sets the target only when clicked.
-  The picture above does not show the plate picker. The crop below is the
-  glue tip only.
-
-<img src="docs/screenshots/plate-glue.png" width="930" height="636" alt="The glue tip: PETG on the Smooth PEI Plate bonds too strongly. Not the plate picker." style="max-width:100%;height:auto">
+  When a material needs glue on that plate, a tip shows how to apply it.
 - Safe by design: locked during a print.
+
+<img src="docs/screenshots/plate-glue.png" width="520" alt="The glue tip: PETG on the Smooth PEI Plate bonds too strongly, apply glue">
 
 <details>
 <summary>More details</summary>
@@ -631,7 +641,10 @@ U1's.
 **What leaves my computer?** Snap Studio talks to GitHub (to check for
 updates and download the engine), to your printers on the local network, to
 the sites you open in Explore, and — if you use the AI — to Anthropic
-through Claude Code. It also sends one anonymous signal at start: see
+through Claude Code. Snappy's messages go there too, with what its tools
+read in the app; printer serial numbers, IP addresses, hostnames and file
+paths are filtered out first, and a camera picture leaves only after you
+allow it. It also sends one anonymous signal at start: see
 [Privacy](#privacy).
 
 **Privacy.** One anonymous signal at each start, to count users. On by

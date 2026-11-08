@@ -27,7 +27,6 @@ html.embed .foot { display: none; }
 
 /* Hero */
 .wn-hero { text-align: center; padding: 76px 0 30px !important; scroll-margin-top: 70px; }
-.wn-next + .wn-hero { padding-top: 48px !important; border-top: 1px solid var(--line); }
 html.embed .wn-hero { scroll-margin-top: 0; }
 .wn-icon { width: 128px; height: 128px; margin: 0 auto 26px; position: relative; }
 .wn-icon::before {

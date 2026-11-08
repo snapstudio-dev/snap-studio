@@ -8,7 +8,7 @@ lists below.
 
 | Plan | Subject | State |
 |---|---|---|
-| [v0.19.md](v0.19.md) | 0.19.0 documentation: changelog, What's new, README, site | Prepared in draft [#96](https://github.com/kameka22/snap-studio/pull/96): version **0.19.0**, changelog dated 2026-11-07, What's new `current` **0.19**, Snappy first. No tag and no published packages in that work. |
+| [v0.19.md](v0.19.md) | 0.19.0: changelog, What's new, README, site, and the checks before publishing | Docs in [#96](https://github.com/kameka22/snap-studio/pull/96): version **0.19.0**, What's new `current` **0.19**, Snappy first. The release itself is published by `scripts/release.sh` |
 
 ## In progress
 
@@ -34,10 +34,10 @@ lists below.
 | [prints-redesign.md](prints-redesign.md) | Prints page redesign: list and record (C, chosen from three mockup directions; the stats go to the printer page and a Statistics page in a follow-up) | Implemented in draft PR [#65](https://github.com/kameka22/snap-studio/pull/65) |
 | [ai-source-models.md](ai-source-models.md) | STL and 3MF files as source models in AI conversations (creation sheet and chat); dropped files reach the AI view; a message for files that can't be attached | Merged in [#83](https://github.com/kameka22/snap-studio/pull/83), in 0.18.0; checks in the app on the three systems left |
 | [printer-simulator.md](printer-simulator.md) | Dev builds: simulated printers (a fake Moonraker per printer on this computer) and a full simulation mode, with time acceleration and fault injection | Merged in [#87](https://github.com/kameka22/snap-studio/pull/87) (phases 1 to 5). Development and test builds only (Cargo feature `sim`); not a user-facing item of 0.19 |
-| [support-needed-hint.md](support-needed-hint.md) | Prepare: tell whether an object needs supports — a badge on the 3D view computed from the mesh, an overhang view, and the engine's warning after the slice | Merged in [#89](https://github.com/kameka22/snap-studio/pull/89), on main, still under Unreleased. The in-app slice check in the plan was not re-run for the 0.19 docs draft |
+| [support-needed-hint.md](support-needed-hint.md) | Prepare: tell whether an object needs supports — a badge on the 3D view computed from the mesh, an overhang view, and the engine's warning after the slice | Merged in [#89](https://github.com/kameka22/snap-studio/pull/89), in 0.19.0. The in-app slice check in the plan is still open |
 | [library-nav-contrast.md](library-nav-contrast.md) | Explore: Back, Forward and Reload almost invisible over dark sites; adaptive pill (dark on light sites, light on dark sites), chosen | Merged in [#88](https://github.com/kameka22/snap-studio/pull/88), with the Linux flicker fix; checks on macOS and Windows still listed in the plan |
 | [plate-material-compatibility.md](plate-material-compatibility.md) | Plate and material compatibility: warnings and glue tip in Prepare and at start, plus the plate set per printer in Control, a check when a spool is loaded, a suggested bed temperature and a glue reminder | Merged in [#16](https://github.com/kameka22/snap-studio/pull/16). The pre-merge rule-table review has no comment on the pull request and is not asked again. Graphic Effect stays the least sure pair in the plan |
-| [usage-analytics.md](usage-analytics.md) | Anonymous usage count with Aptabase: one `app_started` event, announced in a friendly sheet at first launch, easy to turn off in Settings | Merged in [#90](https://github.com/kameka22/snap-studio/pull/90). Privacy doc, README and site footer are in place. The What's new entry is still outstanding ([v0.19.md](v0.19.md)); the plan's first-launch text is the flow before [#95](https://github.com/kameka22/snap-studio/pull/95) |
+| [usage-analytics.md](usage-analytics.md) | Anonymous usage count with Aptabase: one `app_started` event, announced in a friendly sheet at first launch, easy to turn off in Settings | Merged in [#90](https://github.com/kameka22/snap-studio/pull/90), in 0.19.0. Privacy doc, README, site footer and What's new are in place; the plan's first-launch text is the flow before [#95](https://github.com/kameka22/snap-studio/pull/95) |
 
 The other planned features each have a draft pull request: see the
 [Roadmap](../../README.md#roadmap).
@@ -65,12 +65,12 @@ tests), whose real behavior remains to be checked.
 - **Network search**: the U1 shows in "On the network" (otherwise: the
   `[discover]` log in the `cargo tauri dev` terminal).
 - **Welcome assistant**: first launch on a fresh account.
-- **Supports hint** (#89, on main, not in a release yet): rotate a safe T
+- **Supports hint** (#89, 0.19.0): rotate a safe T
   or bridge demo, the badge updates, turn supports on, the overhang toggle
   (red faces and hatched hidden ones), then a slice without supports, the
-  warning, and slice again. Still listed in the plan; not run for the 0.19
-  docs draft, and not newly declared a release blocker.
-- **Plate and materials** (#16, on main, not in a release yet): the plate
+  warning, and slice again. Still listed in the plan; not a release
+  blocker.
+- **Plate and materials** (#16, 0.19.0): the plate
   kept per printer in Control, the material warning when a spool changes,
   the suggested bed temperature, the start-sheet mismatch and the glue
   reminder. Printer screens against the simulator `farm` only. Graphic

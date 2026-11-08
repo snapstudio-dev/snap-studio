@@ -120,11 +120,9 @@ Le plateau U1 comme dans Orca — puis découper.
   en rouge les faces plus inclinées que l'angle de support du profil, et
   hachure celles cachées derrière le modèle. Après une découpe sans
   supports, l'avertissement du moteur s'affiche, avec **Activer les
-  supports et redécouper**. L'image ci-dessus est le plateau, pas cet
-  avertissement. Le cadrage ci-dessous est seulement l'avertissement : il
-  ne montre pas la vue des surplombs.
+  supports et redécouper**.
 
-<img src="docs/screenshots/supports-warning.png" width="662" height="216" alt="L'avertissement de supports : un modèle a probablement besoin de supports parce que des parties commencent dans le vide, avec Activer les supports. La vue des surplombs n'est pas montrée." style="max-width:100%;height:auto">
+<img src="docs/screenshots/supports-warning.png" width="460" alt="L'avertissement de supports : des parties commencent dans le vide, avec Activer les supports">
 
 <br clear="both">
 
@@ -181,23 +179,39 @@ Claude modifie une pièce ou en crée une à partir d'une description.
 
 ### ✦ Snappy
 
-<img src="docs/screenshots/snappy-avatar.png" width="92" height="96" alt="L'icône de Snappy, à sa taille réelle">
-<img src="docs/screenshots/snappy.png" width="1230" height="1788" alt="La carte de Snappy à côté de la barre latérale, avec une question et la réponse de Snappy. Certains libellés de la barre sont masqués. Pas une demande de confirmation." style="max-width:min(100%,420px);height:auto">
+<img align="right" width="40%" hspace="12" src="docs/screenshots/snappy.png" alt="La carte de Snappy à côté de la barre latérale, qui explique ce qu'il sait faire" />
 
-L'assistant d'atelier. L'icône reste au bout du séparateur de la barre
-latérale, au-dessus de Réglages, et ouvre une carte qui flotte à côté.
+L'assistant d'atelier, intégré à l'app. Son icône est au bout du séparateur
+de la barre latérale, au-dessus de Réglages, et s'anime quand il travaille ;
+elle ouvre une carte qui flotte à côté. Posez une question, ou demandez-lui
+de le faire :
 
-- Il a besoin de l'IA. IA désactivée, son interrupteur reste verrouillé.
-  L'assistant de bienvenue vous le propose ; si vous aviez déjà l'app, une
-  fenêtre le fait au lancement suivant, avant celle du comptage anonyme.
-- Vous écrivez dans la carte. Snappy demande confirmation avant de changer
-  quoi que ce soit, et ne la demande pas pour une lecture. Tout ce qui
-  n'est pas un oui est un non.
-- Le modèle, la mémoire (lire, modifier ou effacer) et une nouvelle
-  conversation sont dans Réglages › IA.
-- Les images sont l'icône, à sa taille réelle, et la carte ouverte avec
-  une réponse. Les noms dans la barre sont masqués. Ce n'est pas une
-  demande de confirmation.
+- **Imprimantes** : état, températures et bobines ; origine, déplacements,
+  chauffe, chargement ou déchargement, ventilateurs et lumière ; mettre en
+  pause, reprendre ou annuler une impression ; maillages du plateau et
+  entretien.
+- **Préparer et découper** : ajouter des fichiers au plateau, disposer,
+  orienter, mettre à l'échelle, changer les réglages, découper, puis
+  envoyer à une imprimante ou à sa file.
+- **File, historique et fichiers** : réordonner ou lancer la file, relancer
+  une ancienne impression, trouver, trier et gérer les fichiers de votre
+  ordinateur et de vos imprimantes.
+- **Créer et Explorer** : lancer ou poursuivre une conception IA, ouvrir un
+  site.
+- **Il voit** : la caméra d'une imprimante (après votre accord), le plateau
+  tel que la vue 3D le montre, et les images jointes à un message.
+- **Il demande** : tout ce qui change quelque chose attend votre
+  **Autoriser** ; tout le reste est un non. Quand il lui faut un choix, il
+  pose la question avec quelques réponses. **Échap** l'arrête.
+- **Il se souvient** de ce qui mérite d'être gardé d'une conversation à
+  l'autre, dans une mémoire que vous pouvez lire, modifier ou effacer dans
+  Réglages › IA, avec le modèle, le remplissage de la conversation et
+  **Nouvelle conversation**.
+
+Snappy a besoin de l'IA (Claude Code). Il est proposé au premier lancement,
+et une fois à ceux qui avaient déjà l'app. Son contexte ne contient jamais
+de numéro de série d'imprimante, d'adresse IP, de nom d'hôte ni de chemin
+de fichier.
 
 <br clear="both">
 
@@ -395,12 +409,11 @@ d'Entretien et réglages, aussi accessible depuis la page de l'imprimante
   ne lui convient pas est signalé quand une bobine est déclarée. Une
   pastille conseille la température du plateau d'après les profils de
   filament pour ce plateau (la plus haute quand plusieurs matériaux sont
-  chargés) et ne change la consigne que si vous cliquez. L'image ci-dessus ne montre
-  pas le choix de plateau. Le cadrage ci-dessous est seulement le conseil
-  de colle.
-
-<img src="docs/screenshots/plate-glue.png" width="930" height="636" alt="Le conseil de colle : le PETG sur le plateau PEI lisse adhère trop fort. Pas le choix du plateau." style="max-width:100%;height:auto">
+  chargés) et ne change la consigne que si vous cliquez. Quand un matériau
+  a besoin de colle sur ce plateau, un conseil montre comment l'appliquer.
 - Sûr par construction : bloqué pendant une impression.
+
+<img src="docs/screenshots/plate-glue.png" width="520" alt="Le conseil de colle : le PETG sur le plateau PEI lisse adhère trop fort, mettez de la colle">
 
 <details>
 <summary>Plus de détails</summary>
@@ -693,7 +706,10 @@ profils et les têtes sont ceux de la U1.
 **Qu'est-ce qui sort de mon ordinateur ?** Snap Studio échange avec GitHub
 (vérifier les mises à jour, télécharger le moteur), vos imprimantes sur le
 réseau local, les sites ouverts dans Explorer et, si vous utilisez l'IA,
-Anthropic par Claude Code. Il envoie aussi un signal anonyme au démarrage :
+Anthropic par Claude Code. Les messages de Snappy y vont aussi, avec ce que
+ses outils lisent dans l'app ; les numéros de série, adresses IP, noms
+d'hôte et chemins de fichiers en sont retirés avant, et une photo de la
+caméra ne part qu'avec votre accord. Il envoie aussi un signal anonyme au démarrage :
 voir [Confidentialité](#confidentialité).
 
 **Vie privée.** Un signal anonyme à chaque démarrage, pour compter les

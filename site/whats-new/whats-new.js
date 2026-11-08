@@ -207,19 +207,11 @@ function previousHtml(list, open) {
   </section>`;
 }
 
-/* A version with no date is not released. It leads the page as coming,
-   and is not labeled as a previous version. `current` stays the released
-   page the app's card points at. */
-function upcomingHtml(v) {
-  return `<div class="wn-next">${heroHtml(v)}<section class="wn-feats">${v.features.map(featureHtml).join("")}</section>${smallHtml(v)}</div>`;
-}
-
 function render() {
   const main = document.getElementById("wn");
   const cur = data.versions.find((v) => v.version === data.current) || data.versions[0];
-  const upcoming = data.versions.filter((v) => v !== cur && v.features && v.features.length && !v.date);
-  const later = data.versions.filter((v) => v !== cur && v.features && v.features.length && v.date);
-  const prev = data.versions.filter((v) => v !== cur && !upcoming.includes(v) && !later.includes(v));
+  const later = data.versions.filter((v) => v !== cur && v.features && v.features.length);
+  const prev = data.versions.filter((v) => v !== cur && !later.includes(v));
   // Entries opened by the reader stay open across a language switch; the
   // most recent one of the timeline is open at first, full sections closed.
   const was = [...main.querySelectorAll("details.ver[open], .wn-later.open")].map((d) => d.id.slice(1));
@@ -227,7 +219,6 @@ function render() {
   const target = decodeURIComponent(location.hash.slice(1));
   if (target.startsWith("v")) open.add(target.slice(1));
   main.innerHTML =
-    upcoming.map(upcomingHtml).join("") +
     heroHtml(cur) +
     `<section class="wn-feats">${cur.features.map(featureHtml).join("")}</section>` +
     smallHtml(cur) +

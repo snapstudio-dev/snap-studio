@@ -24,8 +24,8 @@
             "w": 92,
             "h": 96,
             "alt": {
-              "en": "Snappy’s icon at its real size, 92 by 96 pixels",
-              "fr": "L’icône de Snappy à sa taille réelle, 92 par 96 pixels"
+              "en": "Snappy’s icon",
+              "fr": "L’icône de Snappy"
             }
           },
           "tag": {
@@ -48,12 +48,12 @@
             "fr": "Snappy, à côté de ce que vous faites"
           },
           "text": {
-            "en": "The icon stays at the end of the sidebar’s separator, above Settings, and opens a card that floats beside it. You type there. Snappy asks before it changes anything, and does not ask for a read. It needs the AI: with the AI off, its switch stays locked. The model, the memory and a new conversation are in Settings › AI. The picture is that card with a real answer. Names in the sidebar are covered. It is not an approval card.",
-            "fr": "L’icône reste au bout du séparateur de la barre latérale, au-dessus de Réglages, et ouvre une carte qui flotte à côté. Vous écrivez là. Snappy demande confirmation avant de changer quoi que ce soit, et ne la demande pas pour une lecture. Il a besoin de l’IA : IA désactivée, son interrupteur reste verrouillé. Le modèle, la mémoire et une nouvelle conversation sont dans Réglages › IA. L’image montre cette carte avec une vraie réponse. Les noms dans la barre sont masqués. Ce n’est pas une demande de confirmation."
+            "en": "An assistant built into the app, one click away at the end of the sidebar. Ask it a question, or ask it to do the job: drive a printer, arrange and slice the plate, send it or queue it, find a file, start a design. It looks at a printer’s camera, the plate and the images you attach. Anything that changes something waits for your Allow, and it remembers what matters from one conversation to the next.",
+            "fr": "Un assistant intégré à l’app, à un clic au bout de la barre latérale. Posez-lui une question, ou demandez-lui de le faire : piloter une imprimante, disposer et découper le plateau, l’envoyer ou le mettre en file, trouver un fichier, lancer une conception. Il regarde la caméra d’une imprimante, le plateau et les images que vous joignez. Tout ce qui change quelque chose attend votre Autoriser, et il se souvient de l’essentiel d’une conversation à l’autre."
           },
           "alt": {
-            "en": "Snappy’s card beside the sidebar. The message asks what Snappy can do. The reply lists printers, files, Prepare and slicing, the queue, Create, and Explore and settings, and says a change needs confirmation first. Some sidebar labels are covered.",
-            "fr": "La carte de Snappy à côté de la barre latérale. Le message demande ce que Snappy peut faire. La réponse liste les imprimantes, les fichiers, Préparer et la découpe, la file, Créer, Explorer et les réglages, et dit qu’un changement demande d’abord une confirmation. Certains libellés de la barre sont masqués."
+            "en": "Snappy’s card beside the sidebar, answering what it can do: printers, files, Prepare and slicing, the queue, Create, Explore and settings, with a confirmation before any change.",
+            "fr": "La carte de Snappy à côté de la barre latérale, qui répond à ce qu’il sait faire : imprimantes, fichiers, Préparer et découpe, file, Créer, Explorer et réglages, avec une confirmation avant tout changement."
           }
         },
         {
@@ -83,12 +83,12 @@
             "fr": "Quand une pièce a probablement besoin de supports"
           },
           "text": {
-            "en": "In Prepare, a badge says when an object probably needs supports, with the reason and Turn supports on. This picture is that warning only: parts start in the air. It does not show the overhang view.",
-            "fr": "Dans Préparer, un badge dit qu’un objet a probablement besoin de supports, avec la raison et Activer les supports. Cette image est seulement cet avertissement : des parties commencent dans le vide. Elle ne montre pas la vue des surplombs."
+            "en": "In Prepare, a badge says when an object probably needs supports, and why: parts that start in the air, a long overhang, large overhangs. Turn supports on in one click, or show the overhangs in red on the model. After a slice without supports, the engine’s warning offers to slice again with them.",
+            "fr": "Dans Préparer, un badge indique quand un objet a probablement besoin de supports, et pourquoi : des parties qui commencent dans le vide, un long porte-à-faux, de grands surplombs. Activez les supports en un clic, ou affichez les surplombs en rouge sur le modèle. Après une découpe sans supports, l’avertissement du moteur propose de redécouper avec."
           },
           "alt": {
-            "en": "The supports warning: Supports probably needed, a model file whose parts start in the air, and Turn supports on. No overhang view.",
-            "fr": "L’avertissement de supports : Supports probably needed, un fichier dont des parties commencent dans le vide, et Turn supports on. Pas la vue des surplombs."
+            "en": "The supports warning: parts start in the air, with Turn supports on.",
+            "fr": "L’avertissement de supports : des parties commencent dans le vide, avec Activer les supports."
           }
         },
         {
@@ -118,12 +118,12 @@
             "fr": "La colle, quand le plateau en a besoin"
           },
           "text": {
-            "en": "Snap Studio warns when a material does not suit the plate, and shows how to apply glue when the pair needs it. Here, PETG on the Smooth PEI Plate bonds too strongly and can tear the surface. The picture is that glue tip, not the plate picker in Control.",
-            "fr": "Snap Studio vous prévient quand un matériau ne convient pas au plateau, et montre comment mettre de la colle quand la paire en a besoin. Ici, le PETG sur le plateau PEI lisse adhère trop fort et peut arracher la surface. L’image est ce conseil de colle, pas le choix du plateau dans Contrôle."
+            "en": "Set the plate on each printer in Control. Snap Studio warns when a material does not suit it, suggests the bed temperature, and shows how to apply glue when the pair needs it — here, PETG bonds so strongly to the Smooth PEI Plate that it can tear the surface. Before a print, it says when the file was sliced for another plate.",
+            "fr": "Choisissez le plateau de chaque imprimante dans Contrôle. Snap Studio vous prévient quand un matériau ne lui convient pas, conseille la température du plateau, et montre comment mettre de la colle quand la paire en a besoin — ici, le PETG adhère si fort au plateau PEI lisse qu’il peut en arracher la surface. Avant une impression, il signale un fichier découpé pour un autre plateau."
           },
           "alt": {
-            "en": "The glue tip: PETG on the Smooth PEI Plate, a diagram of the part, the glue and the plate, and a switch to hide the tip.",
-            "fr": "Le conseil de colle : PETG on the Smooth PEI Plate, un schéma pièce, colle et plateau, et un interrupteur pour masquer le conseil."
+            "en": "The glue tip: PETG on the Smooth PEI Plate, apply glue, with a diagram of the part, the glue and the plate.",
+            "fr": "Le conseil de colle : PETG sur le plateau PEI lisse, mettez de la colle, avec un schéma de la pièce, de la colle et du plateau."
           }
         }
       ],
