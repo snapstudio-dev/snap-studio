@@ -44,10 +44,14 @@ jobs:
             exit 1
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
-          # The referenced slicing engine must be published.
+          # The referenced slicing engine should be published. Only a warning:
+          # the release's assets are asked of the API, since GitHub's download
+          # links sometimes answer 504 for hours.
           if [ -f src-tauri/engine.json ]; then
             for url in $(jq -r '.platforms[].url' src-tauri/engine.json); do
-              curl -sfIL -o /dev/null "$url" || { echo "::error::Engine not found: $url (scripts/engine.sh)"; exit 1; }
+              tag=$(basename "$(dirname "$url")")
+              gh release view "$tag" --repo "${{ github.repository }}" --json assets -q '.assets[].name' 2>/dev/null | grep -qxF "$(basename "$url")" \
+                || echo "::warning::Engine not found among the assets of $tag: $url (scripts/engine.sh)"
             done
           fi
 

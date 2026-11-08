@@ -66,15 +66,16 @@ if [ -n "$(git rev-list "HEAD..origin/$ref")" ]; then
   exit 1
 fi
 
-# The referenced slicing engine must be published: otherwise the published
-# app could not download it.
+# The referenced slicing engine should be published, or the app could not
+# download it. Only a warning: the release's assets are asked of the API,
+# since GitHub's download links sometimes answer 504 for hours.
 engine="src-tauri/engine.json"
 if [ -f "$engine" ]; then
   ev=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$engine" | head -1)
   for url in $(sed -n 's/^ *"url": "\(.*\)",$/\1/p' "$engine"); do
-    if ! curl -sfIL -o /dev/null "$url"; then
-      echo "✗ Engine $ev not found ($url): run scripts/engine.sh $ev first." >&2
-      exit 1
+    tag=$(basename "$(dirname "$url")")
+    if ! gh release view "$tag" --json assets -q '.assets[].name' 2>/dev/null | grep -qxF "$(basename "$url")"; then
+      echo "⚠ Engine $ev not found among the assets of $tag ($url): run scripts/engine.sh $ev unless it is published." >&2
     fi
   done
 fi
