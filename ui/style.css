@@ -2623,6 +2623,9 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 }
 .cam-box.big { max-width: none; }
 .cam-box img { display: block; width: 100%; height: 100%; object-fit: contain; }
+/* No picture yet (starting, or stopped): nothing drawn, not WebKit's
+   broken-image question mark. */
+.cam-box img:not([src]) { visibility: hidden; }
 /* In a record's media slot (Prints) or Control's card: the whole slot. */
 .pj-media .cam-box, .ct-cam-box .cam-box { position: absolute; inset: 0; max-width: none; margin: 0; aspect-ratio: auto; }
 /* A note over a picture: what the camera says (starting, a missed frame),

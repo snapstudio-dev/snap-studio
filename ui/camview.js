@@ -24,23 +24,50 @@ document.addEventListener("click", (e) => {
   if (b) act(b.dataset.act);
 });
 
-/* The frames, one after the other (as printers.js camNext); a few misses
-   in a row: the printer does not answer, said instead of a frozen image. */
-let n = 0, fails = 0;
+/* The frames, one after the other (as camera.js camNext: read and decoded
+   aside, so a missed or cut frame never shows WebKit's broken-image
+   question mark; the last good one stays); a few misses in a row: the
+   printer does not answer, said instead of a frozen image.
+   Hidden (no site shown: the interface reads its own frames then), it
+   reads nothing; shown again, it goes on. */
+let n = 0, fails = 0, timer = 0, busy = false;
 function next() {
-  $("img").src = schemeUrl("cam", `/f?id=${encodeURIComponent(CV.id)}&n=${++n}`);
+  clearTimeout(timer);
+  timer = 0;
+  if (busy || document.hidden || !CV.id) return;
+  busy = true;
+  const img = new Image();
+  img.src = schemeUrl("cam", `/f?id=${encodeURIComponent(CV.id)}&n=${++n}`);
+  // A decode that never ends counts as a miss (as camera.js camNext).
+  let done = false;
+  const once = (f) => () => {
+    if (done) return;
+    done = true;
+    clearTimeout(guard);
+    f();
+  };
+  const miss = () => {
+    if (++fails >= 3) {
+      $("off").classList.remove("hidden");
+      $("img").classList.add("hidden");
+    }
+    busy = false;
+    timer = setTimeout(next, fails >= 3 ? 3000 : 1000);
+  };
+  const guard = setTimeout(once(miss), 6000);
+  img.decode().then(
+    once(() => {
+      const shown = $("img");
+      for (const a of shown.attributes) if (a.name !== "src") img.setAttribute(a.name, a.value);
+      img.classList.remove("hidden");
+      shown.replaceWith(img);
+      fails = 0;
+      $("off").classList.add("hidden");
+      busy = false;
+      timer = setTimeout(next, 200);
+    }),
+    once(miss),
+  );
 }
-$("img").addEventListener("load", () => {
-  fails = 0;
-  $("off").classList.add("hidden");
-  $("img").classList.remove("hidden");
-  setTimeout(next, 200);
-});
-$("img").addEventListener("error", () => {
-  if (++fails >= 3) {
-    $("off").classList.remove("hidden");
-    $("img").classList.add("hidden");
-  }
-  setTimeout(next, fails >= 3 ? 3000 : 1000);
-});
-if (CV.id) next();
+document.addEventListener("visibilitychange", next);
+next();

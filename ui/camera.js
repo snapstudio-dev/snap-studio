@@ -135,36 +135,72 @@ function camStop() {
   camPlace();
 }
 
-/* The next frame, unless one is in flight or nothing would show it. */
+/* The next frame, unless one is in flight or nothing would show it. It is
+   read and decoded aside, and only a whole picture takes the shown one's
+   place: a missed or cut frame (the printer rewrites its JPEG while it is
+   read) never reaches the screen, where WebKit would draw its broken-image
+   question mark; the last good frame stays meanwhile. */
 function camNext() {
   clearTimeout(CAM.timer);
   CAM.timer = 0;
   if (!CAM.on || CAM.busy || document.hidden || CAM.overlay) return;
   CAM.busy = true;
-  camImg().src = schemeUrl("cam", `/f?id=${encodeURIComponent(CAM.id)}&n=${++CAM.n}`);
+  const id = CAM.id, gen = CAM.gen;
+  const next = new Image();
+  next.src = schemeUrl("cam", `/f?id=${encodeURIComponent(id)}&n=${++CAM.n}`);
+  // A decode that never ends (the read itself stops at 4 s, printers.rs)
+  // counts as a miss, so the stream never stays stuck on one frame; its
+  // late end is dropped then.
+  let done = false;
+  const once = (f) => () => {
+    if (done) return;
+    done = true;
+    clearTimeout(guard);
+    f();
+  };
+  const guard = setTimeout(once(() => camMiss(id, gen)), CAM_DECODE_MS);
+  next.decode().then(
+    once(() => camFrame(next, id, gen)),
+    once(() => camMiss(id, gen)),
+  );
 }
+
+/* Longer than a read may last (4 s), then some to decode it. */
+const CAM_DECODE_MS = 6000;
+
+/* The same stream still: not stopped, nor another printer's since. */
+const camSame = (id, gen) => CAM.on && CAM.id === id && CAM.gen === gen;
 
 /* The window shown again, the site's view gone: the frames go on. */
 function camResume() {
   if (CAM.on) camNext();
 }
 
-camImg().addEventListener("load", () => {
+/* A read of a stream since stopped or replaced is dropped: its end does
+   not free the new stream's read (camStop already did). */
+function camFrame(next, id, gen) {
+  if (!camSame(id, gen)) return;
   CAM.busy = false;
-  if (!CAM.on) return;
+  // The new picture takes the element's place, with its id, classes and
+  // texts (the old one's handlers: none, the reads are made aside).
+  const img = CAM_EL.img;
+  for (const a of img.attributes) if (a.name !== "src") next.setAttribute(a.name, a.value);
+  img.replaceWith(next);
+  CAM_EL.img = next;
   camNote("");
   CAM.fails = 0;
   if (CAM.offline) camOffline(false);
   CAM.timer = setTimeout(camNext, camRetryDelay(0));
-});
-camImg().addEventListener("error", () => {
+}
+
+function camMiss(id, gen) {
+  if (!camSame(id, gen)) return;
   CAM.busy = false;
-  if (!CAM.on) return;
   camNote(tr("printers.cam.retry"));
   // A few misses in a row: the printer is gone. Tried again, less often.
   if (++CAM.fails >= 3) camOffline(true);
   CAM.timer = setTimeout(camNext, camRetryDelay(CAM.fails, CAM.offline));
-});
+}
 document.addEventListener("visibilitychange", camResume);
 
 /* The printer does not answer: said plainly over the camera, never its
@@ -192,6 +228,9 @@ function camPlace() {
   // The screen's choices apply to its own printer's stream.
   const o = CAM.home && (!CAM.on || CAM.home.id === CAM.id) ? CAM.home.opts : {};
   CAM_EL.size.classList.toggle("hidden", !o.enlarge);
+  // Enlarged on a screen that offers it only: not carried into another
+  // one (the pinned window, a record) where no button would shrink it.
+  if (!o.enlarge) CAM_EL.box.classList.remove("big");
   CAM_EL.close.classList.toggle("hidden", o.close === false);
   CAM_EL.tag.classList.toggle("hidden", !o.tag);
   CAM_EL.tag.classList.toggle("paused", o.tag === "paused");
@@ -204,6 +243,7 @@ function camPlace() {
   };
   label(CAM_EL.pin, CAM.pinned ? "printers.cam.unpin" : "printers.cam.pin");
   label(CAM_EL.fullBtn, CAM.full ? "printers.cam.full_exit" : "printers.cam.full");
+  label(CAM_EL.size, CAM_EL.box.classList.contains("big") ? "printers.cam.shrink" : "printers.cam.enlarge");
   camOverlay(name);
   camChanged();
 }
@@ -226,8 +266,8 @@ function camFull(on) {
 
 /* Enlarge, where the screen allows it: its button (shown on hover). */
 function camToggleSize() {
-  const big = CAM_EL.box.classList.toggle("big");
-  CAM_EL.size.title = tr(big ? "printers.cam.shrink" : "printers.cam.enlarge");
+  CAM_EL.box.classList.toggle("big");
+  camPlace();
 }
 
 /* ------------------------------------------------------------ overlay */
@@ -318,9 +358,12 @@ $("cam-pip-head").addEventListener("pointerdown", (e) => {
     pip.style.left = `${Math.max(0, Math.min(innerWidth - r.width, ev.clientX - dx))}px`;
     pip.style.top = `${Math.max(0, Math.min(innerHeight - r.height, ev.clientY - dy))}px`;
   };
-  const up = (ev) => {
+  // Let go, or the drag taken away (pointercancel): settled all the same,
+  // never left dragging with its handlers on.
+  const up = () => {
     pip.removeEventListener("pointermove", move);
     pip.removeEventListener("pointerup", up);
+    pip.removeEventListener("pointercancel", up);
     // Measured while still dragged (its corner's anchors would stretch it).
     const q = pip.getBoundingClientRect();
     pip.classList.remove("dragging");
@@ -331,6 +374,7 @@ $("cam-pip-head").addEventListener("pointerdown", (e) => {
   };
   pip.addEventListener("pointermove", move);
   pip.addEventListener("pointerup", up);
+  pip.addEventListener("pointercancel", up);
 });
 
 window.addEventListener("langchange", () => {

@@ -11,6 +11,14 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Fixed
+- **Camera**: a missed or incomplete image from the printer no longer shows
+  a question mark icon; the last image stays until the next one arrives.
+- **Camera**: the pinned camera no longer reads the printer twice in the
+  background when no site is shown; an enlarged camera no longer stays
+  enlarged on screens that cannot shrink it; dragging the pinned window can
+  no longer leave it stuck mid-drag.
+
 ## [0.19.0] — 2026-11-08
 
 ### Added

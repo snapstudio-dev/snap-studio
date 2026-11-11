@@ -23,6 +23,7 @@
   button svg { width: 15px; height: 15px; fill: currentColor; }
   .body { position: relative; flex: 1; min-height: 0; cursor: pointer; }
   img { display: block; width: 100%; height: 100%; object-fit: contain; }
+  img:not([src]) { visibility: hidden; }
   .off { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px; background: #111; color: rgba(255, 255, 255, 0.78); text-align: center; }
   .off svg { width: 26px; height: 26px; fill: currentColor; opacity: 0.7; }
   .hidden { display: none; }
