@@ -18,6 +18,8 @@ with its packages for macOS, Windows and Linux. What comes next:
   background when no site is shown; an enlarged camera no longer stays
   enlarged on screens that cannot shrink it; dragging the pinned window can
   no longer leave it stuck mid-drag.
+- **Snappy's icon opens on the first click**: a click sometimes did
+  nothing and the card only opened on the second one (macOS and Linux).
 
 ## [0.19.0] — 2026-11-08
 

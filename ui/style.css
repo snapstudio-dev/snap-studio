@@ -5474,11 +5474,15 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
   border: 0;
   background: none;
   cursor: pointer;
-  transition: transform 160ms ease;
 }
+/* The button alone takes the pointer: the avatar redraws its eyes as they
+   follow it, and a press on an eye replaced before the release lost the
+   click (WebKit sends none). The hover and press scale go to the avatar,
+   so the button's own box never shrinks under the pointer either. */
+.snappy-fab .snappy-av { pointer-events: none; transition: transform 160ms ease; }
 .snappy-fab .snv { filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.22)); }
-.snappy-fab:hover { transform: scale(1.06); }
-.snappy-fab:active { transform: scale(0.97); }
+.snappy-fab:hover .snappy-av { transform: scale(1.06); }
+.snappy-fab:active .snappy-av { transform: scale(0.97); }
 .snappy-fab:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 12px; }
 
 /* The avatar (snappy-avatar.js), in CSS 3D: 1 em is one unit of its
@@ -5551,7 +5555,7 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 }
 .snappy-drawer.in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) {
-  .snappy-fab, .snappy-drawer { transition: none; }
+  .snappy-fab, .snappy-fab .snappy-av, .snappy-drawer { transition: none; }
 }
 /* Over a site of Explore (snappy-view.html): the card fills the native
    view laid at its place, its tail in the strip left of it. */

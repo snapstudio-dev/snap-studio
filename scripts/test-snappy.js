@@ -158,4 +158,15 @@ for (const key of ["snappy.empty", "snappy.approve.title", "snappy.approve.allow
 }
 assert.ok(/langchange[^\n]*applyI18n\(\$\("snappy"\)\)/.test(card), "the card re-applies its words on langchange");
 
+// The icon's avatar never takes the pointer: its eyes are redrawn as they
+// follow it, and a press on an eye replaced before the release lost the
+// click in WebKit (the icon opened on the second click). The scale is the
+// avatar's, so the button's box does not shrink under the pointer.
+const css = require("fs").readFileSync(require("path").join(__dirname, "..", "ui", "style.css"), "utf8");
+assert.ok(/\.snappy-fab \.snappy-av \{[^}]*pointer-events:\s*none/.test(css), "the icon's avatar takes no pointer");
+assert.ok(!/\.snv[^{,]*\{[^}]*pointer-events:\s*(auto|all)/.test(css), "no part of the avatar takes the pointer back");
+assert.ok(!/\.snappy-fab:(hover|active)\s*\{[^}]*transform/.test(css), "the button itself does not scale");
+const html = require("fs").readFileSync(require("path").join(__dirname, "..", "ui", "index.html"), "utf8");
+assert.ok(/<button id="snappy-fab"[^>]*>\s*<span class="snappy-av"/.test(html), "the avatar sits in .snappy-av inside the button");
+
 console.log("snappy: ok");
