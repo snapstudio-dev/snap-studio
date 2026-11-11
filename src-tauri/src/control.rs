@@ -593,7 +593,7 @@ fn fmt_mm(d: f64) -> String {
     s.strip_suffix(".0").map(str::to_string).unwrap_or(s)
 }
 
-const QUERY: &str = "print_stats=state&display_status=progress&machine_state_manager&toolhead=homed_axes,position,extruder\
+const QUERY: &str = "print_stats=state,filename&display_status=progress&virtual_sdcard=progress,file_position&machine_state_manager&toolhead=homed_axes,position,extruder\
 &heater_bed&extruder&extruder1&extruder2&extruder3&fan=speed&fan_generic%20cavity_fan&led%20cavity_led&purifier&idle_timeout=state\
 &filament_feed%20left&filament_feed%20right&filament_motion_sensor%20e0_filament&filament_motion_sensor%20e1_filament\
 &filament_motion_sensor%20e2_filament&filament_motion_sensor%20e3_filament&print_task_config=filament_official";
@@ -616,7 +616,17 @@ async fn read_with(host: &str, port: u16, config: bool, materials: bool) -> Resu
             c.materials = parse_materials(&t);
         }
     }
-    Ok((parse_state(s), cfg))
+    let mut st = parse_state(s);
+    // The percentage as the printer's screen counts it, as in the status.
+    let mut ps = crate::printers::Status::default();
+    crate::printers::apply_status(s, &mut ps);
+    let printer = ps.progress;
+    let est = crate::printers::job_estimate(host, port, &ps);
+    crate::printers::apply_estimate(&mut ps, est);
+    if ps.progress != printer {
+        st.progress = ps.progress.map(f64::from);
+    }
+    Ok((st, cfg))
 }
 
 /// Carries an action out, after checking it against the printer now.

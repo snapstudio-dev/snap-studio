@@ -208,6 +208,8 @@ pub async fn session_with(p: &Printer, out: &(dyn Fn(bool, Status) + Send + Sync
                     next.nozzles.clear();
                     next.filaments.clear();
                     printers::apply_status(&Value::Object(snapshot.clone()), &mut next);
+                    let est = printers::job_estimate(&p.host, p.port, &next);
+                    printers::apply_estimate(&mut next, est);
                     if down {
                         keep_down(&mut next);
                     }
@@ -231,6 +233,8 @@ pub async fn session_with(p: &Printer, out: &(dyn Fn(bool, Status) + Send + Sync
                     next.nozzles.clear();
                     next.filaments.clear();
                     printers::apply_status(&Value::Object(snapshot.clone()), &mut next);
+                    let est = printers::job_estimate(&p.host, p.port, &next);
+                    printers::apply_estimate(&mut next, est);
                     if down {
                         keep_down(&mut next);
                     }
