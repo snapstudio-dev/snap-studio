@@ -632,11 +632,11 @@ async function startSlice() {
   const eng = vhEngine(new Set(maps.flat()), headsVirtual(pid), filaments.length);
   const virtual_heads = eng.heads.map((v) => ({ a: v.a, b: v.b, pct: v.pct, color: headsVirtualColor(pid, v) || null }));
   const groupOf = (i) => SL.groups.findIndex((g) => g.items.includes(i));
-  const scene = SL.source.items.map(({ id, colors, heads, base, hc, ...it }, i) => ({ ...it, extruder_map: (maps[groupOf(i)] || []).map(eng.index) }));
+  const scene = SL.source.items.map(({ id, colors, heads, base, hc, hcl, ...it }, i) => ({ ...it, extruder_map: (maps[groupOf(i)] || []).map(eng.index) }));
   // Colour changes at a height (HueForge): the plate's single head
   // switched from each height up, by the engine.
   const heights = hcRequest(
-    SL.source.items.map((it, i) => ({ base: it.base, hc: it.hc, map: scene[i].extruder_map })),
+    SL.source.items.map((it, i) => ({ base: it.base, hc: it.hc, hcl: it.hcl, scale: it.scale, map: scene[i].extruder_map })),
     { pillars: prPillarsRequest().length > 0, byObject: String(prTowerSetting("print_sequence") || "") === "by object" },
   );
   if (heights.error) {
@@ -692,7 +692,7 @@ async function startSlice() {
         source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors, virtual_heads,
         // One tower per material: the pillars, generated at every slice.
         pillars: prPillarsRequest(),
-        ...(heights.changes.length ? { height_changes: heights.changes } : {}),
+        ...(heights.changes.length ? { height_changes: heights.changes, height_layers: heights.layers || undefined } : {}),
         // Each layer of a virtual head split between its two heads: sent
         // with virtual heads only (otherwise the request is unchanged).
         ...(virtual_heads.length && vhSmoothOn(PR) ? { smooth_mix: true } : {}),

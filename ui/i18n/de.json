@@ -2819,9 +2819,11 @@
   "files.info.format": "Format",
   "files.info.format.stl": "STL (nur Netz)",
   "slice.heights.mixed": "Die Objekte dieser Platte haben unterschiedliche Farbwechsel nach Höhe. Die Wechsel gelten für die ganze Platte: Behalte nur Objekte mit derselben Liste oder slice sie getrennt.",
-  "slice.heights.heads": "Farbwechsel nach Höhe erfordern, dass die Platte mit einem einzigen Kopf beginnt: Hier drucken die Objekte (oder ihre Farben) mit mehreren Köpfen. Weise ihnen unterhalb des ersten Wechsels allen denselben Kopf zu.",
+  "slice.heights.heads": "Farbwechsel nach Höhe verlangen, dass die Platte mit einem einzigen Kopf beginnt und jede Farbe der Wechsel bei allen Objekten auf demselben Kopf liegt: Hier drucken sie mit mehreren Köpfen. Geben Sie allen dieselben Köpfe.",
   "slice.heights.pillars": "Farbwechsel nach Höhe funktionieren nicht mit einem Reinigungsturm pro Material. Wähle einen einzigen Reinigungsturm oder keinen.",
   "slice.heights.by_object": "Farbwechsel nach Höhe erfordern, dass die Platte Schicht für Schicht gedruckt wird. Stelle Druckreihenfolge auf „Nach Ebene“.",
   "viewer.mark.pause": "Pause zum Spulenwechsel",
-  "viewer.mark.head": "Kopfwechsel zu {head}"
+  "viewer.mark.head": "Kopfwechsel zu {head}",
+  "slice.heights.layer": "Diese Datei hat ihre Farbwechsel auf Schichten von {file} gesetzt (Schichthöhe / erste Schicht); das gewählte Profil druckt {profile}. Die Farben würden auf anderen Höhen wechseln: Wählen Sie ein Profil mit den Schichten der Datei.",
+  "slice.heights.scaled": "Ein Objekt mit Farbwechseln nach Höhe ist in der Höhe skaliert: Seine Farben würden woanders wechseln. Setzen Sie seine Z-Skalierung auf 100 % zurück."
 }

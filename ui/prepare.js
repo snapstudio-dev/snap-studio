@@ -95,8 +95,8 @@ void main() { frag = uColor; }`;
 /* ------------------------------------------------------------ state */
 
 /* An object as stored: placement and choices, never its mesh. */
-const prStored = ({ id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, pick, cv, free, hc }) => ({
-  id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, pick, cv, free, hc,
+const prStored = ({ id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, pick, cv, free, hc, hcl }) => ({
+  id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, pick, cv, free, hc, hcl,
 });
 
 function prSave() {
@@ -1999,7 +1999,9 @@ async function prepareAddFile(path, { remember = true } = {}) {
   const main = first.length ? first : added;
   // The changes are the first plate's: its objects carry them.
   const hc = hcFromFile(heights?.changes);
-  if (hc.length) for (const o of main) o.hc = hc;
+  // With the layers it placed them on: the slice checks the profile's.
+  const hcl = { layer_height: heights?.layer_height ?? null, first_layer: heights?.first_layer ?? null };
+  if (hc.length) for (const o of main) Object.assign(o, { hc, hcl });
   const box = groupBox(main);
   const { w, d } = PR.bed;
   const fits = box.x0 >= 0 && box.y0 >= 0 && box.x1 <= w && box.y1 <= d;
@@ -2569,7 +2571,7 @@ async function prSplit() {
           plate: o.plate,
           extruders: p.extruders,
           heads: { ...(o.heads || {}) },
-          ...(o.hc ? { hc: o.hc } : {}),
+          ...(o.hc ? { hc: o.hc, hcl: o.hcl } : {}),
           cv: COLORS_VERSION,
         };
       });
@@ -2668,7 +2670,7 @@ function prepareScene() {
     name,
     files,
     skipped: PR.objects.length - on.length,
-    items: on.map((o) => ({ id: o.id, path: o.path, item: o.item, piece: o.piece ?? null, name: o.name, pos: o.pos, rot: o.rot, scale: o.scale, colors: prColors(o), heads: prSliceHeads(o), base: o.extruders || [], hc: o.hc || [] })),
+    items: on.map((o) => ({ id: o.id, path: o.path, item: o.item, piece: o.piece ?? null, name: o.name, pos: o.pos, rot: o.rot, scale: o.scale, colors: prColors(o), heads: prSliceHeads(o), base: o.extruders || [], hc: o.hc || [], hcl: o.hcl || null })),
   };
 }
 

@@ -2819,9 +2819,11 @@
   "files.info.format": "Formato",
   "files.info.format.stl": "STL (solo malla)",
   "slice.heights.mixed": "Los objetos de esta placa tienen cambios de color por altura distintos. Los cambios se aplican a toda la placa: deja objetos que compartan la misma lista o lamínalos por separado.",
-  "slice.heights.heads": "Los cambios de color por altura requieren que la placa empiece con un solo cabezal: aquí, los objetos (o sus colores) se imprimen con varios cabezales. Asígnales a todos el mismo cabezal por debajo del primer cambio.",
+  "slice.heights.heads": "Los cambios de color por altura requieren que la placa empiece con un solo cabezal y que cada color de los cambios vaya al mismo cabezal en todos los objetos: aquí se imprimen con varios cabezales. Dales a todos los mismos cabezales.",
   "slice.heights.pillars": "Los cambios de color por altura no son compatibles con una torre de purga por material. Elige una sola torre de purga o ninguna.",
   "slice.heights.by_object": "Los cambios de color por altura requieren imprimir la placa capa por capa. Ajusta Secuencia de impresión a «Por capa».",
   "viewer.mark.pause": "Pausa para cambiar la bobina",
-  "viewer.mark.head": "Cambio al cabezal {head}"
+  "viewer.mark.head": "Cambio al cabezal {head}",
+  "slice.heights.layer": "Este archivo colocó sus cambios de color en capas de {file} (altura de capa / primera capa); el perfil elegido imprime {profile}. Los colores cambiarían a otras alturas: elige un perfil con las capas del archivo.",
+  "slice.heights.scaled": "Un objeto con cambios de color por altura está escalado en altura: sus colores cambiarían en otro lugar. Vuelve a poner su escala Z al 100 %."
 }

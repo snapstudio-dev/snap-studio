@@ -277,6 +277,10 @@ pub struct Request {
     /// one head, switched from each height up (`heights`).
     #[serde(default)]
     pub height_changes: Vec<crate::heights::HeightChange>,
+    /// The layers the changes' file placed them on, checked against the
+    /// profile's.
+    #[serde(default)]
+    pub height_layers: Option<crate::heights::FileLayers>,
 }
 
 /// What printing pillars needs from the engine: no tower of its own, the
@@ -753,12 +757,16 @@ pub fn start(app_handle: AppHandle, req: Request) -> Result<String> {
 /// its virtual head's mix.
 fn write_height_changes(req: &Request, process: &Path, work: &Path) -> anyhow::Result<PathBuf> {
     let cfg: Value = serde_json::from_slice(&std::fs::read(process)?)?;
-    let height = crate::heights::setting(&cfg, "layer_height").unwrap_or(0.2);
+    let height = crate::heights::setting(&cfg, "layer_height").ok_or_else(|| anyhow!("layer_height missing from the process"))?;
     let first = crate::heights::setting(&cfg, "initial_layer_print_height").unwrap_or(height);
+    let layers = crate::heights::Layers { first, height };
+    if let Some(file) = &req.height_layers {
+        file.check(layers).map_err(|e| anyhow!(e))?;
+    }
     let n = req.filaments.len();
     let colors: Vec<Option<String>> =
         (0..n).map(|i| req.colors.get(i).cloned().flatten()).chain(req.virtual_heads.iter().map(|v| v.color.clone())).collect();
-    let list = crate::heights::engine_list(&req.height_changes, crate::heights::Layers { first, height }, &colors);
+    let list = crate::heights::engine_list(&req.height_changes, layers, &colors);
     let path = work.join("custom_gcodes.json");
     std::fs::write(&path, serde_json::to_vec_pretty(&list)?)?;
     Ok(path)
@@ -2618,9 +2626,11 @@ mod tests {
                     piece: None,
                 }],
                 height_changes: vec![
-                    HeightChange { z: 6.03, head: 0, kind: ChangeKind::Pause },
+                    // A pause keeps the head: it carries the one in force.
+                    HeightChange { z: 6.03, head: 1, kind: ChangeKind::Pause },
                     HeightChange { z: 3.0, head: 1, kind: ChangeKind::Auto },
                 ],
+                height_layers: Some(crate::heights::FileLayers { layer_height: Some(0.2), first_layer: None }),
                 overrides,
                 name: Some("heights".into()),
                 ..Default::default()
@@ -2652,13 +2662,8 @@ mod tests {
         println!("pauses at {paused:?}; tools by layer: {per_z:?}");
         assert!(per_z.len() >= 45, "a 10 mm cube at 0.2 mm: {} layers", per_z.len());
         for (z, t) in &per_z {
-            let want = if *z < 2.99 {
-                0
-            } else if *z < 5.99 {
-                1
-            } else {
-                0
-            };
+            // T0, then T1 from 3 mm to the top: the pause changes nothing.
+            let want = if *z < 2.99 { 0 } else { 1 };
             assert_eq!(*t, want, "layer at {z} mm");
         }
         assert!(paused.len() == 1 && (paused[0] - 6.0).abs() < 0.01, "one pause, at 6 mm: {paused:?}");

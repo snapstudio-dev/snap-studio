@@ -14,20 +14,29 @@ const hc = H.hcFromFile([
 assert.deepStrictEqual(hc, [{ z: 1.2, ext: 2, kind: "auto" }, { z: 2.4, ext: 3, kind: "pause" }]);
 assert.deepStrictEqual(H.hcFromFile(null), []);
 
-// The colours the sheet maps: the object's, then the changes'.
-assert.deepStrictEqual(H.hcColours([1], hc), [1, 2, 3]);
-assert.deepStrictEqual(H.hcColours([], hc), [1, 2, 3], "an uncoloured object is extruder 1");
-assert.deepStrictEqual(H.hcColours([2], hc), [2, 3]);
+// The colours the sheet maps: the object's, then the head changes' (a
+// pause keeps the head, so brings none).
+assert.deepStrictEqual(H.hcColours([1], hc), [1, 2]);
+assert.deepStrictEqual(H.hcColours([], hc), [1, 2], "an uncoloured object is extruder 1");
+assert.deepStrictEqual(H.hcColours([3], hc), [3, 2]);
 assert.deepStrictEqual(H.hcColours([1, 2], undefined), [1, 2], "no change: unchanged");
 
 // No change: nothing sent, whatever the plate.
 assert.deepStrictEqual(H.hcRequest([{ base: [1, 2], hc: [], map: [0, 1] }], { pillars: true }), { changes: [] });
 
-// One object on T0, T1 from 1.2 mm, a pause for the spool on T2 at 2.4 mm.
-const one = { base: [1], hc, map: [0, 1, 2] };
+// One object on T0, T1 from 1.2 mm, a pause for a spool swap at 2.4 mm:
+// it keeps T1, the head in force; the file's layers go along.
+const hcl = { layer_height: 0.08, first_layer: 0.16 };
+const one = { base: [1], hc, hcl, map: [0, 1, 2], scale: [1, 1, 1] };
 assert.deepStrictEqual(H.hcRequest([one]), {
-  changes: [{ z: 1.2, head: 1, kind: "auto" }, { z: 2.4, head: 2, kind: "pause" }],
+  changes: [{ z: 1.2, head: 1, kind: "auto" }, { z: 2.4, head: 1, kind: "pause" }],
+  layers: hcl,
 });
+// A pause below every head change: the base head; out of order, sorted.
+assert.deepStrictEqual(
+  H.hcRequest([{ ...one, hc: [{ z: 2, ext: 2, kind: "auto" }, { z: 1, ext: 3, kind: "pause" }], map: [3, 1, 2] }]).changes,
+  [{ z: 1, head: 3, kind: "pause" }, { z: 2, head: 1, kind: "auto" }],
+);
 // A virtual head as target: its engine index as the map gives it.
 assert.deepStrictEqual(H.hcRequest([{ ...one, map: [0, 4, 2] }]).changes[0], { z: 1.2, head: 4, kind: "auto" });
 // Copies of the object, same list: fine.
@@ -40,6 +49,13 @@ assert.deepStrictEqual(H.hcRequest([one], { pillars: true }), { error: "pillars"
 assert.deepStrictEqual(H.hcRequest([one], { byObject: true }), { error: "by_object" });
 assert.deepStrictEqual(H.hcRequest([{ ...one, base: [1, 2] }]), { error: "heads" }, "a painted or two-colour object");
 assert.deepStrictEqual(H.hcRequest([one, { ...one, map: [3, 1, 2] }]), { error: "heads" }, "two objects on two heads");
+assert.deepStrictEqual(H.hcRequest([one, { ...one, map: [0, 3, 2] }]), { error: "heads" }, "a change's colour on two heads");
+// Only the head changes' colours count: a pause's says nothing.
+assert.ok(H.hcRequest([one, { ...one, map: [0, 1, 3] }]).changes);
+assert.deepStrictEqual(H.hcRequest([one, { ...one, hcl: { layer_height: 0.12, first_layer: 0.16 } }]), { error: "mixed" }, "other layers");
+assert.deepStrictEqual(H.hcRequest([{ ...one, scale: [1, 1, 1.5] }]), { error: "scaled" });
+assert.ok(H.hcRequest([{ ...one, scale: [2, 2, 1] }]).changes, "scaled across only: same heights");
+assert.ok(H.hcRequest([one, { base: [1], hc: [], map: [0], scale: [1, 1, 2] }]).error !== "scaled", "an object without changes may be");
 // Two colours on the same head: one head, fine.
 assert.ok(H.hcRequest([{ ...one, base: [1, 2], map: [0, 0, 2] }]).changes);
 

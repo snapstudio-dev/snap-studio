@@ -28,7 +28,8 @@ pub struct HeightChange {
     /// Top of the first layer printed with the new head, mm.
     pub z: f32,
     /// The head from there on, as in the extruder maps: physical heads from
-    /// 0, then the virtual ones (`n + k`).
+    /// 0, then the virtual ones (`n + k`). A pause keeps the head: it carries
+    /// the one in force (its colour is the one shown).
     pub head: u8,
     #[serde(default)]
     pub kind: ChangeKind,
@@ -98,6 +99,36 @@ pub fn engine_list(changes: &[HeightChange], layers: Layers, colors: &[Option<St
     json!({ "mode": "MultiAsSingle", "gcodes": gcodes })
 }
 
+/// The layers a file placed its changes on (its project settings), sent
+/// back with them: a profile with other layers would change colour
+/// elsewhere.
+#[derive(Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct FileLayers {
+    #[serde(default)]
+    pub layer_height: Option<f32>,
+    #[serde(default)]
+    pub first_layer: Option<f32>,
+}
+
+impl FileLayers {
+    /// `Err` (a message for the user) when the profile's layers are not
+    /// the file's; a value the file does not give is not checked.
+    pub fn check(&self, layers: Layers) -> Result<(), String> {
+        let differs = |file: Option<f32>, profile: f32| file.is_some_and(|f| (f - profile).abs() > 0.001);
+        if differs(self.layer_height, layers.height) || differs(self.first_layer, layers.first) {
+            let mm = |h: f32| format!("{h} mm");
+            let file = format!(
+                "{} / {}",
+                self.layer_height.map(mm).unwrap_or_else(|| "?".into()),
+                self.first_layer.map(mm).unwrap_or_else(|| "?".into())
+            );
+            let profile = format!("{} / {}", mm(layers.height), mm(layers.first));
+            return Err(crate::t!("slice.heights.layer", file = file, profile = profile));
+        }
+        Ok(())
+    }
+}
+
 /// Orca's `CustomGCode::Type`, as the XML numbers it.
 const TYPE_COLOR_CHANGE: u8 = 0;
 const TYPE_PAUSE: u8 = 1;
@@ -105,21 +136,22 @@ const TYPE_TOOL_CHANGE: u8 = 2;
 
 /// The first plate's changes in `custom_gcode_per_layer.xml`. A file
 /// without `<plate>` is the first plate's; the older format without `type`
-/// says it with its G-code. A colour change (`M600` in PrusaSlicer, nothing
-/// in Snapmaker Orca) is taken as a head change to its extruder; custom
-/// G-code and templates are left out.
+/// says it with its G-code. A colour change (`M600`: the spool of the head
+/// in use swapped by hand) is taken as a pause; custom G-code and
+/// templates are left out.
 pub fn read_xml(data: &[u8]) -> Vec<FileChange> {
     use quick_xml::events::Event;
     let mut reader = quick_xml::Reader::from_reader(data);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut out = Vec::new();
-    // Inside a <plate>: which one; outside, the first.
+    // Inside a <plate>: which one (the first until its <plate_info> says
+    // otherwise); outside, the first.
     let mut plate: Option<u32> = None;
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.local_name().as_ref() {
-                "plate" => plate = Some(0),
+                "plate" => plate = Some(1),
                 "plate_info" => {
                     if plate.is_some() {
                         plate = Some(crate::model3mf::attr_str(&e, "id").and_then(|v| v.parse().ok()).unwrap_or(1));
@@ -149,8 +181,8 @@ fn layer(e: &quick_xml::events::BytesStart) -> Option<FileChange> {
         _ => None,
     });
     let kind = match ty? {
-        TYPE_TOOL_CHANGE | TYPE_COLOR_CHANGE => ChangeKind::Auto,
-        TYPE_PAUSE => ChangeKind::Pause,
+        TYPE_TOOL_CHANGE => ChangeKind::Auto,
+        TYPE_PAUSE | TYPE_COLOR_CHANGE => ChangeKind::Pause,
         _ => return None,
     };
     let extruder = attr("extruder").and_then(|v| v.parse::<u8>().ok()).unwrap_or(1).clamp(1, 16);
@@ -285,11 +317,36 @@ mod tests {
 
     #[test]
     fn reads_the_older_format() {
-        let xml = br##"<custom_gcodes_per_layer><code print_z="0" /><layer top_z="0.6" extruder="2" color="#fff" gcode="M600"/><layer top_z="0.9" extruder="1" gcode="M601"/></custom_gcodes_per_layer>"##;
+        let xml = br##"<custom_gcodes_per_layer><code print_z="0" /><layer top_z="0.6" extruder="2" color="#fff" gcode="tool_change"/><layer top_z="0.9" extruder="1" gcode="M601"/><layer top_z="1.2" extruder="2" color="#000" gcode="M600"/></custom_gcodes_per_layer>"##;
         let c = read_xml(xml);
-        assert_eq!(c.len(), 2);
+        assert_eq!(c.len(), 3);
         assert_eq!(c[0], FileChange { z: 0.6, extruder: 2, kind: ChangeKind::Auto });
         assert_eq!(c[1].kind, ChangeKind::Pause);
+        // A colour change swaps the spool by hand: a pause.
+        assert_eq!(c[2].kind, ChangeKind::Pause);
+    }
+
+    #[test]
+    fn a_colour_change_is_a_pause() {
+        let xml = br##"<custom_gcodes_per_layer><plate><plate_info id="1"/><layer top_z="0.8" type="0" extruder="1" color="#ff0000" extra="" gcode="M600"/></plate></custom_gcodes_per_layer>"##;
+        assert_eq!(read_xml(xml), vec![FileChange { z: 0.8, extruder: 1, kind: ChangeKind::Pause }]);
+    }
+
+    #[test]
+    fn a_plate_without_info_is_the_first() {
+        let xml = br##"<custom_gcodes_per_layer><plate><layer top_z="0.4" type="2" extruder="2" color="" extra="" gcode="tool_change"/></plate><plate><plate_info id="2"/><layer top_z="0.6" type="2" extruder="3" color="" extra="" gcode="tool_change"/></plate></custom_gcodes_per_layer>"##;
+        assert_eq!(read_xml(xml), vec![FileChange { z: 0.4, extruder: 2, kind: ChangeKind::Auto }]);
+    }
+
+    #[test]
+    fn file_layers_must_be_the_profile_s() {
+        let file = FileLayers { layer_height: Some(0.08), first_layer: Some(0.16) };
+        assert!(file.check(HUEFORGE).is_ok());
+        assert!(file.check(Layers { first: 0.2, height: 0.08 }).is_err());
+        assert!(file.check(Layers { first: 0.16, height: 0.12 }).is_err());
+        // What the file does not say is not checked.
+        assert!(FileLayers { layer_height: Some(0.08), first_layer: None }.check(Layers { first: 0.3, height: 0.08 }).is_ok());
+        assert!(FileLayers::default().check(Layers { first: 0.3, height: 0.2 }).is_ok());
     }
 
     #[test]
