@@ -2812,5 +2812,9 @@
   "snappy.tool.create_versions": "Legge le versioni di un oggetto",
   "snappy.tool.create_manage": "Gestisce una conversazione di Crea",
   "snappy.tool.explore_tab": "Agisce su una scheda di Esplora",
-  "snappy.tool.explore_site": "Agisce su un sito di Esplora"
+  "snappy.tool.explore_site": "Agisce su un sito di Esplora",
+  "files.stl_badge": "Solo mesh: niente colori, impostazioni o piatti",
+  "files.unit_hint": "Misura {size}: controlla l'unità (millimetri attesi)",
+  "files.info.format": "Formato",
+  "files.info.format.stl": "STL (solo mesh)"
 }

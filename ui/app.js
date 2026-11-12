@@ -537,7 +537,7 @@ function makeCard(f) {
   meta.className = "meta";
   const name = document.createElement("div");
   name.className = "name";
-  name.textContent = f.name.replace(/\.3mf$/i, "");
+  name.textContent = f.name.replace(/\.(3mf|stl)$/i, "");
   name.title = f.name;
   const sub = document.createElement("div");
   sub.className = "sub";
@@ -558,7 +558,7 @@ function makeRow(f) {
   const nameWrap = document.createElement("div");
   const n = document.createElement("div");
   n.className = "rname";
-  n.textContent = f.name.replace(/\.3mf$/i, "");
+  n.textContent = f.name.replace(/\.(3mf|stl)$/i, "");
   const s = document.createElement("div");
   s.className = "rsub";
   nameWrap.append(n, s);
@@ -613,6 +613,16 @@ function addBadges(card, f) {
     b.textContent = "G-code";
     b.title = tr("files.gcode_badge");
     card.querySelector(".thumb").appendChild(b);
+    return;
+  }
+  if (f.kind === "stl") {
+    // A mesh only: tells it from a 3MF of the same name.
+    const b = document.createElement("div");
+    b.className = "badge stl";
+    b.textContent = "STL";
+    b.title = tr("files.stl_badge");
+    card.querySelector(".thumb").appendChild(b);
+    // Always a render, never several plates: the other badges say nothing.
     return;
   }
   if (!m) return;
@@ -754,13 +764,20 @@ async function updateDetails() {
     if (![...state.sel][0] || [...state.sel][0] !== path) return;
   }
   const m = state.meta.get(path) || {};
-  $("det-sub").textContent = [m.title, m.designer && tr("files.by", { name: m.designer })].filter(Boolean).join(" — ");
-  const rendered = state.pref === 3 || (state.pref !== 2 && !m.has_embedded_thumb);
+  // An STL has no unit: a size far from millimeters is worth a word.
+  const oddUnit = f.kind === "stl" && m.size_mm && attachOddScale(m.size_mm);
+  $("det-sub").textContent = oddUnit
+    ? tr("files.unit_hint", { size: chatModelDims(m) })
+    : [m.title, m.designer && tr("files.by", { name: m.designer })].filter(Boolean).join(" — ");
+  $("det-sub").classList.toggle("warn", !!oddUnit);
+  // An STL never has an embedded image: its preview is always a render.
+  const rendered = f.kind === "stl" || state.pref === 3 || (state.pref !== 2 && !m.has_embedded_thumb);
   $("det-badge").textContent = rendered ? tr("files.render_badge") : "";
   $("det-badge").style.display = rendered ? "" : "none";
 
   const rows = [];
   const add = (k, v) => v && rows.push([k, v]);
+  if (f.kind === "stl") add(tr("files.info.format"), tr("files.info.format.stl"));
   add(tr("files.col.size"), fmtSize(f.size));
   add(tr("files.col.date"), fmtDate(f.modified));
   if (f.rel) add(tr("files.info.subfolder"), f.rel);

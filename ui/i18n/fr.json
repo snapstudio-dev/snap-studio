@@ -2770,5 +2770,9 @@
   "snappy.tool.create_versions": "Lit les versions d'un objet",
   "snappy.tool.create_manage": "Gère une conversation Créer",
   "snappy.tool.explore_tab": "Agit sur un onglet d'Explorer",
-  "snappy.tool.explore_site": "Agit sur un site d'Explorer"
+  "snappy.tool.explore_site": "Agit sur un site d'Explorer",
+  "files.stl_badge": "Maillage seul : ni couleurs, ni réglages, ni plateaux",
+  "files.unit_hint": "Mesure {size} : vérifiez son unité (millimètres attendus)",
+  "files.info.format": "Format",
+  "files.info.format.stl": "STL (maillage seul)"
 }

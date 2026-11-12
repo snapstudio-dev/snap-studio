@@ -2728,5 +2728,9 @@
   "snappy.tool.create_versions": "オブジェクトのバージョンを読み取ります",
   "snappy.tool.create_manage": "作成の会話を管理します",
   "snappy.tool.explore_tab": "探索のタブを操作します",
-  "snappy.tool.explore_site": "探索のサイトを操作します"
+  "snappy.tool.explore_site": "探索のサイトを操作します",
+  "files.stl_badge": "メッシュのみ：色、設定、プレートはありません",
+  "files.unit_hint": "サイズ {size}：単位を確認してください（ミリメートルが前提です）",
+  "files.info.format": "形式",
+  "files.info.format.stl": "STL（メッシュのみ）"
 }

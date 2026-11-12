@@ -25,6 +25,7 @@ lists below.
 
 | Plan | Subject | State |
 |---|---|---|
+| [stl-in-files.md](stl-in-files.md) | Files library: list STL files with a rendered preview, details, Analyze and View in 3D; Prepare and print them like 3MF files | Implemented in draft PR [#105](https://github.com/kameka22/snap-studio/pull/105); checks in the app left |
 | [ai-agents.md](ai-agents.md) | OpenCode next to Claude Code, one agent active at a time | Written, postponed |
 | [ai-builtin-sandbox.md](ai-builtin-sandbox.md) | Claude Code's built-in sandbox as the default sandbox on macOS and Linux; yolobox kept for those who use it | Written, draft PR [#62](https://github.com/kameka22/snap-studio/pull/62) |
 | [slice-basic-advanced.md](slice-basic-advanced.md) | Basic and Advanced levels for the slice sheet (title bar and Settings) | Written, draft PR |

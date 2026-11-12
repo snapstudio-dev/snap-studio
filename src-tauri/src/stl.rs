@@ -25,11 +25,13 @@ const RECORD: usize = 50;
 /// The word "solid" at the start is not trusted: many exporters put it in the
 /// header of a binary file too.
 fn looks_binary(data: &[u8]) -> bool {
-    if data.len() < HEADER {
-        return false;
-    }
-    let n = u32::from_le_bytes([data[80], data[81], data[82], data[83]]) as usize;
-    n > 0 && n.checked_mul(RECORD).and_then(|body| data.len().checked_sub(HEADER + body)).is_some_and(|extra| extra < RECORD)
+    data.len() >= HEADER && count_fits(u32::from_le_bytes([data[80], data[81], data[82], data[83]]) as usize, data.len())
+}
+
+/// True if `n` records fill a file of `len` bytes, give or take a few
+/// trailing bytes (see `looks_binary`).
+fn count_fits(n: usize, len: usize) -> bool {
+    n > 0 && n.checked_mul(RECORD).and_then(|body| len.checked_sub(HEADER + body)).is_some_and(|extra| extra < RECORD)
 }
 
 fn f32_at(data: &[u8], off: usize) -> f32 {
@@ -104,6 +106,84 @@ pub fn read(path: &Path) -> Result<MeshData> {
         tris.push(Tri { v, c: crate::render::DEFAULT_COLOR });
     }
     Ok(MeshData { extruders: Vec::new(), tris, min, max, truncated: false, volumes: Vec::new(), paint: Vec::new() })
+}
+
+/// Size of an STL's bounding box, in file units, read as a stream: the file
+/// is never held in memory and no triangle list is built, so the Files
+/// library can show many large STL files cheaply. Same result as
+/// `read(path)?.size()`.
+pub fn size(path: &Path) -> Result<[f32; 3]> {
+    use std::io::{BufRead, BufReader, Read};
+    crate::access::ensure_file(path);
+    let len = std::fs::metadata(path)?.len() as usize;
+    if len < 15 {
+        return Err(anyhow!(crate::t!("err.stl_empty")));
+    }
+    let mut r = BufReader::with_capacity(1 << 16, std::fs::File::open(path)?);
+    let mut min = [f32::MAX; 3];
+    let mut max = [f32::MIN; 3];
+    let mut grow = |p: &[f32; 3]| {
+        for k in 0..3 {
+            min[k] = min[k].min(p[k]);
+            max[k] = max[k].max(p[k]);
+        }
+    };
+
+    let mut head = [0u8; HEADER];
+    let binary = len >= HEADER && {
+        r.read_exact(&mut head)?;
+        count_fits(u32::from_le_bytes([head[80], head[81], head[82], head[83]]) as usize, len)
+    };
+    let mut found = false;
+    if binary {
+        let n = u32::from_le_bytes([head[80], head[81], head[82], head[83]]) as usize;
+        let mut rec = [0u8; RECORD];
+        for _ in 0..n {
+            r.read_exact(&mut rec)?;
+            for k in 0..3 {
+                // Skip the normal (12 bytes), as `read_binary` does.
+                let base = 12 + k * 12;
+                grow(&[f32_at(&rec, base), f32_at(&rec, base + 4), f32_at(&rec, base + 8)]);
+            }
+        }
+        found = n > 0;
+    } else {
+        // Text: start over, the header bytes were part of the first lines.
+        let mut r = BufReader::with_capacity(1 << 16, std::fs::File::open(path)?);
+        let mut line = Vec::new();
+        let mut cur = [[0f32; 3]; 3];
+        let mut k = 0usize;
+        'lines: loop {
+            line.clear();
+            if r.read_until(b'\n', &mut line)? == 0 {
+                break;
+            }
+            let text = String::from_utf8_lossy(&line);
+            let mut it = text.split_whitespace();
+            if it.next() != Some("vertex") {
+                continue;
+            }
+            let mut p = [0f32; 3];
+            for c in p.iter_mut() {
+                match it.next().and_then(|t| t.parse::<f32>().ok()) {
+                    Some(x) => *c = x,
+                    None => break 'lines, // truncated line: keep what we have
+                }
+            }
+            cur[k] = p;
+            k += 1;
+            if k == 3 {
+                // Only whole triangles count, as in `read_ascii`.
+                cur.iter().for_each(&mut grow);
+                found = true;
+                k = 0;
+            }
+        }
+    }
+    if !found {
+        return Err(anyhow!(crate::t!("err.stl_no_triangle")));
+    }
+    Ok([max[0] - min[0], max[1] - min[1], max[2] - min[2]])
 }
 
 /// Unit normal of a triangle; zero if the triangle is degenerate.
@@ -227,6 +307,38 @@ endsolid essai
         assert_eq!(m.tris.len(), 2);
         assert_eq!(m.max, [1., 1., 2.]);
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// The streamed size matches the full read, in both dialects.
+    #[test]
+    fn size_without_loading() {
+        let dir = std::env::temp_dir().join("snapstudio-stl-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let bin = dir.join("size-bin.stl");
+        write(&bin, &cube()).unwrap();
+        assert_eq!(size(&bin).unwrap(), read(&bin).unwrap().size());
+        assert_eq!(size(&bin).unwrap(), [10., 10., 10.]);
+
+        let txt = dir.join("size-ascii.stl");
+        let mut text = String::from("solid cube\n");
+        for t in cube() {
+            text.push_str(" facet normal 0 0 0\n  outer loop\n");
+            for v in t.v {
+                text.push_str(&format!("   vertex {} {} {}\n", v[0], v[1], v[2] + 5.0));
+            }
+            text.push_str("  endloop\n endfacet\n");
+        }
+        text.push_str("endsolid cube\n");
+        std::fs::write(&txt, text).unwrap();
+        assert_eq!(size(&txt).unwrap(), read(&txt).unwrap().size());
+        assert_eq!(size(&txt).unwrap(), [10., 10., 10.]);
+
+        let empty = dir.join("size-empty.stl");
+        std::fs::write(&empty, "solid nothing\nendsolid nothing\n").unwrap();
+        assert!(size(&empty).is_err());
+        for p in [bin, txt, empty] {
+            let _ = std::fs::remove_file(p);
+        }
     }
 
     /// A binary whose header starts with "solid" must not be taken for text:

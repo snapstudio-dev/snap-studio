@@ -172,9 +172,22 @@ fn generate_gcode(path: &Path, size: u32) -> Result<Thumb> {
     Ok(Thumb { png: to_png(&image::DynamicImage::ImageRgba8(img))?, source: ThumbSource::Rendered })
 }
 
+/// An STL has no image of its own and no colour: always a render, in the
+/// model's neutral colour, whatever the thumbnail preference.
+fn generate_stl(path: &Path, size: u32) -> Result<Thumb> {
+    let _guard = RenderGuard::acquire();
+    let mut mesh = crate::stl::read(path)?;
+    crate::mesh::downsample(&mut mesh, TRI_BUDGET);
+    let img = crate::render::render(&mesh, size);
+    Ok(Thumb { png: to_png(&image::DynamicImage::ImageRgba8(img))?, source: ThumbSource::Rendered })
+}
+
 fn generate(path: &Path, size: u32, pref: ThumbPref) -> Result<Thumb> {
     if crate::scan::kind_of(path) == Some("gcode") {
         return generate_gcode(path, size);
+    }
+    if crate::scan::kind_of(path) == Some("stl") {
+        return generate_stl(path, size);
     }
     let mut zip = model3mf::open(path)?;
 
@@ -252,6 +265,21 @@ pub fn prune_old() {
 mod tests {
     use super::*;
     use std::time::Instant;
+
+    #[test]
+    fn an_stl_is_rendered() {
+        let dir = std::env::temp_dir().join(format!("snap-thumb-stl-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("cube.stl");
+        crate::stl::write(&p, &crate::stl::tests_cube()).unwrap();
+        let t = generate(&p, 64, ThumbPref::Auto).unwrap();
+        assert_eq!(t.source, ThumbSource::Rendered);
+        assert!(image::load_from_memory(&t.png).is_ok(), "a PNG");
+
+        std::fs::write(dir.join("broken.stl"), b"solid nothing endsolid").unwrap();
+        assert!(generate(&dir.join("broken.stl"), 64, ThumbPref::Auto).is_err(), "no triangle, no preview");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     /// Generates thumbnails for real files and measures the time.
     #[test]

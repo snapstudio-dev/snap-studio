@@ -100,6 +100,9 @@ pub struct MetaDto {
     plates: usize,
     printer: Option<String>,
     has_embedded_thumb: bool,
+    /// STL only: the mesh's size in file units, for a unit hint (an STL has
+    /// no unit; millimeters are expected).
+    size_mm: Option<[f32; 3]>,
 }
 
 #[derive(Serialize)]
@@ -179,7 +182,14 @@ fn meta_of(path: &str) -> MetaDto {
         plates: 0,
         printer: None,
         has_embedded_thumb: false,
+        size_mm: None,
     };
+    if scan::kind_of(Path::new(path)) == Some("stl") {
+        // Triangles only: no name, settings or plates.
+        dto.plates = 1;
+        dto.size_mm = stl::size(Path::new(path)).ok();
+        return dto;
+    }
     if scan::kind_of(Path::new(path)) == Some("gcode") {
         if let Ok(f) = std::fs::File::open(path) {
             if let Ok(g) = gcode::parse(f) {
@@ -254,6 +264,10 @@ async fn read_metas(paths: Vec<String>) -> Vec<MetaDto> {
 /// On-demand geometry analysis: real bounding box and triangle count.
 #[tauri::command]
 async fn analyze(path: String) -> Result<AnalyzeDto, String> {
+    if scan::kind_of(Path::new(&path)) == Some("stl") {
+        let m = stl::read(Path::new(&path)).map_err(ui_err)?;
+        return Ok(AnalyzeDto { size_mm: m.size(), triangles: m.tris.len(), approximated: false });
+    }
     let mut zip = model3mf::open(Path::new(&path)).map_err(ui_err)?;
     let m = mesh::load_mesh(&mut zip, 2_500_000).map_err(ui_err)?;
     Ok(AnalyzeDto { size_mm: m.size(), triangles: m.tris.len(), approximated: m.truncated })
@@ -2468,6 +2482,19 @@ mod tests {
             assert_eq!(query_param(u, "p").as_deref(), Some(want), "{u}");
             assert!(query_param(u, "s").is_some());
         }
+    }
+
+    #[test]
+    fn an_stl_has_its_size_and_one_plate() {
+        let dir = std::env::temp_dir().join(format!("snap-meta-stl-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("cube.stl");
+        stl::write(&p, &stl::tests_cube()).unwrap();
+        let m = meta_of(&p.to_string_lossy());
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(m.size_mm, Some([10.0, 10.0, 10.0]));
+        assert_eq!(m.plates, 1);
+        assert!(!m.has_embedded_thumb && m.title.is_none() && m.filaments.is_empty());
     }
 
     /// Shows the metadata read from real files.

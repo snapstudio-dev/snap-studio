@@ -2728,5 +2728,9 @@
   "snappy.tool.create_versions": "객체 버전을 읽습니다",
   "snappy.tool.create_manage": "만들기 대화를 관리합니다",
   "snappy.tool.explore_tab": "탐색 탭을 다룹니다",
-  "snappy.tool.explore_site": "탐색 사이트를 다룹니다"
+  "snappy.tool.explore_site": "탐색 사이트를 다룹니다",
+  "files.stl_badge": "메시만 포함: 색상, 설정, 플레이트 없음",
+  "files.unit_hint": "크기 {size}: 단위를 확인하세요 (밀리미터 기준)",
+  "files.info.format": "형식",
+  "files.info.format.stl": "STL (메시만)"
 }

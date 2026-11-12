@@ -2767,5 +2767,9 @@
   "snappy.tool.create_versions": "Reads an object's versions",
   "snappy.tool.create_manage": "Manages a Create conversation",
   "snappy.tool.explore_tab": "Works on an Explore tab",
-  "snappy.tool.explore_site": "Works on an Explore site"
+  "snappy.tool.explore_site": "Works on an Explore site",
+  "files.stl_badge": "Mesh only: no colours, settings or plates",
+  "files.unit_hint": "Measures {size}: check its unit (millimeters expected)",
+  "files.info.format": "Format",
+  "files.info.format.stl": "STL (mesh only)"
 }

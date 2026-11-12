@@ -11,6 +11,12 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Added
+- **STL files in Files**: STL files now show in the library, with a rendered
+  preview and an STL badge. They can be analyzed, viewed in 3D, prepared and
+  printed like 3MF files. A model whose size suggests inches or meters
+  instead of millimeters gets a word in its details.
+
 ### Fixed
 - **Camera**: a missed or incomplete image from the printer no longer shows
   a question mark icon; the last image stays until the next one arrives.

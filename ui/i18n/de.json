@@ -2812,5 +2812,9 @@
   "snappy.tool.create_versions": "Liest die Versionen eines Objekts",
   "snappy.tool.create_manage": "Verwaltet eine Erstellen-Unterhaltung",
   "snappy.tool.explore_tab": "Bearbeitet einen Erkunden-Tab",
-  "snappy.tool.explore_site": "Bearbeitet eine Erkunden-Seite"
+  "snappy.tool.explore_site": "Bearbeitet eine Erkunden-Seite",
+  "files.stl_badge": "Nur Netz: keine Farben, Einstellungen oder Platten",
+  "files.unit_hint": "Misst {size}: Einheit prüfen (Millimeter erwartet)",
+  "files.info.format": "Format",
+  "files.info.format.stl": "STL (nur Netz)"
 }

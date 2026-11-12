@@ -2728,5 +2728,9 @@
   "snappy.tool.create_versions": "读取对象版本",
   "snappy.tool.create_manage": "管理创建对话",
   "snappy.tool.explore_tab": "处理探索标签页",
-  "snappy.tool.explore_site": "处理探索网站"
+  "snappy.tool.explore_site": "处理探索网站",
+  "files.stl_badge": "仅网格：没有颜色、设置或打印板",
+  "files.unit_hint": "尺寸 {size}：请检查单位（应为毫米）",
+  "files.info.format": "格式",
+  "files.info.format.stl": "STL（仅网格）"
 }

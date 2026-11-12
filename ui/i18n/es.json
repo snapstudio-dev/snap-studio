@@ -2812,5 +2812,9 @@
   "snappy.tool.create_versions": "Lee las versiones de un objeto",
   "snappy.tool.create_manage": "Gestiona una conversación de Crear",
   "snappy.tool.explore_tab": "Actúa sobre una pestaña de Explorar",
-  "snappy.tool.explore_site": "Actúa sobre un sitio de Explorar"
+  "snappy.tool.explore_site": "Actúa sobre un sitio de Explorar",
+  "files.stl_badge": "Solo malla: sin colores, ajustes ni placas",
+  "files.unit_hint": "Mide {size}: comprueba su unidad (se esperan milímetros)",
+  "files.info.format": "Formato",
+  "files.info.format.stl": "STL (solo malla)"
 }
