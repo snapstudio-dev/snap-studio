@@ -2733,5 +2733,11 @@
   "files.stl_badge": "仅网格：没有颜色、设置或打印板",
   "files.unit_hint": "尺寸 {size}：请检查单位（应为毫米）",
   "files.info.format": "格式",
-  "files.info.format.stl": "STL（仅网格）"
+  "files.info.format.stl": "STL（仅网格）",
+  "slice.heights.mixed": "此打印板上的对象具有不同的按高度换色设置。换色作用于整个打印板：请只保留换色列表相同的对象，或分开切片。",
+  "slice.heights.heads": "按高度换色要求打印板从单个打印头开始：此处对象（或其颜色）使用了多个打印头。请让它们在第一次换色之前都使用同一个打印头。",
+  "slice.heights.pillars": "按高度换色不能与每种材料一个擦料塔同时使用。请选择单个擦料塔，或不使用。",
+  "slice.heights.by_object": "按高度换色需要逐层打印整个打印板。请将打印顺序设为“逐层”。",
+  "viewer.mark.pause": "暂停以更换料卷",
+  "viewer.mark.head": "切换到打印头 {head}"
 }

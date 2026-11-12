@@ -2817,5 +2817,11 @@
   "files.stl_badge": "Só malha: sem cores, configurações ou placas",
   "files.unit_hint": "Mede {size}: verifique a unidade (milímetros esperados)",
   "files.info.format": "Formato",
-  "files.info.format.stl": "STL (só malha)"
+  "files.info.format.stl": "STL (só malha)",
+  "slice.heights.mixed": "Os objetos desta mesa têm trocas de cor por altura diferentes. As trocas valem para a mesa inteira: mantenha objetos com a mesma lista ou fatie-os separadamente.",
+  "slice.heights.heads": "As trocas de cor por altura exigem que a mesa comece com um único cabeçote: aqui, os objetos (ou suas cores) imprimem com vários cabeçotes. Dê a todos o mesmo cabeçote abaixo da primeira troca.",
+  "slice.heights.pillars": "As trocas de cor por altura não funcionam com uma torre de purga por material. Escolha uma única torre de purga, ou nenhuma.",
+  "slice.heights.by_object": "As trocas de cor por altura exigem a mesa impressa camada por camada. Defina Sequência de impressão como “Por camada”.",
+  "viewer.mark.pause": "Pausa para trocar o carretel",
+  "viewer.mark.head": "Troca para o cabeçote {head}"
 }

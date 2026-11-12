@@ -2772,5 +2772,11 @@
   "files.stl_badge": "Mesh only: no colours, settings or plates",
   "files.unit_hint": "Measures {size}: check its unit (millimeters expected)",
   "files.info.format": "Format",
-  "files.info.format.stl": "STL (mesh only)"
+  "files.info.format.stl": "STL (mesh only)",
+  "slice.heights.mixed": "This plate's objects have different colour changes at a height. The changes apply to the whole plate: keep objects that share the same list, or slice them separately.",
+  "slice.heights.heads": "Colour changes at a height need the plate to start with a single head: here, the objects (or their colours) print with several heads. Give them all the same head below the first change.",
+  "slice.heights.pillars": "Colour changes at a height cannot go with one prime tower per material. Choose a single prime tower, or none.",
+  "slice.heights.by_object": "Colour changes at a height need the plate printed layer by layer. Set Print sequence to “By layer”.",
+  "viewer.mark.pause": "Pause to change the spool",
+  "viewer.mark.head": "Head change to {head}"
 }

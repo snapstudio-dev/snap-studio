@@ -10,6 +10,7 @@ mod engine;
 mod favorites;
 mod gcode;
 mod gcode_thumbs;
+mod heights;
 mod i18n;
 mod ia;
 mod ia_attach;
@@ -555,12 +556,22 @@ async fn plate_save(
     tower: Option<plate::TowerPlace>,
     smooth_mix: Option<bool>,
     snap: Option<serde_json::Value>,
+    heights: Option<heights::Saved>,
     path: String,
 ) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || plate::save_scene(&scene, tower, smooth_mix, snap.as_ref(), Path::new(&path)))
-        .await
-        .map_err(ui_err)?
-        .map_err(ui_err)
+    tauri::async_runtime::spawn_blocking(move || {
+        plate::save_scene(&scene, tower, smooth_mix, snap.as_ref(), heights.as_ref(), Path::new(&path))
+    })
+    .await
+    .map_err(ui_err)?
+    .map_err(ui_err)
+}
+
+/// The colour changes at a height a 3MF keeps (its first plate's), with
+/// the layers they were made for.
+#[tauri::command]
+async fn plate_heights(path: String) -> Result<heights::FileHeights, String> {
+    tauri::async_runtime::spawn_blocking(move || heights::of_file(Path::new(&path))).await.map_err(ui_err)
 }
 
 /// A virtual head's preview color: `a` and `b` (`#rrggbb`) mixed at each
@@ -2265,6 +2276,7 @@ pub fn run() {
             plate_orient,
             plate_support_hint,
             plate_save,
+            plate_heights,
             plate_tower,
             mix_colors,
             print_send,

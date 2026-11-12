@@ -1,6 +1,8 @@
 // node scripts/test-toolpaths.js — the slice preview's toolpath buffer
-// (gcode.rs encode → viewer.js decodeGcode), version 4: positions
-// quantized in a box, a byte per attribute, per-layer ends and tops.
+// (gcode.rs encode → viewer.js decodeGcode), version 5: positions
+// quantized in a box, a byte per attribute, per-layer ends and tops, then
+// the colors and the pauses, marked on the layer slider with the head
+// changes.
 const assert = require("assert");
 const fs = require("fs"), vm = require("vm"), path = require("path");
 const src = fs.readFileSync(path.join(__dirname, "../ui/viewer.js"), "utf8");
@@ -15,16 +17,17 @@ const code = [
   cut("function decodeGcode(buf)", "\n/* Color of a head"),
 ].join("\n");
 const ctx = {};
-vm.runInNewContext(code + "\nthis.decodeGcode = decodeGcode; this.PATH_VS = PATH_VS; this.RIB_VS = RIB_VS;", ctx);
+const marks = fs.readFileSync(path.join(__dirname, "../ui/heights-logic.js"), "utf8");
+vm.runInNewContext(marks + "\n" + code + "\nthis.decodeGcode = decodeGcode; this.PATH_VS = PATH_VS; this.RIB_VS = RIB_VS;", ctx);
 
 // A buffer as gcode.rs writes it: two layers, two extrusions (inner wall
 // on T0, outer wall on T2), a box from (10, 20, 0.2) spanning 100 × 50 × 0.2.
-function buffer({ flags = 1, widths = [45, 0], heights = [16, 8] } = {}) {
+function buffer({ flags = 1, widths = [45, 0], heights = [16, 8], pauses = [] } = {}) {
   const n = 2, layers = 2;
   const pos = 68 + layers * 8;
-  const b = new ArrayBuffer(pos + n * 16 + 1 + 2 * 4), dv = new DataView(b), u8 = new Uint8Array(b);
+  const b = new ArrayBuffer(pos + n * 16 + 1 + 2 * 4 + 2 + pauses.length * 2), dv = new DataView(b), u8 = new Uint8Array(b);
   u8.set([..."3MFG"].map((c) => c.charCodeAt(0)), 0);
-  dv.setUint8(4, 4);
+  dv.setUint8(4, 5);
   dv.setUint8(5, flags);
   dv.setUint16(6, (1 << 1) | (1 << 2), true);
   dv.setUint32(8, n, true);
@@ -40,6 +43,8 @@ function buffer({ flags = 1, widths = [45, 0], heights = [16, 8] } = {}) {
   u8.set(widths, pos + n * 14);
   u8.set(heights, pos + n * 15);
   u8.set([2, 1, 255, 255, 255, 0, 0, 0, 0], pos + n * 16);
+  dv.setUint16(pos + n * 16 + 9, pauses.length, true);
+  pauses.forEach((l, i) => dv.setUint16(pos + n * 16 + 11 + i * 2, l, true));
   return b;
 }
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} vs ${b}`);
@@ -70,7 +75,7 @@ assert.deepStrictEqual(plain(d.fileColors), [[255, 255, 255], null], "the colors
 assert.strictEqual(ctx.decodeGcode(buffer({ flags: 2 })).travel, true);
 // An older buffer is refused (the viewer says the file cannot be read).
 const old = buffer();
-new DataView(old).setUint8(4, 3);
+new DataView(old).setUint8(4, 4);
 assert.throws(() => ctx.decodeGcode(old), /unexpected toolpath format/);
 
 // The shaders read that layout: quantized ends in the box, bytes for the
@@ -84,5 +89,10 @@ for (const vs of [ctx.PATH_VS, ctx.RIB_VS]) {
 }
 for (const k of ["uniform vec3 uEye;", "- u * hh", "segHeight()"]) assert.ok(ctx.RIB_VS.includes(k), k);
 assert.ok(ctx.PATH_VS.includes("gl_VertexID == 0 ? aA : aB"), "one instance per line");
+
+// The marks beside the layer slider: layer 1 printed by T2 after layer 0's
+// T0, a head mark; a pause on that layer wins over it.
+assert.deepStrictEqual(plain(d.marks), [{ layer: 1, kind: "head", tool: 2 }]);
+assert.deepStrictEqual(plain(ctx.decodeGcode(buffer({ pauses: [1] })).marks), [{ layer: 1, kind: "pause" }]);
 
 console.log("toolpaths: ok");

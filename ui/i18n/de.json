@@ -2817,5 +2817,11 @@
   "files.stl_badge": "Nur Netz: keine Farben, Einstellungen oder Platten",
   "files.unit_hint": "Misst {size}: Einheit prüfen (Millimeter erwartet)",
   "files.info.format": "Format",
-  "files.info.format.stl": "STL (nur Netz)"
+  "files.info.format.stl": "STL (nur Netz)",
+  "slice.heights.mixed": "Die Objekte dieser Platte haben unterschiedliche Farbwechsel nach Höhe. Die Wechsel gelten für die ganze Platte: Behalte nur Objekte mit derselben Liste oder slice sie getrennt.",
+  "slice.heights.heads": "Farbwechsel nach Höhe erfordern, dass die Platte mit einem einzigen Kopf beginnt: Hier drucken die Objekte (oder ihre Farben) mit mehreren Köpfen. Weise ihnen unterhalb des ersten Wechsels allen denselben Kopf zu.",
+  "slice.heights.pillars": "Farbwechsel nach Höhe funktionieren nicht mit einem Reinigungsturm pro Material. Wähle einen einzigen Reinigungsturm oder keinen.",
+  "slice.heights.by_object": "Farbwechsel nach Höhe erfordern, dass die Platte Schicht für Schicht gedruckt wird. Stelle Druckreihenfolge auf „Nach Ebene“.",
+  "viewer.mark.pause": "Pause zum Spulenwechsel",
+  "viewer.mark.head": "Kopfwechsel zu {head}"
 }

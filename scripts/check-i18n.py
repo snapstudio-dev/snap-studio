@@ -29,7 +29,7 @@ SRC = ROOT / "src-tauri" / "src"
 # Keys assembled at run time: any key starting with one of these is used.
 DYNAMIC = (
     "ais.item.", "ais.mode.", "welcome.ai.chosen.", "color.", "engine.phase.", "feature.", "files.sort.", "pd.kind.", "printers.state.",
-    "prints.state.", "prints.filter.", "prints.day.", "prints.tl.", "prints.reason.", "settings.history.short.", "slice.pstate.", "slice.stage.", "style.", "maint.t.", "maint.nozzle.", "maint.in.", "maint.late.", "bm.st.", "bm.done.", "bm.f.", "bm.level.", "bm.phase.", "bm.set.level_", "bm.side.", "ctl.st.", "ctl.lock.", "ctl.why.", "ctl.doing.", "ctl.confirm.", "ctl.help.",
+    "prints.state.", "prints.filter.", "prints.day.", "prints.tl.", "prints.reason.", "settings.history.short.", "slice.pstate.", "slice.stage.", "slice.heights.", "style.", "maint.t.", "maint.nozzle.", "maint.in.", "maint.late.", "bm.st.", "bm.done.", "bm.f.", "bm.level.", "bm.phase.", "bm.set.level_", "bm.side.", "ctl.st.", "ctl.lock.", "ctl.why.", "ctl.doing.", "ctl.confirm.", "ctl.help.",
     "snap.site.", "snappy.tool.", "snappy.plate.", "snappy.ask.print_", "snappy.intro.", "snappy.app.", "snappy.ask.create_", "snappy.ask.maint_",
     "snappy.ask.mesh_", "snappy.ask.preview_", "snappy.ask.printer_", "snappy.ask.site_", "explore.desc.", "slice.vp.", "prepare.tower.why.", "slice.tower.place.", "window.", "plate.why.",
 )

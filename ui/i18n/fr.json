@@ -2775,5 +2775,11 @@
   "files.stl_badge": "Maillage seul : ni couleurs, ni réglages, ni plateaux",
   "files.unit_hint": "Mesure {size} : vérifiez son unité (millimètres attendus)",
   "files.info.format": "Format",
-  "files.info.format.stl": "STL (maillage seul)"
+  "files.info.format.stl": "STL (maillage seul)",
+  "slice.heights.mixed": "Les objets de ce plateau ont des changements de couleur par hauteur différents. Les changements s'appliquent à tout le plateau : gardez des objets qui partagent la même liste, ou découpez-les séparément.",
+  "slice.heights.heads": "Les changements de couleur par hauteur demandent que le plateau commence avec une seule tête : ici, les objets (ou leurs couleurs) s'impriment avec plusieurs têtes. Donnez-leur à tous la même tête sous le premier changement.",
+  "slice.heights.pillars": "Les changements de couleur par hauteur ne vont pas avec une tour de purge par matériau. Choisissez une seule tour de purge, ou aucune.",
+  "slice.heights.by_object": "Les changements de couleur par hauteur demandent un plateau imprimé couche par couche. Réglez Séquence d'impression sur « Par couche ».",
+  "viewer.mark.pause": "Pause pour changer la bobine",
+  "viewer.mark.head": "Passage à la tête {head}"
 }

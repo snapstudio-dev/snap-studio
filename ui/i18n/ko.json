@@ -2733,5 +2733,11 @@
   "files.stl_badge": "메시만 포함: 색상, 설정, 플레이트 없음",
   "files.unit_hint": "크기 {size}: 단위를 확인하세요 (밀리미터 기준)",
   "files.info.format": "형식",
-  "files.info.format.stl": "STL (메시만)"
+  "files.info.format.stl": "STL (메시만)",
+  "slice.heights.mixed": "이 플레이트의 객체들은 높이별 색상 변경이 서로 다릅니다. 변경은 플레이트 전체에 적용됩니다. 같은 목록을 가진 객체만 두거나 따로 슬라이스하세요.",
+  "slice.heights.heads": "높이별 색상 변경은 플레이트가 하나의 헤드로 시작해야 합니다. 여기서는 객체(또는 그 색상)가 여러 헤드로 출력됩니다. 첫 번째 변경 아래에서는 모두 같은 헤드를 지정하세요.",
+  "slice.heights.pillars": "높이별 색상 변경은 재료별 프라임 타워와 함께 사용할 수 없습니다. 프라임 타워를 하나만 쓰거나 사용하지 마세요.",
+  "slice.heights.by_object": "높이별 색상 변경은 레이어별로 출력해야 합니다. 출력 순서를 ‘레이어별’로 설정하세요.",
+  "viewer.mark.pause": "스풀 교체를 위한 일시 정지",
+  "viewer.mark.head": "{head}(으)로 헤드 전환"
 }

@@ -2817,5 +2817,11 @@
   "files.stl_badge": "Solo malla: sin colores, ajustes ni placas",
   "files.unit_hint": "Mide {size}: comprueba su unidad (se esperan milímetros)",
   "files.info.format": "Formato",
-  "files.info.format.stl": "STL (solo malla)"
+  "files.info.format.stl": "STL (solo malla)",
+  "slice.heights.mixed": "Los objetos de esta placa tienen cambios de color por altura distintos. Los cambios se aplican a toda la placa: deja objetos que compartan la misma lista o lamínalos por separado.",
+  "slice.heights.heads": "Los cambios de color por altura requieren que la placa empiece con un solo cabezal: aquí, los objetos (o sus colores) se imprimen con varios cabezales. Asígnales a todos el mismo cabezal por debajo del primer cambio.",
+  "slice.heights.pillars": "Los cambios de color por altura no son compatibles con una torre de purga por material. Elige una sola torre de purga o ninguna.",
+  "slice.heights.by_object": "Los cambios de color por altura requieren imprimir la placa capa por capa. Ajusta Secuencia de impresión a «Por capa».",
+  "viewer.mark.pause": "Pausa para cambiar la bobina",
+  "viewer.mark.head": "Cambio al cabezal {head}"
 }

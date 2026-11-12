@@ -169,7 +169,7 @@ pub fn aval<'a>(a: &quick_xml::events::attributes::Attribute<'a>) -> std::borrow
     a.normalized_value(quick_xml::XmlVersion::Implicit1_0).unwrap_or_else(|_| a.value.clone())
 }
 
-fn attr_str(e: &quick_xml::events::BytesStart, key: &str) -> Option<String> {
+pub(crate) fn attr_str(e: &quick_xml::events::BytesStart, key: &str) -> Option<String> {
     for a in e.attributes().flatten() {
         if a.key.local_name().as_ref() == key {
             return Some(aval(&a).to_string());
