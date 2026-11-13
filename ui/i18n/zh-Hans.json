@@ -2733,5 +2733,14 @@
   "files.stl_badge": "仅网格：没有颜色、设置或打印板",
   "files.unit_hint": "尺寸 {size}：请检查单位（应为毫米）",
   "files.info.format": "格式",
-  "files.info.format.stl": "STL（仅网格）"
+  "files.info.format.stl": "STL（仅网格）",
+  "slice.heights.mixed": "此打印板上的对象具有不同的按高度换色设置。换色作用于整个打印板：请只保留换色列表相同的对象，或分开切片。",
+  "slice.heights.heads": "按高度换色要求打印板以单个喷头开始，且每个换色颜色在所有对象上使用同一喷头：此处它们使用多个喷头打印。请为它们指定相同的喷头。",
+  "slice.heights.pillars": "按高度换色不能与每种材料一个擦料塔同时使用。请选择单个擦料塔，或不使用。",
+  "slice.heights.by_object": "按高度换色需要逐层打印整个打印板。请将打印顺序设为“逐层”。",
+  "viewer.mark.pause": "暂停以更换料卷",
+  "viewer.mark.head": "切换到打印头 {head}",
+  "slice.heights.layer": "此文件将颜色变化放在 {file}（层高 / 首层）的层上；所选配置以 {profile} 打印。颜色会在其他高度变化：请选择与文件层相同的配置。",
+  "slice.heights.scaled": "带有按高度换色的对象在高度上被缩放：其颜色会在别处变化。请将其 Z 缩放恢复为 100 %。",
+  "slice.heights.raft": "按高度换色不能与筏层一起使用：筏层会抬高对象，颜色会在过低的位置变化。请选择不带筏层的配置。"
 }

@@ -95,8 +95,8 @@ void main() { frag = uColor; }`;
 /* ------------------------------------------------------------ state */
 
 /* An object as stored: placement and choices, never its mesh. */
-const prStored = ({ id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, pick, cv, free }) => ({
-  id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, pick, cv, free,
+const prStored = ({ id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, pick, cv, free, hc, hcl }) => ({
+  id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, pick, cv, free, hc, hcl,
 });
 
 function prSave() {
@@ -1967,8 +1967,11 @@ async function prepareAddFile(path, { remember = true } = {}) {
   const name = path.split(/[\\/]/).pop();
   PRL.reading.push(name);
   prLoadingShow();
+  let heights = null;
   try {
     items = await invoke("plate_items", { path });
+    // Its colour changes at a height, if it keeps some (HueForge).
+    heights = await invoke("plate_heights", { path }).catch(() => null);
   } catch (e) {
     toast(`${name} : ${e}`, true);
     return;
@@ -1994,6 +1997,11 @@ async function prepareAddFile(path, { remember = true } = {}) {
   const wasEmpty = PR.objects.length === 0;
   const first = added.filter((o) => o.plate === 1);
   const main = first.length ? first : added;
+  // The changes are the first plate's: its objects carry them.
+  const hc = hcFromFile(heights?.changes);
+  // With the layers it placed them on: the slice checks the profile's.
+  const hcl = { layer_height: heights?.layer_height ?? null, first_layer: heights?.first_layer ?? null };
+  if (hc.length) for (const o of main) Object.assign(o, { hc, hcl });
   const box = groupBox(main);
   const { w, d } = PR.bed;
   const fits = box.x0 >= 0 && box.y0 >= 0 && box.x1 <= w && box.y1 <= d;
@@ -2369,6 +2377,8 @@ async function prSavePlate() {
       snap: PR.tower.kind === "material" || Object.keys(PR.tower.pillars || {}).length ? prPillarsFileData() : null,
       // Smooth mix, for a plate with a virtual head: Orca's keys, on or off.
       smooth_mix: prTowerVirtualUsed() ? vhSmoothOn(PR) : null,
+      // The colour changes at a height, kept where Orca keeps them.
+      heights: prSaveHeights(),
       path: dest,
     });
     toast(tr("prepare.saved", { name: dest.split(/[\\/]/).pop() }));
@@ -2376,6 +2386,18 @@ async function prSavePlate() {
   } catch (e) {
     toast(tr("printers.form.save_failed", { err: e }), true);
   }
+}
+
+/* The plate's colour changes as a saved 3MF keeps them (the first
+   object's that has some: the slice wants them all alike), with each
+   extruder's colour from its file. */
+function prSaveHeights() {
+  const o = PR.objects.find((x) => x.hc?.length);
+  if (!o) return null;
+  const fils = (typeof headsModelNow === "function" && headsModelNow(o.path)?.filaments) || [];
+  const n = Math.max(...prColors(o));
+  const colors = Array.from({ length: n }, (_, i) => fils.find((f) => f.index === i + 1)?.color || null);
+  return { changes: o.hc.map((c) => ({ z: c.z, extruder: c.ext, kind: c.kind })), colors };
 }
 
 /* ------------------------------------------------------------ arrangement */
@@ -2549,6 +2571,7 @@ async function prSplit() {
           plate: o.plate,
           extruders: p.extruders,
           heads: { ...(o.heads || {}) },
+          ...(o.hc ? { hc: o.hc, hcl: o.hcl } : {}),
           cv: COLORS_VERSION,
         };
       });
@@ -2647,7 +2670,7 @@ function prepareScene() {
     name,
     files,
     skipped: PR.objects.length - on.length,
-    items: on.map((o) => ({ id: o.id, path: o.path, item: o.item, piece: o.piece ?? null, name: o.name, pos: o.pos, rot: o.rot, scale: o.scale, colors: prColors(o), heads: prSliceHeads(o) })),
+    items: on.map((o) => ({ id: o.id, path: o.path, item: o.item, piece: o.piece ?? null, name: o.name, pos: o.pos, rot: o.rot, scale: o.scale, colors: prColors(o), heads: prSliceHeads(o), base: o.extruders || [], hc: o.hc || [], hcl: o.hcl || null })),
   };
 }
 
@@ -2908,8 +2931,9 @@ prStatus();
 
 /* ---------------------------------------------------- heads and spools */
 
-/* Colors of an object: those of its triangles and painting (plate_items). */
-const prColors = (o) => (o.extruders?.length ? o.extruders : [1]);
+/* Colors of an object: those of its triangles and painting (plate_items),
+   then those its colour changes at a height bring. */
+const prColors = (o) => hcColours(o.extruders, o.hc);
 
 /* Head printing each color of an object: the object's own choice,
    otherwise the file's (slice sheet memory) or the closest spool.
@@ -3003,7 +3027,8 @@ function prOrphans() {
 /* The colours the 3MF gives an object (none: an uncoloured object, which
    "by colour" mode asks a head for, on its row). */
 function prOwnColours(o) {
-  return o.extruders?.length ? o.extruders : [];
+  // Its colour changes at a height bring theirs (each needs a head).
+  return o.extruders?.length || o.hc?.length ? prColors(o) : [];
 }
 
 /* The colours an object brings to the plate's banner: none once a head

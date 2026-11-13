@@ -1654,6 +1654,25 @@ input.sw.small:checked::after { transform: translateX(12px); }
   width: 22px;
   height: 240px;
 }
+/* Marks of the colour changes, left of the slider: 0 at the bottom. The
+   thumb's half (8 px) is kept at both ends, as the range draws it. */
+.v-layer-track { position: relative; }
+.v-layer-marks { position: absolute; top: 8px; bottom: 8px; right: 100%; width: 12px; pointer-events: none; }
+.v-mark {
+  position: absolute;
+  right: 2px;
+  bottom: calc(var(--at) * 100%);
+  width: 10px;
+  height: 4px;
+  margin-bottom: -2px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--text) 35%, transparent);
+  border-radius: 2px;
+  background: var(--c, var(--text));
+  cursor: pointer;
+  pointer-events: auto;
+}
+.v-mark.pause { background: var(--warning); }
 .v-layer-info { text-align: center; font-size: 11px; color: var(--text-secondary); }
 .v-layer-info b { display: block; color: var(--text); font-size: 12px; font-weight: 600; }
 .v-legend {

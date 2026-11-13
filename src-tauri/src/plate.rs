@@ -339,12 +339,14 @@ pub fn write_scene(scene: &[SceneItem], pillars: &[Pillar], bed: (f32, f32), dst
 /// parts, never the pillars. Its prime tower, if shown, and smooth mix, for
 /// a plate with a virtual head (`Some(on)`), in the project's settings as
 /// Orca keeps them; Snap Studio's own tower data (the kind of tower, the
-/// pillars' places) beside it, which Orca ignores.
+/// pillars' places) beside it, which Orca ignores. Its colour changes at a
+/// height, where Orca keeps them (`heights`).
 pub fn save_scene(
     scene: &[SceneItem],
     tower: Option<TowerPlace>,
     smooth_mix: Option<bool>,
     snap: Option<&serde_json::Value>,
+    heights: Option<&crate::heights::Saved>,
     dst: &Path,
 ) -> Result<()> {
     write_items(scene, &[], None, dst)?;
@@ -359,6 +361,10 @@ pub fn save_scene(
     }
     if let Some(v) = snap {
         crate::write3mf::append_entry(dst, SNAP_TOWER, &serde_json::to_vec_pretty(v)?)?;
+    }
+    if let Some(h) = heights.filter(|h| !h.changes.is_empty()) {
+        let xml = crate::heights::write_xml(&h.changes, &h.colors);
+        crate::write3mf::append_entry(dst, crate::heights::XML_ENTRY, xml.as_bytes())?;
     }
     Ok(())
 }
@@ -960,15 +966,15 @@ mod tests {
         let out = tmp.join("saved.3mf");
         let place = TowerPlace { on: true, x: 15.0, y: 220.0, rot: 0.0 };
         let snap = serde_json::json!({ "kind": "material", "row": { "rot": 90 }, "groups": { "PLA": { "split": true } }, "pillars": { "PLA/T0": { "x": 20, "y": 30, "moved": false } } });
-        save_scene(std::slice::from_ref(&item), Some(place), None, Some(&snap), &out).unwrap();
+        save_scene(std::slice::from_ref(&item), Some(place), None, Some(&snap), None, &out).unwrap();
         assert_eq!(items(&out).unwrap().len(), 1, "no pillar in the project");
         assert_eq!(tower_of(&out), Some(FileTower { place: Some(place), ours: true, snap: Some(snap.clone()), smooth_mix: None }));
         // The data alone (the switch off): still read.
-        save_scene(std::slice::from_ref(&item), None, None, Some(&snap), &out).unwrap();
+        save_scene(std::slice::from_ref(&item), None, None, Some(&snap), None, &out).unwrap();
         assert_eq!(tower_of(&out), Some(FileTower { place: None, ours: true, snap: Some(snap.clone()), smooth_mix: None }));
         // Another application's file: its tower, never our data.
         let foreign = tmp.join("orca.3mf");
-        save_scene(std::slice::from_ref(&item), Some(place), None, Some(&snap), &out).unwrap();
+        save_scene(std::slice::from_ref(&item), Some(place), None, Some(&snap), None, &out).unwrap();
         {
             let mut zin = zip::ZipArchive::new(std::fs::File::open(&out).unwrap()).unwrap();
             let mut zout = zip::ZipWriter::new(std::fs::File::create(&foreign).unwrap());
@@ -988,7 +994,7 @@ mod tests {
         assert_eq!(tower_of(&foreign), Some(FileTower { place: Some(place), ours: false, snap: None, smooth_mix: None }));
         // Smooth mix, for a plate with a virtual head: Orca's keys in the
         // project's settings, on or off, read back from our files only.
-        save_scene(std::slice::from_ref(&item), Some(place), Some(true), None, &out).unwrap();
+        save_scene(std::slice::from_ref(&item), Some(place), Some(true), None, None, &out).unwrap();
         let mut zip = crate::model3mf::open(&out).unwrap();
         let cfg: serde_json::Value = serde_json::from_slice(&crate::model3mf::read_entry(&mut zip, PROJECT_SETTINGS).unwrap()).unwrap();
         for k in crate::slice::SMOOTH_MIX_OVERRIDES {
@@ -996,9 +1002,9 @@ mod tests {
         }
         assert_eq!(cfg["wipe_tower_x"], serde_json::json!(["15.000"]), "next to the tower's");
         assert_eq!(tower_of(&out).unwrap().smooth_mix, Some(true));
-        save_scene(std::slice::from_ref(&item), None, Some(false), None, &out).unwrap();
+        save_scene(std::slice::from_ref(&item), None, Some(false), None, None, &out).unwrap();
         assert_eq!(tower_of(&out), Some(FileTower { place: None, ours: true, snap: None, smooth_mix: Some(false) }));
-        save_scene(std::slice::from_ref(&item), None, None, None, &out).unwrap();
+        save_scene(std::slice::from_ref(&item), None, None, None, None, &out).unwrap();
         assert_eq!(tower_of(&out), None, "no virtual head: nothing saved");
         let _ = std::fs::remove_dir_all(&tmp);
     }
@@ -1059,13 +1065,13 @@ mod tests {
         };
         let out = tmp.join("saved.3mf");
         let place = TowerPlace { on: true, x: 12.5, y: 210.25, rot: 90.0 };
-        save_scene(std::slice::from_ref(&item), Some(place), None, None, &out).unwrap();
+        save_scene(std::slice::from_ref(&item), Some(place), None, None, None, &out).unwrap();
         assert_eq!(tower_of(&out), Some(FileTower { place: Some(place), ours: true, snap: None, smooth_mix: None }));
         assert_eq!(items(&out).unwrap().len(), 1, "the objects still read");
         let mut zip = crate::model3mf::open(&out).unwrap();
         let cfg: serde_json::Value = serde_json::from_slice(&crate::model3mf::read_entry(&mut zip, PROJECT_SETTINGS).unwrap()).unwrap();
         assert_eq!(cfg["wipe_tower_x"], serde_json::json!(["12.500"]), "one per plate, as Orca");
-        save_scene(&[item], None, None, None, &out).unwrap();
+        save_scene(&[item], None, None, None, None, &out).unwrap();
         assert_eq!(tower_of(&out), None);
         let _ = std::fs::remove_dir_all(&tmp);
     }

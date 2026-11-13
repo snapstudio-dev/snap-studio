@@ -338,14 +338,15 @@ function decodeMesh(buf) {
   return { n, min, max, pos, col, truncated, ext };
 }
 
-/* Decodes the buffer produced by `gcode::encode` (version 4, 68-byte
+/* Decodes the buffer produced by `gcode::encode` (version 5, 68-byte
    header): segments sorted by layer, each the 16 bytes the shaders read
-   (`segs`, sent to the GPU as is), then the filament colors. The small
-   arrays are copied, so the buffer goes once on the GPU. */
+   (`segs`, sent to the GPU as is), then the filament colors and the
+   pauses. The small arrays are copied, so the buffer goes once on the
+   GPU. */
 function decodeGcode(buf) {
   const dv = new DataView(buf);
   const magic = String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3));
-  if (magic !== "3MFG" || dv.getUint8(4) !== 4) throw new Error("unexpected toolpath format");
+  if (magic !== "3MFG" || dv.getUint8(4) !== 5) throw new Error("unexpected toolpath format");
   const flags = dv.getUint8(5);
   const featMask = dv.getUint16(6, true);
   const n = dv.getUint32(8, true);
@@ -363,6 +364,10 @@ function decodeGcode(buf) {
   for (let i = 0; i < k; i++, o += 4) {
     fileColors.push(dv.getUint8(o) ? [dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3)] : null);
   }
+  // The layers the print pauses before (a spool swapped by hand).
+  const pauses = [];
+  const np = dv.getUint16(o, true);
+  for (let i = 0; i < np; i++) pauses.push(dv.getUint16(o + 2 + i * 2, true));
   const bits = (m) => [...Array(16).keys()].filter((b) => m & (1 << b));
   return {
     n,
@@ -379,7 +384,27 @@ function decodeGcode(buf) {
     fileColors,
     feats: [...new Set(bits(featMask).map((f) => Math.min(f, FEATURES.length - 1)))],
     tools: bits(toolMask),
+    marks: hcMarks(mainTools(dv, pos, n, ends, toolMask), pauses),
   };
+}
+
+/* Each layer's main head (the one extruding the most segments), for the
+   slider's head marks; undefined for a layer without extrusion. One head
+   on the whole print: no need to count. */
+function mainTools(dv, pos, n, ends, toolMask) {
+  const layers = ends.length;
+  if (!(toolMask & (toolMask - 1))) return new Array(layers).fill(Math.log2(toolMask || 1));
+  const tool = new Uint8Array(dv.buffer, pos + n * 13, n);
+  const count = new Uint32Array(16);
+  const out = [];
+  for (let l = 0, i = 0; l < layers; l++) {
+    count.fill(0);
+    for (; i < ends[l]; i++) count[tool[i] & 15]++;
+    let best, most = 0;
+    for (let t = 0; t < 16; t++) if (count[t] > most) (most = count[t]), (best = t);
+    out.push(best);
+  }
+  return out;
 }
 
 /* Color of a head: spool read on the printer (slice preview), otherwise
@@ -1085,7 +1110,25 @@ function setupLayerSlider(data) {
   s.min = 1;
   s.max = data.layers;
   s.value = data.layers;
+  renderLayerMarks(data);
   updateLayerLabel();
+}
+
+/* Marks beside the slider: the layers where the print pauses for a spool
+   swap, and where the main head changes (colour changes at a height).
+   Read-only; a click goes to the layer. */
+function renderLayerMarks(data) {
+  const box = $("v-layer-marks");
+  const span = Math.max(1, data.layers - 1);
+  box.innerHTML = (data.marks || [])
+    .map((m) => {
+      const z = data.layerZ[Math.min(m.layer, data.layerZ.length - 1)];
+      const what = m.kind === "pause" ? tr("viewer.mark.pause") : tr("viewer.mark.head", { head: "T" + m.tool });
+      const title = `${what} · ${tr("viewer.layer_of", { n: m.layer + 1, total: data.layers })}${z ? ` · Z ${fmtDec(z, 2)} mm` : ""}`;
+      const style = `--at:${(m.layer / span).toFixed(4)}` + (m.kind === "head" ? `;--c:rgb(${toolRgb(m.tool).join(",")})` : "");
+      return `<button class="v-mark ${m.kind}" data-layer="${m.layer + 1}" style="${style}" title="${esc(title)}" aria-label="${esc(title)}"></button>`;
+    })
+    .join("");
 }
 
 function updateLayerLabel() {
@@ -1307,6 +1350,12 @@ function bindInteractions(canvas) {
   addEventListener("resize", schedule);
 }
 
+$("v-layer-marks").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-layer]");
+  if (!b) return;
+  $("v-layer").value = b.dataset.layer;
+  $("v-layer").dispatchEvent(new Event("input"));
+});
 $("v-layer").addEventListener("input", () => {
   V.layer = +$("v-layer").value - 1;
   updateLayerLabel();

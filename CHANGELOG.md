@@ -19,6 +19,15 @@ with its packages for macOS, Windows and Linux. What comes next:
 - **Under the plate**: in Prepare and in the 3D and sliced previews, turning
   the view below the plate hides the plate, so the underside of the part
   shows. Prepare's camera can now go below the plate too.
+- **Colour changes at a height (HueForge)**: a 3MF that changes colour from
+  given heights up (exported by HueForge or Orca) keeps its changes in
+  Prepare. Each new colour gets a head like the model's own, the slice
+  switches heads at those heights (a pause when a spool must be swapped by
+  hand, on the same head), and a saved plate keeps them. In the preview,
+  marks beside the layer slider show each pause and head change. The plate
+  must start with a single head, print layer by layer, use a single prime
+  tower and the file's layer heights, with no raft and the objects unscaled
+  in height; the slice says so otherwise (#102).
 
 ### Fixed
 - **Explore**: sites scroll more smoothly, on macOS above all. The floating

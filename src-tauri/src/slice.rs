@@ -273,6 +273,14 @@ pub struct Request {
     /// into sub-layers, one per head (`SMOOTH_MIX_OVERRIDES`). Absent: off.
     #[serde(default)]
     pub smooth_mix: bool,
+    /// Colour changes at a height (HueForge): the whole plate prints with
+    /// one head, switched from each height up (`heights`).
+    #[serde(default)]
+    pub height_changes: Vec<crate::heights::HeightChange>,
+    /// The layers the changes' file placed them on, checked against the
+    /// profile's.
+    #[serde(default)]
+    pub height_layers: Option<crate::heights::FileLayers>,
 }
 
 /// What printing pillars needs from the engine: no tower of its own, the
@@ -744,6 +752,31 @@ pub fn start(app_handle: AppHandle, req: Request) -> Result<String> {
     Ok(id)
 }
 
+/// Writes the request's colour changes for `--load-custom-gcodes`, each on
+/// a layer of the prepared process; each head's colour is its spool's, or
+/// its virtual head's mix.
+fn write_height_changes(req: &Request, process: &Path, work: &Path) -> anyhow::Result<PathBuf> {
+    let cfg: Value = serde_json::from_slice(&std::fs::read(process)?)?;
+    let height = crate::heights::setting(&cfg, "layer_height").ok_or_else(|| anyhow!("layer_height missing from the process"))?;
+    let first = crate::heights::setting(&cfg, "initial_layer_print_height").unwrap_or(height);
+    let layers = crate::heights::Layers { first, height };
+    // A raft lifts the object by its thickness: the file's heights would
+    // land that much too low on it.
+    if crate::heights::setting(&cfg, "raft_layers").is_some() {
+        return Err(anyhow!(crate::t!("slice.heights.raft")));
+    }
+    if let Some(file) = &req.height_layers {
+        file.check(layers).map_err(|e| anyhow!(e))?;
+    }
+    let n = req.filaments.len();
+    let colors: Vec<Option<String>> =
+        (0..n).map(|i| req.colors.get(i).cloned().flatten()).chain(req.virtual_heads.iter().map(|v| v.color.clone())).collect();
+    let list = crate::heights::engine_list(&req.height_changes, layers, &colors);
+    let path = work.join("custom_gcodes.json");
+    std::fs::write(&path, serde_json::to_vec_pretty(&list)?)?;
+    Ok(path)
+}
+
 /// Full run of a slice, independent of Tauri to stay testable.
 pub fn run_job(bin: PathBuf, idx: Arc<Index>, req: Request, job_id: String, report: &(dyn Fn(Progress) + Send + Sync)) {
     {
@@ -841,6 +874,14 @@ pub fn run_job(bin: PathBuf, idx: Arc<Index>, req: Request, job_id: String, repo
         }
         let out = work.join("out");
         let _ = std::fs::create_dir_all(&out);
+        let custom = if req.height_changes.is_empty() {
+            None
+        } else {
+            match write_height_changes(&req, &prep.process, &work) {
+                Ok(p) => Some(p),
+                Err(e) => return fail(crate::util::ui_err(e)),
+            }
+        };
         let settings = format!("{};{}", prep.machine.display(), prep.process.display());
         let fils = prep.filaments.iter().map(|f| f.display().to_string()).collect::<Vec<_>>().join(";");
 
@@ -872,6 +913,9 @@ pub fn run_job(bin: PathBuf, idx: Arc<Index>, req: Request, job_id: String, repo
         let pipe = progress_pipe(&work).and_then(|p| open_pipe(&p).map(|f| (p, f)));
         if let Some((p, _)) = &pipe {
             cmd.arg("--pipe").arg(p);
+        }
+        if let Some(p) = &custom {
+            cmd.arg("--load-custom-gcodes").arg(p);
         }
         let child = cmd.arg(&input).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn();
         let mut child = match child {
@@ -1358,6 +1402,53 @@ pub fn cancel(id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The changes reach the engine's file with the process's layers, and
+    /// what cannot print right is refused: other layers than the file's, a
+    /// raft, no layer height.
+    #[test]
+    fn height_changes_file() {
+        use crate::heights::{ChangeKind, FileLayers, HeightChange};
+        let work = std::env::temp_dir().join(format!("snapstudio-heights-{}", std::process::id()));
+        std::fs::create_dir_all(&work).unwrap();
+        let process = work.join("process.json");
+        let write = |v: Value| std::fs::write(&process, serde_json::to_vec(&v).unwrap()).unwrap();
+        let req = Request {
+            filaments: vec!["a".into(), "b".into()],
+            colors: vec![Some("#000000".into()), Some("#ff0000".into())],
+            height_changes: vec![
+                HeightChange { z: 1.04, head: 0, kind: ChangeKind::Pause },
+                HeightChange { z: 0.5, head: 1, kind: ChangeKind::Auto },
+            ],
+            ..Default::default()
+        };
+
+        write(serde_json::json!({ "layer_height": "0.08", "initial_layer_print_height": "0.16", "raft_layers": "0" }));
+        let path = write_height_changes(&req, &process, &work).unwrap();
+        let v: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(v["mode"], "MultiAsSingle");
+        let g = v["gcodes"].as_array().unwrap();
+        assert_eq!(g.len(), 2);
+        assert_eq!((g[0]["type"].as_str(), g[0]["print_z"].as_f64(), g[0]["extruder"].as_u64()), (Some("ToolChange"), Some(0.48), Some(2)));
+        assert_eq!(g[0]["color"], "#ff0000");
+        assert_eq!((g[1]["type"].as_str(), g[1]["print_z"].as_f64(), g[1]["extruder"].as_u64()), (Some("PausePrint"), Some(1.04), Some(1)));
+
+        // The file's layers are not the profile's.
+        let other = Request { height_layers: Some(FileLayers { layer_height: Some(0.12), first_layer: Some(0.16) }), ..req.clone() };
+        assert!(write_height_changes(&other, &process, &work).is_err());
+        let same = Request { height_layers: Some(FileLayers { layer_height: Some(0.08), first_layer: Some(0.16) }), ..req.clone() };
+        assert!(write_height_changes(&same, &process, &work).is_ok());
+
+        // A raft lifts the object: refused.
+        write(serde_json::json!({ "layer_height": "0.08", "initial_layer_print_height": "0.16", "raft_layers": "2" }));
+        assert_eq!(write_height_changes(&req, &process, &work).unwrap_err().to_string(), crate::t!("slice.heights.raft"));
+
+        // No layer height: refused.
+        write(serde_json::json!({ "initial_layer_print_height": "0.16" }));
+        assert!(write_height_changes(&req, &process, &work).is_err());
+
+        let _ = std::fs::remove_dir_all(&work);
+    }
 
     #[test]
     fn engine_is_found() {
@@ -2532,6 +2623,103 @@ mod tests {
         assert!(seq.chunks(3).take(seq.len() / 3).all(|c| c == [0, 0, 2]), "T0, T0, T2: {seq:?}");
         assert_eq!(last.stats.unwrap().tools, vec![0, 2], "only physical tools");
         discard("mix");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Colour changes at a height through the app's path: a 10 mm cube on
+    /// head 0, head 1 from 3 mm, a pause then head 0 again from 6 mm. In the
+    /// G-code, the layers up to 3 mm print with T0, then T1, then T0 from
+    /// the 6 mm layer, which starts with `;PAUSE_PRINT`.
+    /// `SNAPSTUDIO_ENGINE=… cargo test --lib engine_height_changes -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn engine_height_changes() {
+        use crate::heights::{ChangeKind, HeightChange};
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles");
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.20mm")).expect("a 0.20 mm profile").name.clone();
+        let pla = l.filaments.iter().find(|f| f.name.contains("PLA")).expect("PLA").name.clone();
+        use crate::mesh::{Mat, Tri};
+        let tmp = std::env::temp_dir().join("snapstudio-engine-heights");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        #[rustfmt::skip]
+        let p = [[0., 0., 0.], [10., 0., 0.], [10., 10., 0.], [0., 10., 0.], [0., 0., 10.], [10., 0., 10.], [10., 10., 10.], [0., 10., 10.]];
+        #[rustfmt::skip]
+        let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+        let tris: Vec<Tri> = f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect();
+        let src = tmp.join("cube.3mf");
+        crate::write3mf::write_scene(
+            &src,
+            &[crate::write3mf::SceneObject { name: "c".into(), tris, transform: Mat::IDENTITY, extruder: None }],
+        )
+        .unwrap();
+        let mut overrides = Map::new();
+        overrides.insert("enable_prime_tower".into(), Value::String("0".into()));
+        let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+        let sink = seen.clone();
+        run_job(
+            binary(&app).unwrap(),
+            index_for(&app).unwrap(),
+            Request {
+                machine,
+                process,
+                filaments: vec![pla; 4],
+                colors: vec![Some("#ffffff".into()), Some("#202020".into()), None, None],
+                scene: vec![crate::plate::SceneItem {
+                    path: src.to_string_lossy().to_string(),
+                    item: 0,
+                    name: "c".into(),
+                    pos: [135.0, 135.0],
+                    rot: [0.0; 3],
+                    scale: [1.0; 3],
+                    extruder_map: vec![0],
+                    piece: None,
+                }],
+                height_changes: vec![
+                    // A pause keeps the head: it carries the one in force.
+                    HeightChange { z: 6.03, head: 1, kind: ChangeKind::Pause },
+                    HeightChange { z: 3.0, head: 1, kind: ChangeKind::Auto },
+                ],
+                height_layers: Some(crate::heights::FileLayers { layer_height: Some(0.2), first_layer: None }),
+                overrides,
+                name: Some("heights".into()),
+                ..Default::default()
+            },
+            "heights".into(),
+            &move |p| sink.lock().unwrap().push(p),
+        );
+        let last = seen.lock().unwrap().last().cloned().unwrap();
+        assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
+        let gcode = std::fs::read_to_string(last.gcode.clone().unwrap()).unwrap();
+        // The tool printing each layer's features, by the layer's `;Z:`.
+        let (mut tool, mut z, mut paused) = (None::<u8>, None::<f32>, Vec::new());
+        let mut per_z = Vec::<(f32, u8)>::new();
+        for l in gcode.lines() {
+            if let Some(v) = l.strip_prefix(";Z:") {
+                z = v.trim().parse().ok();
+            } else if l.starts_with(";PAUSE_PRINT") {
+                paused.push(z.unwrap());
+            } else if let Some(t) = l.strip_prefix('T').and_then(|t| t.trim().parse::<u8>().ok()) {
+                tool = Some(t);
+            } else if l.starts_with(";TYPE:") {
+                if let (Some(z), Some(t)) = (z, tool) {
+                    if per_z.last().map(|p| p.0) != Some(z) {
+                        per_z.push((z, t));
+                    }
+                }
+            }
+        }
+        println!("pauses at {paused:?}; tools by layer: {per_z:?}");
+        assert!(per_z.len() >= 45, "a 10 mm cube at 0.2 mm: {} layers", per_z.len());
+        for (z, t) in &per_z {
+            // T0, then T1 from 3 mm to the top: the pause changes nothing.
+            let want = if *z < 2.99 { 0 } else { 1 };
+            assert_eq!(*t, want, "layer at {z} mm");
+        }
+        assert!(paused.len() == 1 && (paused[0] - 6.0).abs() < 0.01, "one pause, at 6 mm: {paused:?}");
+        discard("heights");
         let _ = std::fs::remove_dir_all(&tmp);
     }
 

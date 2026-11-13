@@ -2775,5 +2775,14 @@
   "files.stl_badge": "Maillage seul : ni couleurs, ni réglages, ni plateaux",
   "files.unit_hint": "Mesure {size} : vérifiez son unité (millimètres attendus)",
   "files.info.format": "Format",
-  "files.info.format.stl": "STL (maillage seul)"
+  "files.info.format.stl": "STL (maillage seul)",
+  "slice.heights.mixed": "Les objets de ce plateau ont des changements de couleur par hauteur différents. Les changements s'appliquent à tout le plateau : gardez des objets qui partagent la même liste, ou découpez-les séparément.",
+  "slice.heights.heads": "Les changements de couleur par hauteur demandent que le plateau commence avec une seule tête, et que chaque couleur des changements aille sur la même tête pour tous les objets : ici, ils s'impriment avec plusieurs têtes. Donnez-leur à tous les mêmes têtes.",
+  "slice.heights.pillars": "Les changements de couleur par hauteur ne vont pas avec une tour de purge par matériau. Choisissez une seule tour de purge, ou aucune.",
+  "slice.heights.by_object": "Les changements de couleur par hauteur demandent un plateau imprimé couche par couche. Réglez Séquence d'impression sur « Par couche ».",
+  "viewer.mark.pause": "Pause pour changer la bobine",
+  "viewer.mark.head": "Passage à la tête {head}",
+  "slice.heights.layer": "Ce fichier a placé ses changements de couleur sur des couches de {file} (hauteur de couche / première couche) ; le profil choisi imprime en {profile}. Les couleurs changeraient à d'autres hauteurs : choisissez un profil avec les couches du fichier.",
+  "slice.heights.scaled": "Un objet avec des changements de couleur par hauteur est mis à l'échelle en hauteur : ses couleurs changeraient ailleurs. Remettez son échelle Z à 100 %.",
+  "slice.heights.raft": "Les changements de couleur par hauteur ne vont pas avec un radeau : il surélève l'objet, et les couleurs changeraient trop bas. Choisissez un profil sans radeau."
 }

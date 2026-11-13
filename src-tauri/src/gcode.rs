@@ -89,6 +89,9 @@ pub struct GMeta {
     /// The build plate it was sliced for (`curr_bed_type`, Orca's settings
     /// block).
     pub bed_type: Option<String>,
+    /// The layers the print pauses before (`;PAUSE_PRINT`, a colour change
+    /// by hand), in order.
+    pub pauses: Vec<u16>,
 }
 
 /// Times computed by walking the toolpaths (length ÷ speed), ignoring
@@ -442,6 +445,11 @@ pub(crate) fn parse_capped(read: impl Read, keep: Keep, cap: usize) -> Result<Gc
                         z_step = height_steps(v - prev);
                     }
                     layer_z = Some(v);
+                }
+            } else if rl == "pause_print" {
+                // Orca writes it after the new layer's `;LAYER_CHANGE`.
+                if meta.pauses.last() != Some(&layer) {
+                    meta.pauses.push(layer);
                 }
             } else if rl == "layer_change" {
                 layer = layer.saturating_add(1);
@@ -797,11 +805,11 @@ pub fn tower_box(d: &GcodeData, at: [f32; 2], angle: f32) -> Option<TowerBox> {
     (x0 <= x1).then(|| TowerBox { x: at[0], y: at[1], x0, y0, w: x1 - x0, d: y1 - y0, h: d.tower_top })
 }
 
-/// Serialization for the viewer, version 4: about 18 bytes per segment,
+/// Serialization for the viewer, version 5: about 18 bytes per segment,
 /// laid out so that the viewer hands it to the GPU as is.
 ///
 /// 68-byte header:
-/// `"3MFG"` | version u8 (4) | flags u8 (bit 0: simplified, bit 1: travel
+/// `"3MFG"` | version u8 (5) | flags u8 (bit 0: simplified, bit 1: travel
 /// moves) | feature mask u16 (bit per extruded feature) | segment count u32 |
 /// layer count u32 | framing min f32×3 | max f32×3 | positions' origin
 /// f32×3 | span f32×3 | tool mask u16 (bit per extruding head) | reserved
@@ -812,7 +820,8 @@ pub fn tower_box(d: &GcodeData, at: [f32; 2], angle: f32) -> Option<TowerBox> {
 /// positions (start and end, 6 × u16, `origin + q / 65535 × span`), then
 /// in separate arrays feature (u8), head (u8), width (u8, 0.01 mm, 0
 /// unknown) and height (u8, `HEIGHT_STEP`); then the colors (count u8, then
-/// per head a known flag and RGB).
+/// per head a known flag and RGB); then the pauses (count u16, then the
+/// layer of each, u16).
 ///
 /// Segments are sorted by layer (extrusions before travel within one), the
 /// order of the file kept inside: the viewer shows layers up to a given
@@ -856,10 +865,11 @@ pub fn encode(data: &GcodeData) -> Vec<u8> {
     let head = 68 + layers * 8;
     let pos = head;
     let (feat, tool, width, height) = (pos + n * 12, pos + n * 13, pos + n * 14, pos + n * 15);
-    let mut out = vec![0u8; pos + n * 16 + 1 + k * 4];
+    let pauses = &data.meta.pauses[..data.meta.pauses.len().min(u16::MAX as usize)];
+    let mut out = vec![0u8; pos + n * 16 + 1 + k * 4 + 2 + pauses.len() * 2];
 
     out[0..4].copy_from_slice(b"3MFG");
-    out[4] = 4;
+    out[4] = 5;
     out[5] = u8::from(data.simplified) | (u8::from(data.keep == Keep::Travel) << 1);
     out[6..8].copy_from_slice(&feats.to_le_bytes());
     out[8..12].copy_from_slice(&(n as u32).to_le_bytes());
@@ -909,6 +919,11 @@ pub fn encode(data: &GcodeData) -> Vec<u8> {
             out[o..o + 4].copy_from_slice(&[1, (v >> 16) as u8, (v >> 8) as u8, v as u8]);
         }
         o += 4;
+    }
+    // The layers the print pauses before (a spool swapped by hand).
+    out[o..o + 2].copy_from_slice(&(pauses.len() as u16).to_le_bytes());
+    for (j, l) in pauses.iter().enumerate() {
+        out[o + 2 + j * 2..o + 4 + j * 2].copy_from_slice(&l.to_le_bytes());
     }
     out
 }
@@ -1046,7 +1061,7 @@ G1 X30 Y30 F9000
         assert_eq!(extr.len(), 1, "only the E increase is an extrusion");
     }
 
-    /// A version 4 buffer read back: (header fields, segments as
+    /// A version 5 buffer read back: (header fields, segments as
     /// (start, end, feature, tool, width, height), per-layer ends and tops).
     struct Decoded {
         flags: u8,
@@ -1057,11 +1072,12 @@ G1 X30 Y30 F9000
         ends: Vec<u32>,
         tops: Vec<f32>,
         colors: Vec<u8>,
+        pauses: Vec<u16>,
     }
 
     fn decode(b: &[u8]) -> Decoded {
         assert_eq!(&b[0..4], b"3MFG");
-        assert_eq!(b[4], 4, "version 4");
+        assert_eq!(b[4], 5, "version 5");
         let u32_at = |o: usize| u32::from_le_bytes(b[o..o + 4].try_into().unwrap());
         let f32_at = |o: usize| f32::from_le_bytes(b[o..o + 4].try_into().unwrap());
         let n = u32_at(8) as usize;
@@ -1069,6 +1085,10 @@ G1 X30 Y30 F9000
         let origin = [f32_at(40), f32_at(44), f32_at(48)];
         let span = [f32_at(52), f32_at(56), f32_at(60)];
         let pos = 68 + layers * 8;
+        let c = pos + n * 16;
+        let p = c + 1 + b[c] as usize * 4;
+        let u16_at = |o: usize| u16::from_le_bytes([b[o], b[o + 1]]);
+        assert_eq!(b.len(), p + 2 + u16_at(p) as usize * 2, "the pauses end the buffer");
         let segs = (0..n)
             .map(|i| {
                 let v = |j: usize| {
@@ -1087,7 +1107,8 @@ G1 X30 Y30 F9000
             segs,
             ends: (0..layers).map(|l| u32_at(68 + l * 4)).collect(),
             tops: (0..layers).map(|l| f32_at(68 + layers * 4 + l * 4)).collect(),
-            colors: b[pos + n * 16..].to_vec(),
+            colors: b[c..p].to_vec(),
+            pauses: (0..u16_at(p) as usize).map(|j| u16_at(p + 2 + j * 2)).collect(),
         }
     }
 
@@ -1098,7 +1119,8 @@ G1 X30 Y30 F9000
         let x = decode(&b);
         assert_eq!(x.segs.len(), d.segs.len());
         assert_eq!(x.layers, 3, "layers 0 to 2");
-        assert_eq!(b.len(), 68 + 3 * 8 + d.segs.len() * 16 + 1 + d.meta.colors.len() * 4);
+        assert_eq!(b.len(), 68 + 3 * 8 + d.segs.len() * 16 + 1 + d.meta.colors.len() * 4 + 2, "no pause: the count only");
+        assert!(x.pauses.is_empty());
         // Per-layer ends: increasing, the last one the whole count.
         assert!(x.ends.windows(2).all(|w| w[0] <= w[1]));
         assert_eq!(*x.ends.last().unwrap() as usize, d.segs.len());
@@ -1324,6 +1346,17 @@ G1 X100.001 Y100 Z9.87 E2
         assert!(heights.iter().all(|&x| x == 32), "{heights:?}");
         assert_eq!(height_steps(0.0), 0);
         assert_eq!(height_steps(2.0), 255, "clamped");
+    }
+
+    /// A pause (`;PAUSE_PRINT`, Orca's colour change by hand) belongs to the
+    /// layer it follows the change of; encoded after the colors.
+    #[test]
+    fn reads_and_encodes_pauses() {
+        let g = ";LAYER_CHANGE\n;Z:0.2\nG1 X10 Y0 E1\n;LAYER_CHANGE\n;Z:0.4\n;PAUSE_PRINT\nM600\nG1 X10 Y10 E2\n\
+;LAYER_CHANGE\n;Z:0.6\nG1 X0 Y10 E3\n;LAYER_CHANGE\n;Z:0.8\n;PAUSE_PRINT\n;PAUSE_PRINT\nG1 X0 Y0 E4\n";
+        let d = parse(g.as_bytes()).unwrap();
+        assert_eq!(d.meta.pauses, vec![2, 4]);
+        assert_eq!(decode(&encode(&d)).pauses, vec![2, 4]);
     }
 
     #[test]

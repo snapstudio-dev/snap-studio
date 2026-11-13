@@ -2817,5 +2817,14 @@
   "files.stl_badge": "Só malha: sem cores, configurações ou placas",
   "files.unit_hint": "Mede {size}: verifique a unidade (milímetros esperados)",
   "files.info.format": "Formato",
-  "files.info.format.stl": "STL (só malha)"
+  "files.info.format.stl": "STL (só malha)",
+  "slice.heights.mixed": "Os objetos desta mesa têm trocas de cor por altura diferentes. As trocas valem para a mesa inteira: mantenha objetos com a mesma lista ou fatie-os separadamente.",
+  "slice.heights.heads": "As trocas de cor por altura exigem que a mesa comece com um único cabeçote e que cada cor das trocas vá para o mesmo cabeçote em todos os objetos: aqui eles imprimem com vários cabeçotes. Dê a todos os mesmos cabeçotes.",
+  "slice.heights.pillars": "As trocas de cor por altura não funcionam com uma torre de purga por material. Escolha uma única torre de purga, ou nenhuma.",
+  "slice.heights.by_object": "As trocas de cor por altura exigem a mesa impressa camada por camada. Defina Sequência de impressão como “Por camada”.",
+  "viewer.mark.pause": "Pausa para trocar o carretel",
+  "viewer.mark.head": "Troca para o cabeçote {head}",
+  "slice.heights.layer": "Este arquivo colocou suas trocas de cor em camadas de {file} (altura da camada / primeira camada); o perfil escolhido imprime {profile}. As cores mudariam em outras alturas: escolha um perfil com as camadas do arquivo.",
+  "slice.heights.scaled": "Um objeto com trocas de cor por altura está escalado na altura: suas cores mudariam em outro lugar. Volte a escala Z dele para 100 %.",
+  "slice.heights.raft": "As trocas de cor por altura não funcionam com uma jangada (raft): ela eleva o objeto e as cores mudariam baixo demais. Escolha um perfil sem jangada."
 }
