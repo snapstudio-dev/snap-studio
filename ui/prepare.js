@@ -55,8 +55,8 @@ const PREP_VS = MESH_VS.replace("in vec3 aCol;", "in vec3 aCol;\nin float aExt;\
   .replace("out vec3 vPosV;", "out vec3 vPosV;\nout vec3 vPosW;\nuniform mat4 uModel;")
   .replace("vPosV = (uMV * vec4(aPos, 1.0)).xyz;", "vPosV = (uMV * vec4(aPos, 1.0)).xyz;\n  vPosW = (uModel * vec4(aPos, 1.0)).xyz;");
 /* Overhang view (uOver 1): faces pointing down more than the profile's
-   angle, above the first layer, in red. Seen from above (the camera stays
-   above the bed), an underside is hidden: a second pass (uOver 2) draws the
+   angle, above the first layer, in red. Seen from above, an underside is
+   hidden: a second pass (uOver 2) draws the
    hidden ones only, hatched, through what covers them; the winding tells
    their outward side (uFlip: a mirroring scale). */
 const PREP_FS = MESH_FS.replace("in vec3 vPosV;", "in vec3 vPosV;\nin vec3 vPosW;")
@@ -502,7 +502,8 @@ function prDraw() {
   const { eye, view, proj } = prCamera(w, h);
   const vp = m4.mul(proj, view);
 
-  drawBed(gl, PR.plate, PR.grid, vp, view, light);
+  // From under the plate, the plate goes: the parts' undersides show.
+  if (eye[2] >= 0) drawBed(gl, PR.plate, PR.grid, vp, view, light);
   // Off-plate objects and selection box: translucent.
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -984,7 +985,7 @@ function prBindInteractions(canvas) {
       if (d.mode === "pan") prPan(dx, dy);
       else {
         PR.cam.yaw -= dx * 0.008;
-        PR.cam.pitch = clamp(PR.cam.pitch + dy * 0.008, 0.05, 1.5);
+        PR.cam.pitch = clamp(PR.cam.pitch + dy * 0.008, -1.5, 1.5);
       }
       prSchedule();
       return;
@@ -1119,7 +1120,7 @@ function prBindInteractions(canvas) {
         prPan(-e.deltaX * dir * speed, -e.deltaY * dir * speed);
       } else {
         PR.cam.yaw += e.deltaX * 0.006 * dir * speed;
-        PR.cam.pitch = clamp(PR.cam.pitch - e.deltaY * 0.006 * dir * speed, 0.05, 1.5);
+        PR.cam.pitch = clamp(PR.cam.pitch - e.deltaY * 0.006 * dir * speed, -1.5, 1.5);
       }
       prSchedule();
     },

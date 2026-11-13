@@ -16,6 +16,9 @@ with its packages for macOS, Windows and Linux. What comes next:
   preview and an STL badge. They can be analyzed, viewed in 3D, prepared and
   printed like 3MF files. A model whose size suggests inches or meters
   instead of millimeters gets a word in its details.
+- **Under the plate**: in Prepare and in the 3D and sliced previews, turning
+  the view below the plate hides the plate, so the underside of the part
+  shows. Prepare's camera can now go below the plate too.
 
 ### Fixed
 - **Preview**: on long prints the sliced preview no longer stops part way up;

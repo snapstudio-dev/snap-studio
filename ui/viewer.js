@@ -887,7 +887,8 @@ function draw() {
   if (top && canvas.clientHeight) proj[9] += top / canvas.clientHeight;
   const mvp = m4.mul(proj, view);
 
-  if (V.showPlate && V.grid) drawBed(gl, V.bed, V.grid, mvp, view, light);
+  // From under the plate, the plate goes: the print's underside shows.
+  if (V.showPlate && V.grid && eye[2] >= 0) drawBed(gl, V.bed, V.grid, mvp, view, light);
 
   if (V.paths) {
     const p = V.paths;
