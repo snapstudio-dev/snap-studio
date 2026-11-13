@@ -2780,5 +2780,6 @@
   "viewer.mark.pause": "Pause to change the spool",
   "viewer.mark.head": "Head change to {head}",
   "slice.heights.layer": "This file placed its colour changes on layers of {file} (layer height / first layer); the chosen profile prints {profile}. The colours would change at other heights: choose a profile with the file's layers.",
-  "slice.heights.scaled": "An object with colour changes at a height is scaled in height: its colours would change elsewhere. Set its Z scale back to 100 %."
+  "slice.heights.scaled": "An object with colour changes at a height is scaled in height: its colours would change elsewhere. Set its Z scale back to 100 %.",
+  "slice.heights.raft": "Colour changes at a height do not go with a raft: it lifts the object, so the colours would change too low. Choose a profile without a raft."
 }

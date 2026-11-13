@@ -26,8 +26,8 @@ with its packages for macOS, Windows and Linux. What comes next:
   hand, on the same head), and a saved plate keeps them. In the preview,
   marks beside the layer slider show each pause and head change. The plate
   must start with a single head, print layer by layer, use a single prime
-  tower and the file's layer heights, with the objects unscaled in height;
-  the slice says so otherwise (#102).
+  tower and the file's layer heights, with no raft and the objects unscaled
+  in height; the slice says so otherwise (#102).
 
 ### Fixed
 - **Explore**: sites scroll more smoothly, on macOS above all. The floating

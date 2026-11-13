@@ -2825,5 +2825,6 @@
   "viewer.mark.pause": "Pause zum Spulenwechsel",
   "viewer.mark.head": "Kopfwechsel zu {head}",
   "slice.heights.layer": "Diese Datei hat ihre Farbwechsel auf Schichten von {file} gesetzt (Schichthöhe / erste Schicht); das gewählte Profil druckt {profile}. Die Farben würden auf anderen Höhen wechseln: Wählen Sie ein Profil mit den Schichten der Datei.",
-  "slice.heights.scaled": "Ein Objekt mit Farbwechseln nach Höhe ist in der Höhe skaliert: Seine Farben würden woanders wechseln. Setzen Sie seine Z-Skalierung auf 100 % zurück."
+  "slice.heights.scaled": "Ein Objekt mit Farbwechseln nach Höhe ist in der Höhe skaliert: Seine Farben würden woanders wechseln. Setzen Sie seine Z-Skalierung auf 100 % zurück.",
+  "slice.heights.raft": "Farbwechsel nach Höhe passen nicht zu einem Raft: Es hebt das Objekt an, und die Farben würden zu tief wechseln. Wählen Sie ein Profil ohne Raft."
 }

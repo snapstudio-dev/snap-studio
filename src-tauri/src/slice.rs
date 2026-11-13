@@ -760,6 +760,11 @@ fn write_height_changes(req: &Request, process: &Path, work: &Path) -> anyhow::R
     let height = crate::heights::setting(&cfg, "layer_height").ok_or_else(|| anyhow!("layer_height missing from the process"))?;
     let first = crate::heights::setting(&cfg, "initial_layer_print_height").unwrap_or(height);
     let layers = crate::heights::Layers { first, height };
+    // A raft lifts the object by its thickness: the file's heights would
+    // land that much too low on it.
+    if crate::heights::setting(&cfg, "raft_layers").is_some() {
+        return Err(anyhow!(crate::t!("slice.heights.raft")));
+    }
     if let Some(file) = &req.height_layers {
         file.check(layers).map_err(|e| anyhow!(e))?;
     }
@@ -1397,6 +1402,53 @@ pub fn cancel(id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The changes reach the engine's file with the process's layers, and
+    /// what cannot print right is refused: other layers than the file's, a
+    /// raft, no layer height.
+    #[test]
+    fn height_changes_file() {
+        use crate::heights::{ChangeKind, FileLayers, HeightChange};
+        let work = std::env::temp_dir().join(format!("snapstudio-heights-{}", std::process::id()));
+        std::fs::create_dir_all(&work).unwrap();
+        let process = work.join("process.json");
+        let write = |v: Value| std::fs::write(&process, serde_json::to_vec(&v).unwrap()).unwrap();
+        let req = Request {
+            filaments: vec!["a".into(), "b".into()],
+            colors: vec![Some("#000000".into()), Some("#ff0000".into())],
+            height_changes: vec![
+                HeightChange { z: 1.04, head: 0, kind: ChangeKind::Pause },
+                HeightChange { z: 0.5, head: 1, kind: ChangeKind::Auto },
+            ],
+            ..Default::default()
+        };
+
+        write(serde_json::json!({ "layer_height": "0.08", "initial_layer_print_height": "0.16", "raft_layers": "0" }));
+        let path = write_height_changes(&req, &process, &work).unwrap();
+        let v: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(v["mode"], "MultiAsSingle");
+        let g = v["gcodes"].as_array().unwrap();
+        assert_eq!(g.len(), 2);
+        assert_eq!((g[0]["type"].as_str(), g[0]["print_z"].as_f64(), g[0]["extruder"].as_u64()), (Some("ToolChange"), Some(0.48), Some(2)));
+        assert_eq!(g[0]["color"], "#ff0000");
+        assert_eq!((g[1]["type"].as_str(), g[1]["print_z"].as_f64(), g[1]["extruder"].as_u64()), (Some("PausePrint"), Some(1.04), Some(1)));
+
+        // The file's layers are not the profile's.
+        let other = Request { height_layers: Some(FileLayers { layer_height: Some(0.12), first_layer: Some(0.16) }), ..req.clone() };
+        assert!(write_height_changes(&other, &process, &work).is_err());
+        let same = Request { height_layers: Some(FileLayers { layer_height: Some(0.08), first_layer: Some(0.16) }), ..req.clone() };
+        assert!(write_height_changes(&same, &process, &work).is_ok());
+
+        // A raft lifts the object: refused.
+        write(serde_json::json!({ "layer_height": "0.08", "initial_layer_print_height": "0.16", "raft_layers": "2" }));
+        assert_eq!(write_height_changes(&req, &process, &work).unwrap_err().to_string(), crate::t!("slice.heights.raft"));
+
+        // No layer height: refused.
+        write(serde_json::json!({ "initial_layer_print_height": "0.16" }));
+        assert!(write_height_changes(&req, &process, &work).is_err());
+
+        let _ = std::fs::remove_dir_all(&work);
+    }
 
     #[test]
     fn engine_is_found() {

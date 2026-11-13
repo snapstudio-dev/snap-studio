@@ -2825,5 +2825,6 @@
   "viewer.mark.pause": "Pausa para trocar o carretel",
   "viewer.mark.head": "Troca para o cabeçote {head}",
   "slice.heights.layer": "Este arquivo colocou suas trocas de cor em camadas de {file} (altura da camada / primeira camada); o perfil escolhido imprime {profile}. As cores mudariam em outras alturas: escolha um perfil com as camadas do arquivo.",
-  "slice.heights.scaled": "Um objeto com trocas de cor por altura está escalado na altura: suas cores mudariam em outro lugar. Volte a escala Z dele para 100 %."
+  "slice.heights.scaled": "Um objeto com trocas de cor por altura está escalado na altura: suas cores mudariam em outro lugar. Volte a escala Z dele para 100 %.",
+  "slice.heights.raft": "As trocas de cor por altura não funcionam com uma jangada (raft): ela eleva o objeto e as cores mudariam baixo demais. Escolha um perfil sem jangada."
 }

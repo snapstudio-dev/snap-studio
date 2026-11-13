@@ -2825,5 +2825,6 @@
   "viewer.mark.pause": "Pausa per cambiare la bobina",
   "viewer.mark.head": "Cambio alla testina {head}",
   "slice.heights.layer": "Questo file ha posizionato i cambi di colore su strati di {file} (altezza strato / primo strato); il profilo scelto stampa {profile}. I colori cambierebbero ad altre altezze: scegli un profilo con gli strati del file.",
-  "slice.heights.scaled": "Un oggetto con cambi di colore per altezza è scalato in altezza: i suoi colori cambierebbero altrove. Riporta la sua scala Z al 100 %."
+  "slice.heights.scaled": "Un oggetto con cambi di colore per altezza è scalato in altezza: i suoi colori cambierebbero altrove. Riporta la sua scala Z al 100 %.",
+  "slice.heights.raft": "I cambi di colore per altezza non sono compatibili con un raft: solleva l'oggetto e i colori cambierebbero troppo in basso. Scegli un profilo senza raft."
 }
