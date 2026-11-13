@@ -225,9 +225,10 @@ fn tell_tone(app: &AppHandle) {
 }
 
 /// Reads the tab shown about three times a second, from the first tab
-/// opened on: a scroll, a page change without loading, Back or Forward
-/// show within about half a second (the page measures at most every
-/// 250 ms). Nothing is read while no site is shown.
+/// opened on: the end of a scroll, a page change without loading, Back
+/// or Forward show within about half a second (the page measures once a
+/// scroll stops, at most every 500 ms). Nothing is read while no site is
+/// shown.
 fn start_tone_reading(app: &AppHandle) {
     static STARTED: std::sync::Once = std::sync::Once::new();
     STARTED.call_once(|| {

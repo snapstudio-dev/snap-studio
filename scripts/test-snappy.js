@@ -134,7 +134,45 @@ for (let t = 0; t < 600; t += 0.05) {
 assert.deepStrictEqual([...seen].sort(), ["hop", "look", "sway", "tilt", "wiggle"]);
 const gaps = starts.slice(1).map((s, i) => s - starts[i]);
 assert.ok(Math.min(...gaps) > 0.5 && new Set(gaps.map((g) => g.toFixed(1))).size > 10, "irregular: " + gaps.slice(0, 8));
-assert.ok(starts.length > 60 && starts.length < 130, "every 4 to 9 s or so: " + starts.length);
+assert.ok(starts.length > 60 && starts.length < 100 && Math.min(...gaps) > 5.5 && Math.max(...gaps) < 10.5, "every 6 to 10 s: " + starts.length);
+// Between gestures it is still: no breath, no sway, no wandering eyes, so
+// no frame is drawn; each gesture starts with a blink. It moves under a
+// quarter of the time.
+const rest = A.snvMoodPose({ seed: 7, t: 0, mood: "idle", gaze: null, reduced: true });
+let moving = 0, blinks = 0, n = 0;
+for (let t = 0; t < 600; t += 0.05, n++) {
+  const p = A.snvMoodPose({ seed: 7, t, mood: "idle", gaze: null, reduced: false });
+  const w = A.snvIdleWait(7, t);
+  if (w > 0) assert.deepStrictEqual(p, rest, "still at " + t.toFixed(2));
+  else moving++;
+  if (p.blink > 0.9) blinks++;
+}
+assert.ok(moving / n < 0.25 && moving / n > 0.08, "moving share: " + (moving / n).toFixed(2));
+assert.ok(blinks > 60, "a blink with each gesture: " + blinks);
+// The wait leads to the next gesture's start, never past it.
+for (let t = 0.3; t < 100; t += 0.7) {
+  const w = A.snvIdleWait(7, t);
+  if (w > 0) {
+    assert.ok(A.snvIdleWait(7, t + w + 0.01) === 0, "a gesture once the wait is over, at " + t.toFixed(1));
+    assert.ok(A.snvIdleWait(7, t + w - 0.01) > 0, "none before, at " + t.toFixed(1));
+  }
+}
+// Every gesture starts and ends at rest: no jump as it begins or ends.
+const firstOf = {};
+for (let t = 0; t < 600; t += 0.01) {
+  const k = A.snvGesture(7, t).kind;
+  if (k && !firstOf[k]) firstOf[k] = t;
+}
+for (const [k, t0] of Object.entries(firstOf)) {
+  let a = t0, t1 = t0;
+  while (A.snvGesture(7, a - 0.001).kind === k) a -= 0.001;
+  while (A.snvGesture(7, t1 + 0.001).kind === k) t1 += 0.001;
+  for (const t of [a, t1]) {
+    const g = A.snvGesture(7, t);
+    for (const f of ["yaw", "roll", "lift", "gazeX"]) assert.ok(Math.abs(g[f]) < 0.15, `${k} ${f} at an end: ${g[f]}`);
+    assert.ok(Math.abs(g.sx - 1) < 0.01 && Math.abs(g.sy - 1) < 0.01, `${k} squash at an end: ${g.sx} ${g.sy}`);
+  }
+}
 // A sway goes one way, then the other.
 let sway = null;
 for (let t = 0; t < 600 && !sway; t += 0.05) if (A.snvGesture(7, t).kind === "sway") sway = t;

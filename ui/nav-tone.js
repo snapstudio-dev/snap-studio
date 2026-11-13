@@ -1,10 +1,12 @@
 /* Is the site under the floating navigation light or dark? Injected by
    library.rs into each site's view (main frame), it only reads: the colors
-   under the pill (overlay.html), at most every 250 ms, and keeps one
-   value, "light" or "dark" and the color seen there, that Rust reads (`eval_with_callback`) and passes to
-   the pill. It makes no request, changes nothing in the page and stores
-   nothing. The rules are pure functions, tested in Node
-   (scripts/test-navtone.js). */
+   under the pill (overlay.html), and keeps one value, "light" or "dark"
+   and the color seen there, that Rust reads (`eval_with_callback`) and
+   passes to the pill. A measure forces the page's styles and layout: none
+   is taken while the page scrolls (one follows once it stops), at most
+   one every 500 ms, none while the page is hidden. It makes no request,
+   changes nothing in the page and stores nothing. The rules are pure
+   functions, tested in Node (scripts/test-navtone.js). */
 (function () {
   "use strict";
 
@@ -123,7 +125,18 @@
     return "#" + rgb.slice(0, 3).map((c) => Math.round(Math.min(255, Math.max(0, c))).toString(16).padStart(2, "0")).join("");
   }
 
-  const rules = { POINTS, parseColor, composite, luminance, toneOf, smallPicture, gradientColor, standIn, fallbackTone, decide, underColor };
+  /* Waits between measures (ms): after the last scroll, so that none is
+     taken while scrolling, and between two measures, for pages that change
+     all the time (carousels, pictures loading). */
+  const SCROLL_SETTLE = 150, MIN_GAP = 500;
+
+  /* How long to wait before measuring, at `now`, given the last scroll and
+     the last measure (ms, -Infinity: never): 0 measures now. */
+  function waitFor(now, lastScroll, lastMeasure) {
+    return Math.max(0, lastScroll + SCROLL_SETTLE - now, lastMeasure + MIN_GAP - now);
+  }
+
+  const rules = { POINTS, SCROLL_SETTLE, MIN_GAP, waitFor, parseColor, composite, luminance, toneOf, smallPicture, gradientColor, standIn, fallbackTone, decide, underColor };
   if (typeof module !== "undefined" && module.exports) {
     module.exports = rules;
     return;
@@ -225,26 +238,34 @@
     if (t) keep(t, underColor(colors, body && body[3] >= 0.99 ? body : html, t));
   }
 
-  /* One measure at most every 250 ms, in an animation frame. */
-  let timer = 0, again = false;
+  /* One timer: a measure once the page has stopped scrolling, at most
+     every MIN_GAP, none while the page is hidden. */
+  let timer = 0, lastScroll = -Infinity, lastMeasure = -Infinity;
   function soon() {
-    if (timer) {
-      again = true;
-      return;
-    }
-    timer = setTimeout(() => {
+    if (timer) return;
+    const run = () => {
+      timer = 0;
+      if (document.hidden) return;
+      const wait = waitFor(performance.now(), lastScroll, lastMeasure);
+      if (wait > 0) {
+        timer = setTimeout(run, wait);
+        return;
+      }
+      timer = -1;
       requestAnimationFrame(() => {
+        timer = 0;
+        lastMeasure = performance.now();
         try {
           measure();
         } catch (e) {}
-        timer = 0;
-        if (again) {
-          again = false;
-          soon();
-        }
       });
-    }, 250);
+    };
+    timer = setTimeout(run, waitFor(performance.now(), lastScroll, lastMeasure));
   }
+  const scrolled = () => {
+    lastScroll = performance.now();
+    soon();
+  };
 
   const watch = () => {
     soon();
@@ -255,7 +276,8 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", watch, { once: true });
   else watch();
   addEventListener("load", soon);
-  addEventListener("scroll", soon, { passive: true, capture: true });
+  addEventListener("scroll", scrolled, { passive: true, capture: true });
+  document.addEventListener("visibilitychange", soon);
   addEventListener("resize", soon, { passive: true });
   try {
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", soon);

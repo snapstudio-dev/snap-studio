@@ -85,4 +85,13 @@ assert.strictEqual(T.underColor([null], [0, 0, 0, 0], "dark"), "#121212", "a tra
 assert.strictEqual(T.underColor([], null, "light"), "#ffffff");
 assert.strictEqual(T.underColor([null, null, null], [255, 255, 255, 1], "dark"), "#121212", "a white page under a dark banner: by the tone");
 
+// When to measure: never while scrolling, at most every MIN_GAP.
+const { waitFor, SCROLL_SETTLE: S, MIN_GAP: G } = T;
+assert.strictEqual(waitFor(1000, -Infinity, -Infinity), 0, "nothing yet: now");
+assert.strictEqual(waitFor(1000, 1000, -Infinity), S, "just scrolled: once it settles");
+assert.strictEqual(waitFor(1000 + S, 1000, -Infinity), 0, "scrolling stopped: now");
+assert.strictEqual(waitFor(1100, -Infinity, 1000), G - 100, "just measured: not before the gap");
+assert.strictEqual(waitFor(5000, 4990, 1000), S - 10, "scrolling again: the scroll wins");
+assert.ok(S < G && G <= 1000);
+
 console.log("navtone: ok");
