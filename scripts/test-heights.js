@@ -69,4 +69,120 @@ assert.deepStrictEqual(H.hcMarks([0, undefined, 0], []), [], "a layer without ex
 const alt = Array.from({ length: 100 }, (_, l) => (l % 3 === 2 ? 2 : 0));
 assert.deepStrictEqual(H.hcMarks(alt, [40]), [{ layer: 40, kind: "pause" }]);
 
+// ---- "By height" mode (step 2).
+
+// Layer tops: first layer, then even layers (HueForge's layer #11 at 0.96).
+assert.strictEqual(H.hzLayerTop(11, 0.08, 0.16), 0.96);
+assert.strictEqual(H.hzLayerTop(1, 0.08, 0.16), 0.16);
+// Snap to the nearest layer top: 0.50 → layer 5 at 0.48.
+assert.deepStrictEqual(H.hzSnap(0.5, 0.08, 0.16), { layer: 5, z: 0.48, gap: -0.02 });
+assert.deepStrictEqual(H.hzSnap(0.96, 0.08, 0.16), { layer: 11, z: 0.96, gap: 0 });
+assert.deepStrictEqual(H.hzSnap(0.01, 0.2, 0.2), { layer: 1, z: 0.2, gap: 0.19 }, "never below the first layer");
+assert.strictEqual(H.hzSnap(0.5, 0, 0.2).layer, null, "no layers: as asked");
+
+// Bands from the bed up; a pause keeps the head.
+assert.deepStrictEqual(
+  H.hzBands({ base: 0, changes: [{ z: 2, head: 3, kind: "pause" }, { z: 1, head: 1, kind: "auto" }] }),
+  [
+    { from: 0, to: 1, head: 0, pause: false },
+    { from: 1, to: 2, head: 1, pause: false },
+    { from: 2, to: null, head: 1, pause: true },
+  ],
+);
+assert.deepStrictEqual(H.hzBands(null), [{ from: 0, to: null, head: 0, pause: false }]);
+
+// What the slice sends: sorted, a pause carries the head in force.
+const plan = { base: 2, changes: [{ z: 1.6, head: 0, kind: "pause" }, { z: 0.96, head: 1, kind: "auto" }], layers: hcl, src: "describe" };
+assert.deepStrictEqual(H.hzRequest(plan, [{ base: [1], scale: [1, 1, 1] }, { base: [], scale: [2, 2, 1] }]), {
+  changes: [{ z: 0.96, head: 1, kind: "auto" }, { z: 1.6, head: 1, kind: "pause" }],
+  base: 2,
+  layers: hcl,
+});
+assert.deepStrictEqual(H.hzRequest({ base: 1, changes: [] }, [{ base: [1] }], { pillars: true }), { changes: [], base: 1 });
+assert.deepStrictEqual(H.hzRequest(plan, [{ base: [1, 2] }]), { error: "heads" }, "a painted object");
+assert.deepStrictEqual(H.hzRequest(plan, [{ base: [1], scale: [1, 1, 2] }]), { error: "scaled" }, "an imported list on a stretched object");
+assert.ok(H.hzRequest({ ...plan, src: null }, [{ base: [1], scale: [1, 1, 2] }]).changes, "heights set on the plate itself");
+assert.deepStrictEqual(H.hzRequest(plan, [{ base: [1] }], { pillars: true }), { error: "pillars" });
+assert.deepStrictEqual(H.hzRequest(plan, [{ base: [1] }], { byObject: true }), { error: "by_object" });
+
+// Colours to heads: the same, else the nearest (flagged as not loaded).
+const heads = [{ head: 0, color: "#000000" }, { head: 1, color: "#8a6038" }, { head: 2, color: "#ffffff" }, { head: 4, color: null }];
+assert.deepStrictEqual(H.hzNearestHead("#8c6239", heads), { head: 1, exact: true });
+assert.deepStrictEqual(H.hzNearestHead("#f5e663", heads), { head: 2, exact: false });
+assert.strictEqual(H.hzNearestHead("#ffffff", []), null);
+assert.strictEqual(H.hzColourGap("#000", "#000000"), Infinity);
+
+// A describe, as a file or pasted on one line from a MakerWorld page.
+const describe = `Print at 100% infill with a layer height of 0.08mm with a base layer of 0.16mm
+
+#000000 PLA Bambu Lab Basic Black Transmission Distance: 0.6
+#8C6239 PLA Polymaker Bronze Transmission Distance: 2.2
+#f5e663 PLA Elegoo Yellow Transmission Distance: 4.5
+#ffffff PLA Generic White TD: 6
+
+Swap Instructions:
+Start with Black
+At layer #11 (0.96mm) swap to Bronze
+At layer #20 (1.69mm) swap to White
+At layer #31 (2.56mm) swap to Yellow for the rest.`;
+const d = H.hzParseDescribe(describe);
+assert.deepStrictEqual(d, {
+  layer_height: 0.08,
+  first_layer: 0.16,
+  infill100: true,
+  colours: [
+    { hex: "#000000", name: "PLA Bambu Lab Basic Black" },
+    { hex: "#8c6239", name: "PLA Polymaker Bronze" },
+    { hex: "#f5e663", name: "PLA Elegoo Yellow" },
+    { hex: "#ffffff", name: "PLA Generic White" },
+  ],
+  start: "Black",
+  swaps: [
+    { layer: 11, z: 0.96, name: "Bronze" },
+    { layer: 20, z: 1.69, name: "White" },
+    { layer: 31, z: 2.56, name: "Yellow" },
+  ],
+});
+assert.deepStrictEqual(H.hzParseDescribe(describe.replace(/\n+/g, " ")).swaps, d.swaps, "pasted on one line");
+assert.strictEqual(H.hzParseDescribe(describe.replace(/\n+/g, " ")).start, "Black");
+assert.strictEqual(H.hzParseDescribe("hello"), null);
+
+// Swap names to colour lines: whole words first, then the most shared.
+assert.strictEqual(H.hzColourOf("bronze", d.colours).hex, "#8c6239");
+assert.strictEqual(H.hzColourOf("Basic Black", d.colours).hex, "#000000");
+assert.strictEqual(H.hzColourOf("Glow Yellow", d.colours).hex, "#f5e663");
+assert.strictEqual(H.hzColourOf("Blue", d.colours), null);
+
+// The plan: heights on real layers (1.69 → 1.68, beyond 0.01: said),
+// heads by colour, a colour no head holds said.
+const fromD = H.hzFromDescribe(d, heads);
+assert.deepStrictEqual(fromD.plan, {
+  base: 0,
+  changes: [
+    { z: 0.96, head: 1, kind: "auto" },
+    { z: 1.68, head: 2, kind: "auto" },
+    { z: 2.56, head: 2, kind: "auto" },
+  ],
+  layers: { layer_height: 0.08, first_layer: 0.16 },
+  src: "describe",
+});
+assert.deepStrictEqual(fromD.warnings, [{ kind: "unloaded", name: "PLA Elegoo Yellow", hex: "#f5e663" }], "1.69 → 1.68 is within 0.01");
+const far = H.hzFromDescribe({ ...d, swaps: [{ layer: 11, z: 0.99, name: "Pink" }] }, heads);
+assert.deepStrictEqual(far.warnings, [{ kind: "gap", z: 0.99, to: 0.96 }, { kind: "unknown", name: "Pink" }]);
+
+// From a 3MF's list: colours by extruder, a pause keeps the head.
+const fromF = H.hzFromFile(
+  [{ z: 0.5, ext: 2, kind: "auto" }, { z: 1.04, ext: 3, kind: "pause" }],
+  { 1: "#000000", 2: "#ffffff", 3: "#ff00ff" },
+  hcl,
+  heads,
+);
+assert.deepStrictEqual(fromF.plan, {
+  base: 0,
+  changes: [{ z: 0.48, head: 2, kind: "auto" }, { z: 1.04, head: 2, kind: "pause" }],
+  layers: hcl,
+  src: "3mf",
+});
+assert.deepStrictEqual(fromF.warnings, [{ kind: "gap", z: 0.5, to: 0.48 }]);
+
 console.log("test-heights: ok");
