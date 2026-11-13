@@ -2855,5 +2855,7 @@
   "hz.import.go": "Importa",
   "hz.import.none": "Nessuna altezza di strato né cambio di colore trovati in questo testo.",
   "hz.import.summary": {"one": "{n} cambio di colore, strati da {lh} mm, primo da {first} mm", "other": "{n} cambi di colore, strati da {lh} mm, primo da {first} mm"},
-  "hz.import.infill": "Riempimento al 100 %, come chiede la descrizione"
+  "hz.import.infill": "Riempimento al 100 %, come chiede la descrizione",
+  "slice.heights.multicolour": "In modalità Per altezza, ogni oggetto si stampa in un solo colore, che cambia con l'altezza: qui un oggetto ha più colori propri (dipinto o un file multicolore). Togli i suoi colori o scegli un'altra modalità di colore.",
+  "hz.kept": "I cambi di colore di questo file non sono stati ripresi: il piatto ha già i suoi. Eliminali per usare quelli del file."
 }

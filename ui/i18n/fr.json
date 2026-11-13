@@ -2813,5 +2813,7 @@
   "hz.import.go": "Importer",
   "hz.import.none": "Aucune hauteur de couche ni aucun changement de couleur trouvés dans ce texte.",
   "hz.import.summary": {"one": "{n} changement de couleur, couches de {lh} mm, première de {first} mm", "other": "{n} changements de couleur, couches de {lh} mm, première de {first} mm"},
-  "hz.import.infill": "Remplissage à 100 %, comme le demande la description"
+  "hz.import.infill": "Remplissage à 100 %, comme le demande la description",
+  "slice.heights.multicolour": "En mode Par hauteur, chaque objet s'imprime d'une seule couleur, qui change avec la hauteur : ici, un objet a plusieurs couleurs à lui (peint, ou un fichier multicolore). Retirez ses couleurs, ou choisissez un autre mode de couleurs.",
+  "hz.kept": "Les changements de couleur de ce fichier ne sont pas repris : la plaque a déjà les siens. Supprimez-les pour utiliser ceux du fichier."
 }

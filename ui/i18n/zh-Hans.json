@@ -2771,5 +2771,7 @@
   "hz.import.go": "导入",
   "hz.import.none": "此文本中未找到层高或换色信息。",
   "hz.import.summary": {"other": "{n} 处换色，层高 {lh} mm，首层 {first} mm"},
-  "hz.import.infill": "按说明要求，填充 100 %"
+  "hz.import.infill": "按说明要求，填充 100 %",
+  "slice.heights.multicolour": "在按高度模式下，每个对象只用一种颜色打印，颜色随高度变化：此处有一个对象带有多种自身颜色（已涂色，或多色文件）。请移除其颜色，或选择其他颜色模式。",
+  "hz.kept": "未采用此文件的换色：打印板已有自己的换色。删除它们即可使用文件中的换色。"
 }

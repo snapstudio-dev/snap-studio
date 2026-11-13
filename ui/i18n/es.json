@@ -2855,5 +2855,7 @@
   "hz.import.go": "Importar",
   "hz.import.none": "No se encontró ninguna altura de capa ni cambio de color en este texto.",
   "hz.import.summary": {"one": "{n} cambio de color, capas de {lh} mm, primera de {first} mm", "other": "{n} cambios de color, capas de {lh} mm, primera de {first} mm"},
-  "hz.import.infill": "Relleno al 100 %, como pide la descripción"
+  "hz.import.infill": "Relleno al 100 %, como pide la descripción",
+  "slice.heights.multicolour": "En el modo Por altura, cada objeto se imprime de un solo color, que cambia con la altura: aquí, un objeto tiene varios colores propios (pintado o un archivo multicolor). Quita sus colores o elige otro modo de color.",
+  "hz.kept": "No se aplicaron los cambios de color de este archivo: la placa ya tiene los suyos. Bórralos para usar los del archivo."
 }

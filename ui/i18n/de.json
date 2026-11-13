@@ -2855,5 +2855,7 @@
   "hz.import.go": "Importieren",
   "hz.import.none": "In diesem Text wurde weder eine Schichthöhe noch ein Farbwechsel gefunden.",
   "hz.import.summary": {"one": "{n} Farbwechsel, Schichten {lh} mm, erste {first} mm", "other": "{n} Farbwechsel, Schichten {lh} mm, erste {first} mm"},
-  "hz.import.infill": "Füllung 100 %, wie die Beschreibung verlangt"
+  "hz.import.infill": "Füllung 100 %, wie die Beschreibung verlangt",
+  "slice.heights.multicolour": "Im Modus Nach Höhe druckt jedes Objekt in einer Farbe, die mit der Höhe wechselt: Hier hat ein Objekt mehrere eigene Farben (bemalt oder eine mehrfarbige Datei). Entfernen Sie seine Farben oder wählen Sie einen anderen Farbmodus.",
+  "hz.kept": "Die Farbwechsel dieser Datei wurden nicht übernommen: Die Platte hat bereits eigene. Entfernen Sie diese, um die der Datei zu verwenden."
 }

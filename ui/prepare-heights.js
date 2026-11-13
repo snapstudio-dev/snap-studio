@@ -41,13 +41,23 @@ function hzHeads() {
 function hzOrphans() {
   if (typeof headsActive !== "function" || !PR.hz) return [];
   const list = headsVirtual(headsActive());
-  const heads = [PR.hz.base, ...PR.hz.changes.filter((c) => c.kind !== "pause").map((c) => c.head)];
-  return heads.filter((h) => vhOrphan(list, h)).map((h) => ({ head: h }));
+  return hzPlanHeads(PR.hz).filter((h) => vhOrphan(list, h)).map((h) => ({ head: h }));
+}
+
+/* "By height" without a plan (just switched, or an undo back to before
+   it was made): an empty one, starting with `base`, else the head the
+   first object has of its own. */
+function hzEnsure(base = null) {
+  if (PR.assoc !== "height" || PR.hz) return;
+  const o = PR.objects.find((x) => bedState(x) !== "out");
+  const own = o ? Object.values(o.heads || {})[0] : null;
+  PR.hz = { base: base ?? own ?? 0, changes: [], layers: null, src: null };
 }
 
 /* One undoable edit of the plan; what the import said of its heights no
    longer holds. */
 function hzEdit(fn) {
+  hzEnsure();
   if (!PR.hz) return;
   prRemember();
   PR.hz = { ...PR.hz, changes: PR.hz.changes.map((c) => ({ ...c })) };
@@ -66,7 +76,7 @@ const hzFmt = (z) => fmtNum(Math.round(z * 1000) / 1000, { maximumFractionDigits
 function hzBanner(live, slots, n) {
   const hz = PR.hz || { base: 0, changes: [] };
   const { lh, first } = hzLayers();
-  const tok = (h, i) => (live ? prHeadToken(h, { slots, n, own: true, attrs: ` data-hzi="${i}"` }) : `<span class="sl-token">T${h}</span>`);
+  const tok = (h, i) => (live ? prHeadToken(h, { slots, n, own: true, attrs: ` data-hzi="${i}"` }) : `<span class="sl-token">${vhIs(h) ? `V${vhUid(h) + 1}` : `T${h}`}</span>`);
   const start = `<div class="p-color hz-line">
       <span class="hz-z">${esc(tr("hz.start"))}</span>
       <span class="p-toks">${tok(hz.base, -1)}</span>
@@ -126,6 +136,8 @@ function hzPickHead(tok, i) {
     hzEdit((hz) => {
       if (i < 0) hz.base = h;
       else if (hz.changes[i]) hz.changes[i].head = h;
+      // A head chosen by hand: what the import said of its colours is past.
+      if (hz.warnings) hz.warnings = hz.warnings.filter((w) => w.kind !== "unloaded" && w.kind !== "unknown");
     }),
   );
 }
@@ -133,6 +145,7 @@ function hzPickHead(tok, i) {
 /* A new change: ten layers above the last one (or halfway up the plate),
    on the next head. */
 function hzAdd(z) {
+  hzEnsure();
   const hz = PR.hz;
   if (!hz) return;
   const { lh } = hzLayers();
@@ -235,6 +248,8 @@ async function hzAdoptFile(path, hc, heights) {
   const model = await headsModel(path).catch(() => null);
   const colours = Object.fromEntries((model?.filaments || []).map((f) => [f.index, f.color]));
   const layers = heights?.layer_height ? { layer_height: heights.layer_height, first_layer: heights.first_layer ?? heights.layer_height } : null;
+  // A plan already made (by hand, or by a file added before) is kept.
+  if (PR.hz?.changes?.length) return toast(tr("hz.kept"), true);
   const { plan, warnings } = hzFromFile(hc, colours, layers, hzHeads());
   if (heights?.ranges) warnings.push({ kind: "ranges" });
   PR.hz = { ...plan, warnings };

@@ -28,8 +28,9 @@ Permettre de planifier les changements de couleur **avant la découpe**, avec un
 ### Liste dans l'inspecteur
 
 - Une section « Couleurs par hauteur » dans `p-insp` liste les changements : hauteur en mm, n° de couche, tête cible avec sa bobine réelle, type « Automatique » ou « Pause ».
-- On peut **ajouter**, **déplacer** (glisser sur la règle, calage magnétique sur les couches) ou **supprimer** un changement.
-- La bulle « Ajouter un changement » (maquette 2) cale la hauteur saisie sur une couche réelle (exemple : 0,50 mm → couche 5 · 0,48 mm, avec −1 / +1). On choisit une tête parmi les bobines chargées, ou « Pause pour changer de filament », et on voit un aperçu des couches concernées.
+- On peut **ajouter** (bouton de la liste, ou clic sur la règle à la hauteur voulue), **déplacer** (en saisissant la hauteur dans la liste) ou **supprimer** un changement. Chaque hauteur se cale sur le haut d'une couche réelle (jamais la première), avec son n° de couche affiché.
+- La tête se choisit avec le sélecteur de têtes habituel ; une bascule transforme le changement en pause pour changer de bobine (même tête).
+- Livré sous cette forme (PR #103) : la liste est au-dessus des objets, dans `p-list`, et non dans `p-insp`. Le glisser sur la règle et la bulle « Ajouter un changement » de la maquette 2 sont reportés (voir hors périmètre).
 
 ### Import HueForge
 
@@ -48,38 +49,43 @@ Dans les deux cas :
 
 ### Hors périmètre (étape 3 ou plus tard)
 
+- Déplacer un changement en le glissant sur la règle, et la bulle « Ajouter un changement » (−1 / +1, aperçu des couches).
+- Résumé des changements dans la feuille de découpe.
+- « Par hauteur » comme mode par défaut dans les Réglages (le menu garde « Par objet / Par couleur »).
+
 - Plan automatique de bobines au-delà de 4 couleurs, regroupement des rechargements, pause prévue une couche avant.
 - Carte « Chargez X sur Tn » dans Impressions, et échange guidé.
 - G-code personnalisé (usage secondaire, possible plus tard).
 
 ## Modèle de données
 
-- Sur la plaque : `PR.heightChanges = [{ z, head, kind: "auto"|"pause", note? }]`, inclus dans les étapes d'annulation et dans la sauvegarde.
-- Le mode de la plaque vaut « Par hauteur ».
-- L'écriture de `Metadata/custom_gcode_per_layer.xml` et le transport `Request.height_changes` → `--load-custom-gcodes` sont livrés à l'étape 1. Cette étape alimente `heightChanges` depuis l'interface et l'import.
+- Sur la plaque : `PR.hz = { base, changes: [{ z, head, kind: "auto"|"pause" }], layers, src, infill100?, warnings? }`, inclus dans les étapes d'annulation et dans la sauvegarde. `base` est la tête de départ ; les têtes sont celles de l'interface (0-3, ou une tête virtuelle), converties à la découpe.
+- Le mode de la plaque vaut « Par hauteur » (`PR.assoc = "height"`). Un objet de plusieurs couleurs (peint, ou fichier multicolore) bloque la découpe dans ce mode.
+- L'écriture de `Metadata/custom_gcode_per_layer.xml` et le transport `Request.height_changes` → `--load-custom-gcodes` sont livrés à l'étape 1. Cette étape alimente `PR.hz` depuis l'interface et l'import (`hzRequest` dans `ui/heights-logic.js`).
 - Conversion déjà définie à l'étape 1 : tête physique *h* → filament *h*+1, tête virtuelle *k* → filament *n*+*k*+1, pause → `PausePrint`.
 
 ## Intégration UI
 
 - Préparer : mode « Par hauteur », règle verticale, section dans l'inspecteur, teinte du modèle, feuille d'import.
-- Feuille de découpe : un résumé simple des changements (sans le plan de bobines de l'étape 3).
+- Feuille de découpe : pas de résumé dans ce lot (reporté).
 - Aperçu : les repères en lecture seule sur `v-layer` viennent de l'étape 1 ; après découpe, les bandes apparaissent déjà en mode Filaments grâce aux `T<n>`.
 
 Libellés dans les neuf catalogues, français en « vous », comme le reste de l'app.
 
 ## Checklist
 
-- [ ] Mode « Par hauteur » à côté de « Par objet / Par couleur », activé automatiquement à l'import HueForge
-- [ ] Règle verticale avec bandes de couleur et pastilles de tête
-- [ ] Modèle teinté par hauteur avant la découpe
-- [ ] Liste dans l'inspecteur : ajouter, déplacer (calage sur une couche), supprimer
-- [ ] Bulle « Ajouter un changement » : calage, choix d'une tête ou d'une pause, aperçu des couches
-- [ ] Import 3MF : XML, couleurs, hauteurs de couche imposées, correspondance couleur → tête
-- [ ] Import describe (fichier ou texte collé) : mêmes réglages imposés et même calage
-- [ ] Avertissements : HRM non repris, écart de hauteur > 0,01 mm, couleur non chargée
-- [ ] Blocages du mode incompatibles (plusieurs têtes, peinture, piliers, objet par objet)
-- [ ] Textes d'interface dans `en.json` et `fr.json` (`python3 scripts/check-i18n.py` propre)
-- [ ] Entrée *Unreleased* dans `CHANGELOG.md`
+- [x] Mode « Par hauteur » à côté de « Par objet / Par couleur », activé automatiquement à l'import HueForge
+- [x] Règle verticale avec bandes de couleur (nom de la bobine au survol)
+- [x] Modèle teinté par hauteur avant la découpe
+- [x] Liste des changements : ajouter, déplacer en saisissant la hauteur (calage sur une couche), supprimer
+- [ ] Glisser sur la règle et bulle « Ajouter un changement » (reportés)
+- [x] Import 3MF : XML, couleurs, hauteurs de couche imposées, correspondance couleur → tête
+- [x] Import describe (fichier ou texte collé) : mêmes réglages imposés et même calage
+- [x] Avertissements : HRM non repris, écart de hauteur > 0,01 mm, couleur non chargée
+- [x] Blocages du mode incompatibles (objet multicolore, peinture, piliers, objet par objet)
+- [x] Tour de purge et têtes virtuelles comptent les têtes du plan
+- [x] Textes d'interface dans les neuf catalogues (`python3 scripts/check-i18n.py` propre)
+- [x] Entrée *Unreleased* dans `CHANGELOG.md`
 
 ## Tests
 

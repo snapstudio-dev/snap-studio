@@ -631,7 +631,7 @@ async function startSlice() {
   const pid = currentPrinter()?.id || "";
   // "By height" mode: the plate's plan (prepare-heights.js), its heads used too.
   const byHeight = typeof PR !== "undefined" && PR.assoc === "height" && PR.hz;
-  const hzHeadsUsed = byHeight ? [PR.hz.base, ...PR.hz.changes.filter((c) => c.kind !== "pause").map((c) => c.head)] : [];
+  const hzHeadsUsed = byHeight ? hzPlanHeads(PR.hz) : [];
   const used = new Set([...maps.flat(), ...hzHeadsUsed]);
   const eng = vhEngine(used, headsVirtual(pid), filaments.length);
   const virtual_heads = eng.heads.map((v) => ({ a: v.a, b: v.b, pct: v.pct, color: headsVirtualColor(pid, v) || null }));

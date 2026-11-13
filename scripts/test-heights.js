@@ -100,7 +100,10 @@ assert.deepStrictEqual(H.hzRequest(plan, [{ base: [1], scale: [1, 1, 1] }, { bas
   layers: hcl,
 });
 assert.deepStrictEqual(H.hzRequest({ base: 1, changes: [] }, [{ base: [1] }], { pillars: true }), { changes: [], base: 1 });
-assert.deepStrictEqual(H.hzRequest(plan, [{ base: [1, 2] }]), { error: "heads" }, "a painted object");
+assert.deepStrictEqual(H.hzRequest(plan, [{ base: [1, 2] }]), { error: "multicolour" }, "a painted object");
+assert.deepStrictEqual(H.hzPlanHeads(plan), [plan.base, ...plan.changes.filter((c) => c.kind !== "pause").map((c) => c.head)], "the heads a plan prints with");
+assert.deepStrictEqual(H.hzPlanHeads({ base: 2, changes: [{ z: 1, head: 0, kind: "auto" }, { z: 2, head: 0, kind: "pause" }, { z: 3, head: 101, kind: "auto" }] }), [2, 0, 101], "a pause keeps its head");
+assert.deepStrictEqual(H.hzPlanHeads(null), [], "no plan");
 assert.deepStrictEqual(H.hzRequest(plan, [{ base: [1], scale: [1, 1, 2] }]), { error: "scaled" }, "an imported list on a stretched object");
 assert.ok(H.hzRequest({ ...plan, src: null }, [{ base: [1], scale: [1, 1, 2] }]).changes, "heights set on the plate itself");
 assert.deepStrictEqual(H.hzRequest(plan, [{ base: [1] }], { pillars: true }), { error: "pillars" });
@@ -147,6 +150,11 @@ assert.deepStrictEqual(d, {
 assert.deepStrictEqual(H.hzParseDescribe(describe.replace(/\n+/g, " ")).swaps, d.swaps, "pasted on one line");
 assert.strictEqual(H.hzParseDescribe(describe.replace(/\n+/g, " ")).start, "Black");
 assert.strictEqual(H.hzParseDescribe("hello"), null);
+assert.deepStrictEqual(
+  H.hzParseDescribe("layer height of 0.08mm\n#000000 Black PLA - Transmission Distance: 0.6\nAt layer #5 (0.4mm) swap to Black").colours,
+  [{ hex: "#000000", name: "Black PLA" }],
+  "a name keeps no separator before its transmission distance",
+);
 
 // Swap names to colour lines: whole words first, then the most shared.
 assert.strictEqual(H.hzColourOf("bronze", d.colours).hex, "#8c6239");

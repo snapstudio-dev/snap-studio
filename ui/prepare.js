@@ -202,6 +202,8 @@ function prUnsnap(snapshot) {
   const s = JSON.parse(snapshot);
   PR.objects = Array.isArray(s) ? s : s.objects;
   if (!Array.isArray(s)) PR.hz = s.hz ?? null;
+  // The mode is not undone: "by height" keeps a plan, if an empty one.
+  if (typeof hzEnsure === "function") hzEnsure();
   if (s.tower && PR.tower) Object.assign(PR.tower, s.tower);
 }
 
@@ -3218,12 +3220,11 @@ function prAssocApply(mode) {
   if (mode === PR.assoc) return;
   prRemember();
   if (mode === "height") {
-    // The plate starts with the head its first object prints with.
-    if (!PR.hz) {
-      const o = PR.objects.find((x) => bedState(x) !== "out");
-      const h = o ? Object.values(prShownHeads(o, headsActive(), headsSlots(headsActive())))[0] : null;
-      PR.hz = { base: h ?? 0, changes: [], layers: null, src: null };
-    }
+    // The plate starts with the head its first object prints with now.
+    const o = PR.objects.find((x) => bedState(x) !== "out");
+    const h = o ? Object.values(prShownHeads(o, headsActive(), headsSlots(headsActive())))[0] : null;
+    PR.assoc = mode;
+    hzEnsure(h);
   } else if (mode === "colour") {
     // Only the objects that bring colours to the banner vote: an
     // uncoloured one (its colour is a stand-in) or one with a picked head

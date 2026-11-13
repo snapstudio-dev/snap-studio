@@ -120,13 +120,20 @@ function hzBands(plan) {
   return out;
 }
 
+/* The heads a plan prints with: the start's and each head change's (a
+   pause keeps the head). For the slice's heads and the prime tower. */
+function hzPlanHeads(plan) {
+  if (!plan) return [];
+  return [plan.base ?? 0, ...(plan.changes || []).filter((c) => c.kind !== "pause").map((c) => c.head)];
+}
+
 /* What the slice sends in "by height" mode, or why it cannot: `items` the
    sliced objects ({ base: own colours, scale }), `plate` as hcRequest's.
    Every object prints with the plate's head until the first change: an
    object with several colours (painted, or a multi-colour file) cannot. */
 function hzRequest(plan, items, plate = {}) {
   const changes = [...(plan?.changes || [])].sort((a, b) => a.z - b.z);
-  if (items.some((it) => (it.base?.length || 0) > 1)) return { error: "heads" };
+  if (items.some((it) => (it.base?.length || 0) > 1)) return { error: "multicolour" };
   if (plan?.src && items.some((it) => Math.abs((it.scale?.[2] ?? 1) - 1) > 1e-6)) return { error: "scaled" };
   if (!changes.length) return { changes: [], base: plan?.base ?? 0 };
   if (plate.pillars) return { error: "pillars" };
@@ -177,7 +184,7 @@ function hzParseDescribe(text) {
   const infill100 = /100\s*%\s*infill/i.test(t);
   const colours = [];
   for (const m of t.matchAll(/#([0-9a-f]{6})\b[ \t]*[-–:]?[ \t]*([^\n#]*?)(?:\s*(?:Transmission Distance|TD)\b[^\n#]*)?(?=\n|#[0-9a-f]{6}\b|$)/gi)) {
-    colours.push({ hex: `#${m[1].toLowerCase()}`, name: m[2].trim() });
+    colours.push({ hex: `#${m[1].toLowerCase()}`, name: m[2].replace(/[\s\-–:]+$/, "").trim() });
   }
   const start = t.match(/Start with\s+([^\n]+?)(?=\s*[,.;]?\s*(?:At layer|\n|$))/i)?.[1].trim() || null;
   const swaps = [];
@@ -277,6 +284,6 @@ function hzFromFile(hc, colours, layers, heads) {
 if (typeof module !== "undefined") {
   module.exports = {
     hcColours, hcFromFile, hcKey, hcRequest, hcMarks,
-    hzLayerTop, hzSnap, hzBands, hzRequest, hzColourGap, hzNearestHead, hzParseDescribe, hzColourOf, hzFromDescribe, hzFromFile,
+    hzLayerTop, hzSnap, hzBands, hzPlanHeads, hzRequest, hzColourGap, hzNearestHead, hzParseDescribe, hzColourOf, hzFromDescribe, hzFromFile,
   };
 }

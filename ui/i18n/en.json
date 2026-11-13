@@ -2810,5 +2810,7 @@
   "hz.import.go": "Import",
   "hz.import.none": "No layer height or colour swap found in this text.",
   "hz.import.summary": {"one": "{n} colour change, layers {lh} mm, first {first} mm", "other": "{n} colour changes, layers {lh} mm, first {first} mm"},
-  "hz.import.infill": "Infill 100 %, as the description asks"
+  "hz.import.infill": "Infill 100 %, as the description asks",
+  "slice.heights.multicolour": "In By height mode, each object prints in one colour, changing with the height: here, an object has several colours of its own (painted, or a multi-colour file). Remove its colours, or choose another colour mode.",
+  "hz.kept": "This file's colour changes were not taken over: the plate already has its own. Clear them to use the file's."
 }
