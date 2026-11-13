@@ -2694,6 +2694,31 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .p-colours .p-color.unmapped .p-color-lbl { color: var(--danger); }
 .p-colours .p-color .tag { margin-left: 4px; }
 
+/* Prepare, "by height" mode: one row per change (height, head or pause),
+   and the ruler beside the inspector: the plate's bands from the bed up. */
+.p-hz .hz-line { padding-left: 10px; }
+.hz-z { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
+.hz-z small { color: var(--text-secondary); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+.hz-z-in { width: 62px; padding: 2px 4px; font: inherit; font-variant-numeric: tabular-nums; }
+.hz-pause { padding: 1px 6px; border-radius: 999px; border: 1px dashed var(--border); font-size: 11px; color: var(--text-secondary); }
+.p-ico.hz-kind.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.hz-foot { display: flex; align-items: center; gap: 8px; margin: 6px 2px 0; }
+.hz-foot small { flex: 1; min-width: 0; }
+.hz-warn { margin: 4px 2px 0; font-size: 11px; color: var(--warning, #c98a00); }
+.p-hz-ruler { position: absolute; top: 12px; bottom: 52px; right: 324px; width: 30px; border-radius: 8px; overflow: visible; cursor: copy; box-shadow: var(--glass-edge); background: color-mix(in srgb, var(--sheet-bg) 60%, transparent); }
+.hz-band { position: absolute; left: 0; right: 0; background: var(--c); border-top: 1px solid color-mix(in srgb, var(--text) 35%, transparent); }
+.hz-band:first-child { border-radius: 0 0 8px 8px; border-top: 0; }
+.hz-band.pause { background-image: repeating-linear-gradient(135deg, transparent 0 4px, color-mix(in srgb, #000 18%, transparent) 4px 6px); }
+.hz-tag { display: none; }
+.hz-tick { position: absolute; right: calc(100% + 5px); top: -7px; font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-secondary); pointer-events: none; }
+.hz-top { position: absolute; top: 2px; right: calc(100% + 5px); font-size: 10px; white-space: nowrap; color: var(--text-secondary); pointer-events: none; }
+/* The HueForge import sheet. */
+.modal-box.hz-box { width: 480px; }
+.hz-text { width: 100%; box-sizing: border-box; font: 12px/1.4 var(--font-mono, ui-monospace, monospace); resize: vertical; }
+.hz-row { display: flex; gap: 8px; }
+.hz-preview { font-size: 12px; }
+.hz-preview:empty { display: none; }
+
 .p-float-head {
   flex: none;
   display: flex;

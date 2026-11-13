@@ -629,21 +629,28 @@ async function startSlice() {
   for (const m of maps) for (let i = 0; i < m.length; i++) if (m[i] == null) m[i] = 0;
   // Virtual heads: after the physical ones (head n + k), their mixes sent.
   const pid = currentPrinter()?.id || "";
-  const eng = vhEngine(new Set(maps.flat()), headsVirtual(pid), filaments.length);
+  // "By height" mode: the plate's plan (prepare-heights.js), its heads used too.
+  const byHeight = typeof PR !== "undefined" && PR.assoc === "height" && PR.hz;
+  const hzHeadsUsed = byHeight ? [PR.hz.base, ...PR.hz.changes.filter((c) => c.kind !== "pause").map((c) => c.head)] : [];
+  const used = new Set([...maps.flat(), ...hzHeadsUsed]);
+  const eng = vhEngine(used, headsVirtual(pid), filaments.length);
   const virtual_heads = eng.heads.map((v) => ({ a: v.a, b: v.b, pct: v.pct, color: headsVirtualColor(pid, v) || null }));
   const groupOf = (i) => SL.groups.findIndex((g) => g.items.includes(i));
   const scene = SL.source.items.map(({ id, colors, heads, base, hc, hcl, ...it }, i) => ({ ...it, extruder_map: (maps[groupOf(i)] || []).map(eng.index) }));
   // Colour changes at a height (HueForge): the plate's single head
   // switched from each height up, by the engine.
-  const heights = hcRequest(
-    SL.source.items.map((it, i) => ({ base: it.base, hc: it.hc, hcl: it.hcl, scale: it.scale, map: scene[i].extruder_map })),
-    { pillars: prPillarsRequest().length > 0, byObject: String(prTowerSetting("print_sequence") || "") === "by object" },
-  );
+  const plate = { pillars: prPillarsRequest().length > 0, byObject: String(prTowerSetting("print_sequence") || "") === "by object" };
+  let heights = byHeight
+    ? hzRequest(PR.hz, SL.source.items.map((it) => ({ base: it.base, scale: it.scale })), plate)
+    : hcRequest(SL.source.items.map((it, i) => ({ base: it.base, hc: it.hc, hcl: it.hcl, scale: it.scale, map: scene[i].extruder_map })), plate);
+  // The plan's heads as the engine numbers them (virtual heads after the
+  // physical ones); its layers are imposed (hzOverrides), not checked.
+  if (byHeight && heights.changes) heights = { changes: heights.changes.map((c) => ({ ...c, head: eng.index(c.head) })), layers: null };
   if (heights.error) {
     setSliceMessage(tr(`slice.heights.${heights.error}`), "err");
     return;
   }
-  const heads = [...vhPhysical(new Set(maps.flat()), headsVirtual(pid))];
+  const heads = [...vhPhysical(used, headsVirtual(pid))];
   const empty = heads.filter((h) => SL.slots.find((s) => s.index === h && !s.present));
   if (empty.length) {
     setSliceMessage(tr("slice.head_empty", { heads: empty.map((h) => "T" + h).join(", ") }), "err");
@@ -696,7 +703,7 @@ async function startSlice() {
         // Each layer of a virtual head split between its two heads: sent
         // with virtual heads only (otherwise the request is unchanged).
         ...(virtual_heads.length && vhSmoothOn(PR) ? { smooth_mix: true } : {}),
-        overrides: { ...advOverrides(), ...spdOverrides(), ...prTowerOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
+        overrides: { ...advOverrides(), ...spdOverrides(), ...prTowerOverrides(), ...(typeof hzOverrides === "function" ? hzOverrides() : {}), ...(bed ? { curr_bed_type: bed } : {}) },
       },
     });
     const bedLabel = $("s-bed").selectedOptions[0]?.textContent || "";

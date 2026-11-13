@@ -77,7 +77,8 @@ assert.strictEqual(H.hzLayerTop(1, 0.08, 0.16), 0.16);
 // Snap to the nearest layer top: 0.50 → layer 5 at 0.48.
 assert.deepStrictEqual(H.hzSnap(0.5, 0.08, 0.16), { layer: 5, z: 0.48, gap: -0.02 });
 assert.deepStrictEqual(H.hzSnap(0.96, 0.08, 0.16), { layer: 11, z: 0.96, gap: 0 });
-assert.deepStrictEqual(H.hzSnap(0.01, 0.2, 0.2), { layer: 1, z: 0.2, gap: 0.19 }, "never below the first layer");
+assert.deepStrictEqual(H.hzSnap(0.01, 0.2, 0.2), { layer: 2, z: 0.4, gap: 0.39 }, "never the first layer (as Rust)");
+assert.strictEqual(H.hzSnap(0.53, 0.08, 0.16).z, 0.56);
 assert.strictEqual(H.hzSnap(0.5, 0, 0.2).layer, null, "no layers: as asked");
 
 // Bands from the bed up; a pause keeps the head.

@@ -16,8 +16,13 @@ const PR = {
   /* How colours get their heads: "object" (each object chooses, under its
      row) or "colour" (the plate's colours are assigned once for every
      object, above the list, as Snapmaker Orca does). Starts from the
-     Settings default; never kept per file. */
+     Settings default; never kept per file. "height": the whole plate
+     prints with one head, changed at heights (HueForge, heights-logic.js);
+     a plate keeping such a list comes back in that mode. */
   assoc: "object",
+  /* "height" mode: { base, changes: [{ z, head, kind }], layers, src }
+     (hzBands), null until the mode is first used. */
+  hz: null,
   /* "colour" mode: colour → head, null while unchosen (blocks the slice). */
   colourHeads: {},
   nextId: 1,
@@ -59,7 +64,18 @@ const PREP_VS = MESH_VS.replace("in vec3 aCol;", "in vec3 aCol;\nin float aExt;\
    hidden: a second pass (uOver 2) draws the
    hidden ones only, hatched, through what covers them; the winding tells
    their outward side (uFlip: a mirroring scale). */
-const PREP_FS = MESH_FS.replace("in vec3 vPosV;", "in vec3 vPosV;\nin vec3 vPosW;")
+const PREP_FS = MESH_FS.replace("in vec3 vPosV;", "in vec3 vPosV;\nin vec3 vPosW;\nuniform int uHzN;\nuniform float uHzZ[16];\nuniform vec3 uHzCol[16];")
+  // "By height" mode (prepare-heights.js): each band's spool colour from
+  // its bottom up, before the light.
+  .replace(
+    "vec3 c = vCol * (",
+    `vec3 col = vCol;
+  if (uHzN > 0) {
+    col = uHzCol[0];
+    for (int i = 1; i < 16; i++) if (i < uHzN && vPosW.z >= uHzZ[i]) col = uHzCol[i];
+  }
+  vec3 c = col * (`
+  )
   .replace("out vec4 frag;", "uniform vec4 uTint;\nuniform float uAlpha;\nuniform float uOver;\nuniform float uOverCos;\nuniform float uFlip;\nuniform vec3 uOverCol;\nuniform vec3 uEye;\nout vec4 frag;")
   .replace(
     "frag = vec4(c, 1.0);",
@@ -101,7 +117,7 @@ const prStored = ({ id, name, path, item, piece, pos, rot, scale, size, plate, e
 
 function prSave() {
   const objects = PR.objects.map(prStored);
-  localStorage.setItem("snapstudio.plate", JSON.stringify({ objects, nextId: PR.nextId, colourHeads: PR.colourHeads, tower: prTowerStored(), smoothMix: vhSmoothOn(PR) }));
+  localStorage.setItem("snapstudio.plate", JSON.stringify({ objects, nextId: PR.nextId, colourHeads: PR.colourHeads, hz: PR.hz, tower: prTowerStored(), smoothMix: vhSmoothOn(PR) }));
   prStatus();
   prPruneMeshes();
   prHintRefresh();
@@ -155,14 +171,16 @@ function prLoadState() {
       PR.objects = s.objects;
       PR.nextId = s.nextId || PR.objects.length + 1;
       PR.colourHeads = s.colourHeads && typeof s.colourHeads === "object" ? s.colourHeads : {};
+      PR.hz = s.hz && Array.isArray(s.hz.changes) ? s.hz : null;
       // Read by prepare-tower.js (prTowerRestore).
       PR.tower = s.tower;
       // Smooth mix (virtual heads): on unless the plate says otherwise.
       PR.smoothMix = vhSmoothOn(s);
     }
   } catch {}
-  // The mode is the Settings default at each start, never the file's.
-  PR.assoc = PRUI.assocDefault;
+  // The mode is the Settings default at each start, never the file's;
+  // a plate with colour changes at a height keeps that mode.
+  PR.assoc = PR.hz?.changes?.length ? "height" : PRUI.assocDefault;
 }
 
 /* ------------------------------------------------------------ history */
@@ -174,6 +192,7 @@ const HIST = { undo: [], redo: [] };
 const prSnap = () =>
   JSON.stringify({
     objects: PR.objects,
+    hz: PR.hz,
     tower: { x: PR.tower?.x ?? null, y: PR.tower?.y ?? null, rot: PR.tower?.rot || 0, row: PR.tower?.row || { rot: 0 }, groups: PR.tower?.groups || {}, pillars: PR.tower?.pillars || {} },
   });
 
@@ -182,6 +201,7 @@ const prSnap = () =>
 function prUnsnap(snapshot) {
   const s = JSON.parse(snapshot);
   PR.objects = Array.isArray(s) ? s : s.objects;
+  if (!Array.isArray(s)) PR.hz = s.hz ?? null;
   if (s.tower && PR.tower) Object.assign(PR.tower, s.tower);
 }
 
@@ -521,6 +541,7 @@ function prDraw() {
   gl.uniform3fv(gl.getUniformLocation(PR.prog, "uOverCol"), prTok("--danger", [1, 0.23, 0.19]));
   gl.uniform3fv(gl.getUniformLocation(PR.prog, "uEye"), eye);
   gl.uniform1f(uOver, PR.overhangs ? 1 : 0);
+  if (typeof hzUniforms === "function") hzUniforms(gl, PR.prog);
   const boxes = [];
   const overlap = prOverlaps();
   for (const o of PR.objects) {
@@ -1347,7 +1368,7 @@ function prRenderInspector() {
     const out = st === "out";
     // No colour/heads frame off the plate, nor in "by colour" mode: the
     // plate's banner holds the choices then.
-    const bare = out || PR.assoc === "colour";
+    const bare = out || PR.assoc !== "object";
     const heads = live && !bare ? prHeads(o, pid, slots, n) : {};
     // A color left without a head (its virtual head deleted) unfolds its
     // row: it has to be chosen again.
@@ -1378,7 +1399,7 @@ function prRenderInspector() {
   // when part of a side is selected, "Add All" / "Take All Off" otherwise.
   const onBulk = plBulk(PR.sel, g.on), offBulk = plBulk(PR.sel, g.off);
   const bulk = (b, all, some) => (b.mode === "some" ? tr(some, { n: b.n }) : tr(all));
-  $("p-list").innerHTML = `${PR.assoc === "colour" ? prColourBanner(live, slots, n) : ""}
+  $("p-list").innerHTML = `${PR.assoc === "colour" ? prColourBanner(live, slots, n) : PR.assoc === "height" ? hzBanner(live, slots, n) : ""}
     <div class="p-grp p-on">
       <div class="p-grp-head">
         <span class="k">${esc(tr("prepare.on_bed", { n: g.on.length }))}</span>
@@ -1415,6 +1436,7 @@ function prRenderInspector() {
   prTowerRenderSwitch();
   prRenderProps();
   prStatus();
+  if (typeof hzRuler === "function") hzRuler();
 }
 
 /* Inspector fields. Each one is a slider (live, one undo step per drag)
@@ -1808,7 +1830,10 @@ $("p-list").addEventListener("click", (e) => {
   const tok = e.target.closest("[data-hpick]");
   if (tok) {
     if (PK.prep && PK.anchor === tok && !$("picker").classList.contains("hidden")) return closePicker(true);
-    if (tok.dataset.ch != null) {
+    if (tok.dataset.hzi != null) {
+      const i = +tok.dataset.hzi;
+      hzPickHead(tok, i);
+    } else if (tok.dataset.ch != null) {
       const ext = +tok.dataset.ch;
       prHeadPicker(tok, PR.colourHeads[ext], (h) => prSetColourHead(ext, h));
     } else {
@@ -2002,6 +2027,8 @@ async function prepareAddFile(path, { remember = true } = {}) {
   // With the layers it placed them on: the slice checks the profile's.
   const hcl = { layer_height: heights?.layer_height ?? null, first_layer: heights?.first_layer ?? null };
   if (hc.length) for (const o of main) Object.assign(o, { hc, hcl });
+  // Its list becomes the plate's, in "by height" mode (prepare-heights.js).
+  if (hc.length) hzAdoptFile(path, hc, heights);
   const box = groupBox(main);
   const { w, d } = PR.bed;
   const fits = box.x0 >= 0 && box.y0 >= 0 && box.x1 <= w && box.y1 <= d;
@@ -2722,6 +2749,7 @@ function prEmpty() {
   // A new plate starts in the Settings default mode, with no colour mapped.
   PR.assoc = PRUI.assocDefault;
   PR.colourHeads = {};
+  PR.hz = null;
   // Nor a prime tower: a new project starts without one. Smooth mix back
   // to its default.
   prTowerRestore(null);
@@ -3054,6 +3082,7 @@ function prPlateColours() {
    a head, and the uncoloured objects without a picked one. Declarations:
    `prStatus` may run before this point of the file. */
 function prBlockers() {
+  if (PR.assoc === "height") return { colours: [], objects: [], orphans: hzOrphans() };
   const orphans = prOrphans();
   if (PR.assoc !== "colour") return { colours: [], objects: [], orphans };
   return {
@@ -3071,6 +3100,8 @@ function prUnmapped() {
    its row, which prints the whole object (a colour still unmapped keeps
    the object's; the slice is blocked while one is). */
 function prSliceHeads(o) {
+  // "By height": the whole plate starts on one head (the engine changes it).
+  if (PR.assoc === "height") return Object.fromEntries(prColors(o).map((ext) => [ext, PR.hz?.base ?? 0]));
   if (PR.assoc !== "colour") return o.heads || {};
   const heads = { ...(o.heads || {}) };
   for (const ext of prColors(o)) {
@@ -3120,6 +3151,8 @@ const prPaletteClose = () => PK.prep && PK.grid && closePicker();
    mode the object's colour/heads frame, unfolded in the list. */
 function prColourAction(o, x, y) {
   if (!o) return;
+  // "By height": the plate's list holds the heads.
+  if (PR.assoc === "height") return prSelect([o.id], false);
   if (PR.assoc === "colour") return prColourPalette(o, x, y);
   PR.fold.delete(o.id);
   if (PRUI.listFolded) {
@@ -3184,14 +3217,21 @@ function prAssocSwitch(mode) {
 function prAssocApply(mode) {
   if (mode === PR.assoc) return;
   prRemember();
-  if (mode === "colour") {
+  if (mode === "height") {
+    // The plate starts with the head its first object prints with.
+    if (!PR.hz) {
+      const o = PR.objects.find((x) => bedState(x) !== "out");
+      const h = o ? Object.values(prShownHeads(o, headsActive(), headsSlots(headsActive())))[0] : null;
+      PR.hz = { base: h ?? 0, changes: [], layers: null, src: null };
+    }
+  } else if (mode === "colour") {
     // Only the objects that bring colours to the banner vote: an
     // uncoloured one (its colour is a stand-in) or one with a picked head
     // would otherwise weigh on colour 1.
     const effective = (o) =>
       prBannerColours(o).length ? Object.fromEntries(Object.entries(prHeads(o)).map(([ext, v]) => [ext, v.h])) : {};
     PR.colourHeads = plMigrateToColour(PR.objects, bedState, effective, plPlateColours(PR.objects, bedState, prBannerColours));
-  } else {
+  } else if (PR.assoc === "colour") {
     const heads = plMigrateToObject(PR.objects, bedState, prBannerColours, PR.colourHeads);
     for (const o of PR.objects) {
       if (heads[o.id]) o.heads = heads[o.id];
@@ -3241,6 +3281,7 @@ async function prRefreshColors() {
    head picked for the object, else the plate's for that colour — an
    unmapped colour has none, and keeps the file's colour as a cue. */
 function prShownHeads(o, pid, slots) {
+  if (PR.assoc === "height") return prSliceHeads(o);
   if (PR.assoc !== "colour") return Object.fromEntries(Object.entries(prHeads(o, pid, slots)).map(([ext, v]) => [ext, v.h]));
   const out = {};
   for (const ext of prColors(o)) {

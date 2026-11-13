@@ -229,6 +229,11 @@ pub struct FileHeights {
     pub changes: Vec<FileChange>,
     pub layer_height: Option<f32>,
     pub first_layer: Option<f32>,
+    /// The file changes the layer height over a range of heights (HueForge's
+    /// thicker base, `layer_config_ranges.xml`): not taken over, the file's
+    /// fine layer is printed everywhere.
+    #[serde(default)]
+    pub ranges: bool,
 }
 
 pub fn of_file(path: &std::path::Path) -> FileHeights {
@@ -245,7 +250,18 @@ pub fn of_file(path: &std::path::Path) -> FileHeights {
     let settings: Value = crate::model3mf::read_entry(&mut zip, "Metadata/project_settings.config")
         .and_then(|d| serde_json::from_slice(&d).ok())
         .unwrap_or(Value::Null);
-    FileHeights { changes, layer_height: setting(&settings, "layer_height"), first_layer: setting(&settings, "initial_layer_print_height") }
+    let ranges = crate::model3mf::read_entry(&mut zip, "Metadata/layer_config_ranges.xml").is_some_and(|d| has_ranges(&d));
+    FileHeights {
+        changes,
+        layer_height: setting(&settings, "layer_height"),
+        first_layer: setting(&settings, "initial_layer_print_height"),
+        ranges,
+    }
+}
+
+/// Whether Orca's `layer_config_ranges.xml` sets at least one range.
+fn has_ranges(xml: &[u8]) -> bool {
+    String::from_utf8_lossy(xml).contains("<range")
 }
 
 /// A number of a profile or project setting: a string, or a list's first.
@@ -272,6 +288,12 @@ mod tests {
         // Never the first layer.
         assert_eq!(HUEFORGE.layer_of(0.0), 2);
         assert_eq!(HUEFORGE.snap(0.1), 0.24);
+    }
+
+    #[test]
+    fn layer_ranges_are_seen() {
+        assert!(has_ranges(br#"<objects><object id="1"><range min_z="0" max_z="0.4"><option opt_key="layer_height">0.16</option></range></object></objects>"#));
+        assert!(!has_ranges(br#"<objects><object id="1"></object></objects>"#));
     }
 
     #[test]

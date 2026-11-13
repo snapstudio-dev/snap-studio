@@ -28,6 +28,17 @@ with its packages for macOS, Windows and Linux. What comes next:
   must start with a single head, print layer by layer, use a single prime
   tower and the file's layer heights, with no raft and the objects unscaled
   in height; the slice says so otherwise (#102).
+- **By height mode (HueForge)**: Prepare's colour mode gets a third choice,
+  "By height". The whole plate starts on one head and changes head, or
+  pauses for a spool swap, at the heights listed under the objects; each
+  height snaps to the top of a layer and shows its layer number. A ruler
+  beside the plate shows the bands of colour from the bed up (a click adds
+  a change there), and the plate itself is drawn in those colours. A
+  HueForge 3MF switches to this mode on its own; for a print that comes as
+  an STL, its description (the describe file, or the text of its MakerWorld
+  page) can be pasted or opened: the layer heights, the 100 % infill and
+  the swaps are taken over, each colour going to the closest loaded spool
+  (#103).
 
 ### Fixed
 - **Undo in Prepare**: ⌘Z / Ctrl+Z (and redo) now work right after using a

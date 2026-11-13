@@ -97,10 +97,11 @@ const r4 = (x) => Math.round(x * 1e4) / 1e4;
 const hzLayerTop = (n, lh, first) => r4(first + (n - 1) * lh);
 
 /* The layer whose top is nearest `z`: { layer, z, gap } (gap in mm, the
-   snapped height minus the asked one). */
+   snapped height minus the asked one). Never the first layer, as Rust's
+   `Layers::snap`: a change there would be the plate's start. */
 function hzSnap(z, lh, first) {
   if (!(lh > 0) || !(first > 0)) return { layer: null, z: r4(z), gap: 0 };
-  const layer = Math.max(1, Math.round((z - first) / lh) + 1);
+  const layer = Math.max(2, Math.round((z - first) / lh) + 1);
   const top = hzLayerTop(layer, lh, first);
   return { layer, z: top, gap: r4(top - z) };
 }
