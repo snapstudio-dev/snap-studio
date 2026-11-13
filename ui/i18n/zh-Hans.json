@@ -687,7 +687,8 @@
   "viewer.segments": {
     "other": "{n} 段"
   },
-  "viewer.truncated": "（已截断）",
+  "viewer.simplified": "已简化",
+  "viewer.simplified_tip": "超长打印：显示全部层，但细节较少。层数、时间和耗材用量均准确。",
   "viewer.triangles": {
     "other": "{n} 个三角面"
   },

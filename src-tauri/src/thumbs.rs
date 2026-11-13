@@ -167,10 +167,15 @@ fn generate_gcode(path: &Path, size: u32) -> Result<Thumb> {
         }
     }
     let _guard = RenderGuard::acquire();
-    let data = crate::gcode::parse(std::fs::File::open(path)?)?;
+    // A thumbnail gains nothing from the preview's full budget: a lower cap
+    // keeps a folder scan light (simplified evenly, never cut).
+    let data = crate::gcode::parse_capped(std::fs::File::open(path)?, crate::gcode::Keep::Extrusions, THUMB_SEGS)?;
     let img = crate::render::render_paths(&data.segs, data.min, data.max, size);
     Ok(Thumb { png: to_png(&image::DynamicImage::ImageRgba8(img))?, source: ThumbSource::Rendered })
 }
+
+/// Segments kept at most for a G-code thumbnail.
+const THUMB_SEGS: usize = 2_000_000;
 
 /// An STL has no image of its own and no colour: always a render, in the
 /// model's neutral colour, whatever the thumbnail preference.

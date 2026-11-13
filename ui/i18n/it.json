@@ -704,7 +704,8 @@
     "one": "{n} segmento",
     "other": "{n} segmenti"
   },
-  "viewer.truncated": "(troncato)",
+  "viewer.simplified": "semplificato",
+  "viewer.simplified_tip": "Stampa molto lunga: tutti gli strati sono mostrati con meno dettagli. Strati, tempi e filamento sono esatti.",
   "viewer.triangles": {
     "one": "{n} triangolo",
     "other": "{n} triangoli"

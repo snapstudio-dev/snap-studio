@@ -25,7 +25,7 @@ pub struct Plan {
 
 impl Plan {
     pub fn from_gcode(read: impl std::io::Read) -> Result<Plan> {
-        let d = crate::gcode::parse(read)?;
+        let d = crate::gcode::parse_with(read, crate::gcode::Keep::Extrusions)?;
         let st = crate::gcode::stats(&d);
         let total = st.print_time_s.unwrap_or(0) as f64;
         if total <= 0.0 {

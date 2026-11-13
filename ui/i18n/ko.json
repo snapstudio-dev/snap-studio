@@ -687,7 +687,8 @@
   "viewer.segments": {
     "other": "세그먼트 {n}개"
   },
-  "viewer.truncated": "(일부 생략)",
+  "viewer.simplified": "간략 표시",
+  "viewer.simplified_tip": "매우 긴 출력: 모든 레이어를 더 적은 디테일로 표시합니다. 레이어, 시간, 필라멘트는 정확합니다.",
   "viewer.triangles": {
     "other": "삼각형 {n}개"
   },

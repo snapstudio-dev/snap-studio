@@ -704,7 +704,8 @@
     "one": "{n} Segment",
     "other": "{n} Segmente"
   },
-  "viewer.truncated": "(gekürzt)",
+  "viewer.simplified": "vereinfacht",
+  "viewer.simplified_tip": "Sehr langer Druck: Alle Schichten werden mit weniger Details angezeigt. Schichten, Zeiten und Filament sind exakt.",
   "viewer.triangles": {
     "one": "{n} Dreieck",
     "other": "{n} Dreiecke"

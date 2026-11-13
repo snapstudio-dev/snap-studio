@@ -254,10 +254,12 @@ pub fn add(gcode: &Path, new: NewJob, state: &str, remote: &str) -> Result<Job> 
     let file = dir().join(format!("{id}.gcode"));
     std::fs::copy(gcode, &file).with_context(|| format!("copying {} to {}", gcode.display(), file.display()))?;
     // Summary recomputed from the file: it travels with the job.
-    let stats = new
-        .stats
-        .clone()
-        .or_else(|| std::fs::File::open(&file).ok().and_then(|f| crate::gcode::parse(f).ok()).map(|d| crate::gcode::stats(&d)));
+    let stats = new.stats.clone().or_else(|| {
+        std::fs::File::open(&file)
+            .ok()
+            .and_then(|f| crate::gcode::parse_with(f, crate::gcode::Keep::None).ok())
+            .map(|d| crate::gcode::stats(&d))
+    });
     let job = Job {
         id,
         name: if new.name.is_empty() { "impression".into() } else { new.name },

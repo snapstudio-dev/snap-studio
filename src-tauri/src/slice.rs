@@ -566,7 +566,7 @@ fn output_name(source: &Path, gcode: &Path) -> String {
     let stem = source.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "piece".into());
     let mut bits = vec![stem];
     if let Ok(f) = std::fs::File::open(gcode) {
-        if let Ok(d) = crate::gcode::parse(f) {
+        if let Ok(d) = crate::gcode::parse_with(f, crate::gcode::Keep::None) {
             if let Some(t) = d.meta.filaments.first() {
                 bits.push(t.clone());
             }
@@ -1011,7 +1011,10 @@ pub fn run_job(bin: PathBuf, idx: Arc<Index>, req: Request, job_id: String, repo
 
         // The G-code stays in the working folder: it is a preview, which the user
         // will save, send to the printer or discard.
-        let stats = std::fs::File::open(first).ok().and_then(|f| crate::gcode::parse(f).ok()).map(|d| crate::gcode::stats(&d));
+        let stats = std::fs::File::open(first)
+            .ok()
+            .and_then(|f| crate::gcode::parse_with(f, crate::gcode::Keep::None).ok())
+            .map(|d| crate::gcode::stats(&d));
         report(Progress {
             id: job_id.clone(),
             phase: "slicing".into(),

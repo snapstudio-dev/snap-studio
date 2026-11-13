@@ -704,7 +704,8 @@
     "one": "{n} segmento",
     "other": "{n} segmentos"
   },
-  "viewer.truncated": "(truncado)",
+  "viewer.simplified": "simplificado",
+  "viewer.simplified_tip": "Impresión muy larga: se muestran todas las capas con menos detalle. Las capas, los tiempos y el filamento son exactos.",
   "viewer.triangles": {
     "one": "{n} triángulo",
     "other": "{n} triángulos"

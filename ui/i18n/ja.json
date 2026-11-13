@@ -687,7 +687,8 @@
   "viewer.segments": {
     "other": "{n} セグメント"
   },
-  "viewer.truncated": "（一部省略）",
+  "viewer.simplified": "簡略表示",
+  "viewer.simplified_tip": "非常に長いプリント：すべてのレイヤーを詳細を減らして表示しています。レイヤー数、時間、フィラメント量は正確です。",
   "viewer.triangles": {
     "other": "{n} 個の三角形"
   },

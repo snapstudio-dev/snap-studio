@@ -18,6 +18,10 @@ with its packages for macOS, Windows and Linux. What comes next:
   instead of millimeters gets a word in its details.
 
 ### Fixed
+- **Preview**: on long prints the sliced preview no longer stops part way up;
+  all layers are shown, with the right layer count and time on the slider.
+  The preview uses about three times less memory, and travel moves load only
+  when shown.
 - **Camera**: a missed or incomplete image from the printer no longer shows
   a question mark icon; the last image stays until the next one arrives.
 - **Camera**: the pinned camera no longer reads the printer twice in the

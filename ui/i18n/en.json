@@ -701,7 +701,8 @@
     "one": "{n} segment",
     "other": "{n} segments"
   },
-  "viewer.truncated": "(truncated)",
+  "viewer.simplified": "simplified",
+  "viewer.simplified_tip": "Very long print: all layers are shown with less detail. Layers, times and filament are exact.",
   "viewer.triangles": {
     "one": "{n} triangle",
     "other": "{n} triangles"

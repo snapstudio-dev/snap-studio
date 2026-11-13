@@ -128,7 +128,7 @@ fn setting(path: &Path, key: &str) -> Option<String> {
 
 fn read_info(path: &Path, rel: &str, modified: f64) -> Result<FileInfo> {
     let size = std::fs::metadata(path)?.len();
-    let parsed = crate::gcode::parse(std::fs::File::open(path)?);
+    let parsed = crate::gcode::parse_with(std::fs::File::open(path)?, crate::gcode::Keep::None);
     let plan = Plan::from_gcode(std::fs::File::open(path)?).map(Arc::new).map_err(|e| e.to_string());
     let mut meta = json!({ "filename": rel, "size": size, "modified": modified, "print_start_time": null, "job_id": null });
     let Ok(d) = parsed else {

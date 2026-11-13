@@ -272,7 +272,7 @@ pub fn parse_meta(v: &Value, file_dir: &str) -> FileMeta {
 
 /// Tools a G-code really uses, read from the file itself.
 pub fn gcode_tools(path: &Path) -> Option<Vec<u8>> {
-    let d = crate::gcode::parse(std::fs::File::open(path).ok()?).ok()?;
+    let d = crate::gcode::parse_with(std::fs::File::open(path).ok()?, crate::gcode::Keep::None).ok()?;
     let t = crate::gcode::stats(&d).tools;
     (!t.is_empty()).then_some(t)
 }

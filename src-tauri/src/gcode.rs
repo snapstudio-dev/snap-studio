@@ -106,17 +106,171 @@ pub struct RawTimes {
 }
 
 pub struct GcodeData {
+    /// The segments kept (`Keep`), tiny ones in line merged.
     pub segs: Vec<Seg>,
+    /// The last layer's index, over every move of the file (not only the
+    /// segments kept).
     pub layers: u16,
     pub min: [f32; 3],
     pub max: [f32; 3],
     pub meta: GMeta,
-    pub truncated: bool,
+    /// More than `MAX_SEGS` segments: the whole file is kept, with less
+    /// detail on the curves (never cut).
+    pub simplified: bool,
     pub times: RawTimes,
+    /// The top of each layer's extrusions (mm), over every move; 0 for a
+    /// layer without any.
+    pub layer_top: Vec<f32>,
+    pub keep: Keep,
+    /// The prime tower's extrusion points (x, y), over every move, whatever
+    /// `keep`: its box needs the rotation, often written after them.
+    pub tower_pts: Vec<[f32; 2]>,
+    /// The prime tower's top (mm), 0 without a tower.
+    pub tower_top: f32,
 }
 
-/// Beyond this, display gains nothing and memory blows up.
-const MAX_SEGS: usize = 3_000_000;
+/// Which segments a read keeps: the viewer asks for the extrusions first
+/// and for the travel moves only when they are shown; a read for the
+/// metadata or the times keeps none.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Keep {
+    #[cfg(test)]
+    All,
+    Extrusions,
+    Travel,
+    None,
+}
+
+/// The segments kept at most. Past it the whole set is simplified further
+/// (`Store::shrink`): about 32 bytes per segment here, 18 in the viewer.
+const MAX_SEGS: usize = 10_000_000;
+/// Segments in line within this distance (mm) are merged, on every file:
+/// invisible at any zoom the viewer allows.
+const MERGE_TOL: f32 = 0.01;
+/// Past this tolerance (mm), one segment in two is dropped instead.
+const MAX_TOL: f32 = 1.0;
+/// Points merged into one segment at most: bounds the checks per move.
+const RUN_MAX: usize = 32;
+
+/// Whether `p` lies within `tol` of the segment `a`–`b`.
+fn near_segment(p: [f32; 3], a: [f32; 3], b: [f32; 3], tol: f32) -> bool {
+    let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    let ap = [p[0] - a[0], p[1] - a[1], p[2] - a[2]];
+    let l2 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
+    let t = if l2 > 0.0 { ((ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / l2).clamp(0.0, 1.0) } else { 0.0 };
+    let d = [ap[0] - ab[0] * t, ap[1] - ab[1] * t, ap[2] - ab[2] * t];
+    d[0] * d[0] + d[1] * d[1] + d[2] * d[2] <= tol * tol
+}
+
+/// `b` follows `a` (it starts where `a` ends) and draws the same way.
+fn mergeable(a: &Seg, b: &Seg) -> bool {
+    a.b == b.a
+        && a.layer == b.layer
+        && a.feature == b.feature
+        && a.tool == b.tool
+        && a.travel == b.travel
+        && a.width == b.width
+        && a.height == b.height
+}
+
+/// Merges, in place, the runs of segments that follow each other and stay
+/// within `tol` of the segment from the run's start to its end.
+fn compact(segs: &mut Vec<Seg>, tol: f32) {
+    let n = segs.len();
+    let (mut w, mut i) = (0, 0);
+    while i < n {
+        let mut cur = segs[i];
+        let mut j = i + 1;
+        // The joints of the run are still in place (`w` never passes `i`).
+        while j < n && j - i <= RUN_MAX && mergeable(&cur, &segs[j]) {
+            let b = segs[j].b;
+            if !(i..j).all(|k| near_segment(segs[k].b, cur.a, b, tol)) {
+                break;
+            }
+            cur.b = b;
+            j += 1;
+        }
+        segs[w] = cur;
+        w += 1;
+        i = j;
+    }
+    segs.truncate(w);
+}
+
+/// The segments kept, within `cap`: tiny segments in line are merged as
+/// they come; when the budget is reached, everything kept so far is
+/// simplified further and the rest of the file is read at that level, so
+/// the whole height is always there.
+struct Store {
+    segs: Vec<Seg>,
+    /// The points already merged into the last segment, checked again at
+    /// each extension.
+    run: Vec<[f32; 3]>,
+    tol: f32,
+    cap: usize,
+    /// Past `MAX_TOL`: one segment in `stride` is kept.
+    stride: u32,
+    seen: u32,
+    simplified: bool,
+}
+
+impl Store {
+    fn new(cap: usize) -> Store {
+        // Below, three quarters of the budget would be 0: `shrink` would
+        // never get there.
+        debug_assert!(cap >= 4);
+        Store { segs: Vec::new(), run: Vec::new(), tol: MERGE_TOL, cap, stride: 1, seen: 0, simplified: false }
+    }
+
+    fn push(&mut self, s: Seg) {
+        if self.stride > 1 {
+            self.seen = self.seen.wrapping_add(1);
+            if self.seen % self.stride != 0 {
+                return;
+            }
+        }
+        if let Some(last) = self.segs.last_mut() {
+            if self.run.len() < RUN_MAX && mergeable(last, &s) {
+                let (a, b, tol) = (last.a, s.b, self.tol);
+                if near_segment(last.b, a, b, tol) && self.run.iter().all(|p| near_segment(*p, a, b, tol)) {
+                    self.run.push(last.b);
+                    last.b = b;
+                    return;
+                }
+            }
+        }
+        self.run.clear();
+        if self.segs.len() >= self.cap {
+            self.shrink();
+        }
+        // Grown by hand near the cap: doubling would reserve far past it.
+        let len = self.segs.len();
+        if len == self.segs.capacity() {
+            self.segs.reserve_exact(len.max(1024).min(self.cap.saturating_sub(len)).max(1));
+        }
+        self.segs.push(s);
+    }
+
+    /// Back under three quarters of the budget: merges with a larger
+    /// tolerance, then, past `MAX_TOL`, keeps one segment in two.
+    fn shrink(&mut self) {
+        self.simplified = true;
+        while self.segs.len() > self.cap * 3 / 4 {
+            if self.tol < MAX_TOL {
+                self.tol = (self.tol * 4.0).min(MAX_TOL);
+                compact(&mut self.segs, self.tol);
+            } else {
+                let mut i = 0usize;
+                self.segs.retain(|_| {
+                    i += 1;
+                    i % 2 == 1
+                });
+                self.stride = self.stride.saturating_mul(2);
+            }
+        }
+        self.run.clear();
+    }
+}
 /// Number of features recognized by `feature_id`.
 pub const FEATURE_COUNT: usize = 12;
 
@@ -212,9 +366,21 @@ fn parse_duration(s: &str) -> Option<u32> {
     any.then_some(total)
 }
 
+/// Reads a G-code, keeping every segment (merged where in line): the
+/// tests' shorthand.
+#[cfg(test)]
 pub fn parse(read: impl Read) -> Result<GcodeData> {
+    parse_with(read, Keep::All)
+}
+
+/// Reads a G-code, keeping the segments `keep` asks for.
+pub fn parse_with(read: impl Read, keep: Keep) -> Result<GcodeData> {
+    parse_capped(read, keep, MAX_SEGS)
+}
+
+pub(crate) fn parse_capped(read: impl Read, keep: Keep, cap: usize) -> Result<GcodeData> {
     let mut rd = BufReader::with_capacity(1 << 20, read);
-    let mut segs: Vec<Seg> = Vec::new();
+    let mut store = Store::new(cap);
     let mut meta = GMeta::default();
 
     let (mut x, mut y, mut z, mut e) = (0f32, 0f32, 0f32, 0f32);
@@ -230,7 +396,12 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
     let (mut z_step, mut layer_z) = (0u8, None::<f32>);
     let mut seen_layer_marker = false;
     let mut last_z = f32::MIN;
-    let mut truncated = false;
+    let mut moves = 0usize;
+    // Framing on the part: typed extrusions (not the start G-code's prime
+    // line, which crosses the bed), else any extrusion, else any move.
+    let mut frame = [([f32::MAX; 3], [f32::MIN; 3]); 3];
+    let mut layer_top: Vec<f32> = Vec::new();
+    let (mut tower_pts, mut tower_top): (Vec<[f32; 2]>, f32) = (Vec::new(), 0.0);
     let mut line = String::new();
     // Current speed in mm/min (modal) and times computed segment by segment.
     let mut feed: f32 = 1800.0;
@@ -448,63 +619,64 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
                     times.layer_end.resize(li + 1, last);
                 }
                 times.layer_end[li] = clock;
-                if segs.len() >= MAX_SEGS {
-                    truncated = true;
-                    continue;
+                moves += 1;
+                let travel = de <= 0.0;
+                let (a, b) = ([px, py, pz], [x, y, z]);
+                let boxes: &[usize] = match (travel, feature) {
+                    (true, _) => &[2],
+                    (false, 0) => &[1, 2],
+                    (false, _) => &[0, 1, 2],
+                };
+                for &k in boxes {
+                    let (mn, mx) = &mut frame[k];
+                    for p in [a, b] {
+                        for c in 0..3 {
+                            mn[c] = mn[c].min(p[c]);
+                            mx[c] = mx[c].max(p[c]);
+                        }
+                    }
                 }
-                segs.push(Seg {
-                    a: [px, py, pz],
-                    b: [x, y, z],
-                    layer,
-                    feature,
-                    tool,
-                    travel: de <= 0.0,
-                    width,
-                    height: if height > 0 { height } else { z_step },
-                });
+                if !travel {
+                    if layer_top.len() <= li {
+                        layer_top.resize(li + 1, 0.0);
+                    }
+                    layer_top[li] = layer_top[li].max(z);
+                    if feature == 10 {
+                        // Each point once: a segment starts where the last ended.
+                        for p in [a, b] {
+                            if tower_pts.last() != Some(&[p[0], p[1]]) {
+                                tower_pts.push([p[0], p[1]]);
+                            }
+                            tower_top = tower_top.max(p[2]);
+                        }
+                    }
+                }
+                let wanted = match keep {
+                    #[cfg(test)]
+                    Keep::All => true,
+                    Keep::Extrusions => !travel,
+                    Keep::Travel => travel,
+                    Keep::None => false,
+                };
+                if wanted {
+                    store.push(Seg { a, b, layer, feature, tool, travel, width, height: if height > 0 { height } else { z_step } });
+                }
             }
             _ => {}
         }
     }
 
-    if segs.is_empty() {
+    if moves == 0 {
         return Err(anyhow!(crate::t!("err.no_paths")));
     }
-
-    let mut layers = 0u16;
-    for s in &segs {
-        layers = layers.max(s.layer);
-    }
-
-    // Framing on the part: neither travel moves, nor the start G-code's paths
-    // (prime line), which cross the whole bed.
-    let bbox = |keep: &dyn Fn(&Seg) -> bool| {
-        let mut min = [f32::MAX; 3];
-        let mut max = [f32::MIN; 3];
-        for s in segs.iter().filter(|s| keep(s)) {
-            for p in [&s.a, &s.b] {
-                for k in 0..3 {
-                    min[k] = min[k].min(p[k]);
-                    max[k] = max[k].max(p[k]);
-                }
-            }
-        }
-        (min, max)
-    };
-    let (mut min, mut max) = bbox(&|s| !s.travel && s.feature != 0);
-    if min[0] > max[0] {
-        let r = bbox(&|s| !s.travel);
-        min = r.0;
-        max = r.1;
-    }
-    if min[0] > max[0] {
-        let r = bbox(&|_| true);
-        min = r.0;
-        max = r.1;
-    }
+    // Every move counts, kept or not: the slider reaches the last layer.
+    let layers = times.layer_end.len().saturating_sub(1).min(u16::MAX as usize) as u16;
+    layer_top.resize(layers as usize + 1, 0.0);
+    let (min, max) = frame.into_iter().find(|(mn, mx)| mn[0] <= mx[0]).unwrap_or(([0.0; 3], [0.0; 3]));
 
     times.tools = (0..16u8).filter(|t| tools_used[*t as usize]).collect();
-    Ok(GcodeData { segs, layers, min, max, meta, truncated, times })
+    let Store { segs, simplified, .. } = store;
+    Ok(GcodeData { segs, layers, min, max, meta, simplified, times, layer_top, keep, tower_pts, tower_top })
 }
 
 /// Time of a path feature in the preview.
@@ -613,77 +785,130 @@ pub struct TowerBox {
 /// taking their extent. None without a tower.
 pub fn tower_box(d: &GcodeData, at: [f32; 2], angle: f32) -> Option<TowerBox> {
     let (s, c) = (-angle.to_radians()).sin_cos();
-    let (mut x0, mut y0, mut x1, mut y1, mut h) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN, 0f32);
-    for seg in d.segs.iter().filter(|s| s.feature == 10 && !s.travel) {
-        for p in [&seg.a, &seg.b] {
-            let (dx, dy) = (p[0] - at[0], p[1] - at[1]);
-            let (x, y) = (dx * c - dy * s, dx * s + dy * c);
-            x0 = x0.min(x);
-            y0 = y0.min(y);
-            x1 = x1.max(x);
-            y1 = y1.max(y);
-            h = h.max(p[2]);
-        }
+    let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+    for p in &d.tower_pts {
+        let (dx, dy) = (p[0] - at[0], p[1] - at[1]);
+        let (x, y) = (dx * c - dy * s, dx * s + dy * c);
+        x0 = x0.min(x);
+        y0 = y0.min(y);
+        x1 = x1.max(x);
+        y1 = y1.max(y);
     }
-    (x0 <= x1).then(|| TowerBox { x: at[0], y: at[1], x0, y0, w: x1 - x0, d: y1 - y0, h })
+    (x0 <= x1).then(|| TowerBox { x: at[0], y: at[1], x0, y0, w: x1 - x0, d: y1 - y0, h: d.tower_top })
 }
 
-/// Serialization for the viewer.
+/// Serialization for the viewer, version 4: about 18 bytes per segment,
+/// laid out so that the viewer hands it to the GPU as is.
 ///
-/// 40-byte header:
-/// `"3MFG"` | version u8 | flags u8 (bit 0: truncated) | reserved u8×2 |
-/// segment count u32 | layer count u32 | min f32×3 | max f32×3 |
-/// positions (6 f32 per segment) | attributes (layer u16, feature u8,
-/// tool on the 4 high bits + travel on bit 0) | widths (u8, 0.01 mm, 0
-/// unknown) | heights (u8, `HEIGHT_STEP`, 0 unknown; version 3) | colors.
+/// 68-byte header:
+/// `"3MFG"` | version u8 (4) | flags u8 (bit 0: simplified, bit 1: travel
+/// moves) | feature mask u16 (bit per extruded feature) | segment count u32 |
+/// layer count u32 | framing min f32×3 | max f32×3 | positions' origin
+/// f32×3 | span f32×3 | tool mask u16 (bit per extruding head) | reserved
+/// u16.
 ///
-/// Segments are sorted by layer: the viewer shows layers up to a given rank
-/// with a single draw call.
+/// Then, per layer: the segment count up to its end (u32) and its top Z
+/// (f32, the previous layer's when it has no extrusion); per segment:
+/// positions (start and end, 6 × u16, `origin + q / 65535 × span`), then
+/// in separate arrays feature (u8), head (u8), width (u8, 0.01 mm, 0
+/// unknown) and height (u8, `HEIGHT_STEP`); then the colors (count u8, then
+/// per head a known flag and RGB).
+///
+/// Segments are sorted by layer (extrusions before travel within one), the
+/// order of the file kept inside: the viewer shows layers up to a given
+/// rank by drawing the first segments only.
 pub fn encode(data: &GcodeData) -> Vec<u8> {
-    let mut order: Vec<&Seg> = data.segs.iter().collect();
-    order.sort_by_key(|s| (s.layer, s.travel));
-    let n = order.len();
-
-    let mut out = Vec::with_capacity(40 + n * 30 + 65);
-    out.extend_from_slice(b"3MFG");
-    // Version 2: width per segment and filament colors after it; version 3:
-    // the height per segment between them.
-    out.push(3);
-    out.push(if data.truncated { 1 } else { 0 });
-    out.extend_from_slice(&[0, 0]);
-    out.extend_from_slice(&(n as u32).to_le_bytes());
-    out.extend_from_slice(&(data.layers as u32 + 1).to_le_bytes());
-    for v in data.min.iter().chain(data.max.iter()) {
-        out.extend_from_slice(&v.to_le_bytes());
+    let layers = data.layers as usize + 1;
+    let n = data.segs.len();
+    // Counting sort on (layer, travel): no copy of the segments.
+    let key = |s: &Seg| s.layer as usize * 2 + usize::from(s.travel);
+    let mut start = vec![0u32; layers * 2 + 1];
+    for s in &data.segs {
+        start[key(s) + 1] += 1;
     }
-    for s in &order {
-        for c in s.a.iter().chain(s.b.iter()) {
-            out.extend_from_slice(&c.to_le_bytes());
+    for k in 1..start.len() {
+        start[k] += start[k - 1];
+    }
+
+    // The positions' box: every point kept, travel included.
+    let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
+    for s in &data.segs {
+        for p in [&s.a, &s.b] {
+            for c in 0..3 {
+                lo[c] = lo[c].min(p[c]);
+                hi[c] = hi[c].max(p[c]);
+            }
         }
     }
-    for s in &order {
-        out.extend_from_slice(&s.layer.to_le_bytes());
-        out.push(s.feature);
-        out.push((s.tool << 4) | u8::from(s.travel));
+    if n == 0 {
+        (lo, hi) = ([0.0; 3], [0.0; 3]);
     }
-    for s in &order {
-        out.push(s.width);
+    let span: [f32; 3] = std::array::from_fn(|c| (hi[c] - lo[c]).max(1e-6));
+
+    let (mut feats, mut tools) = (0u16, 0u16);
+    for s in data.segs.iter().filter(|s| !s.travel) {
+        feats |= 1 << s.feature.min(15);
+        tools |= 1 << s.tool.min(15);
     }
+
+    let colors = &data.meta.colors;
+    let k = colors.len().min(16);
+    let head = 68 + layers * 8;
+    let pos = head;
+    let (feat, tool, width, height) = (pos + n * 12, pos + n * 13, pos + n * 14, pos + n * 15);
+    let mut out = vec![0u8; pos + n * 16 + 1 + k * 4];
+
+    out[0..4].copy_from_slice(b"3MFG");
+    out[4] = 4;
+    out[5] = u8::from(data.simplified) | (u8::from(data.keep == Keep::Travel) << 1);
+    out[6..8].copy_from_slice(&feats.to_le_bytes());
+    out[8..12].copy_from_slice(&(n as u32).to_le_bytes());
+    out[12..16].copy_from_slice(&(layers as u32).to_le_bytes());
+    for (i, v) in data.min.iter().chain(&data.max).chain(&lo).chain(&span).enumerate() {
+        out[16 + i * 4..20 + i * 4].copy_from_slice(&v.to_le_bytes());
+    }
+    out[64..66].copy_from_slice(&tools.to_le_bytes());
+
+    let mut z = 0f32;
+    for l in 0..layers {
+        let o = 68 + l * 4;
+        out[o..o + 4].copy_from_slice(&start[(l + 1) * 2].to_le_bytes());
+        if let Some(t) = data.layer_top.get(l).filter(|t| **t > 0.0) {
+            z = *t;
+        }
+        let o = 68 + layers * 4 + l * 4;
+        out[o..o + 4].copy_from_slice(&z.to_le_bytes());
+    }
+
     // A height not written nor stepped: the profile's layer height.
     let fallback = data.meta.layer_height.map(height_steps).unwrap_or(0);
-    for s in &order {
-        out.push(if s.height > 0 { s.height } else { fallback });
+    let q = |v: f32, c: usize| (((v - lo[c]) / span[c]) * 65535.0).round().clamp(0.0, 65535.0) as u16;
+    let mut next = start;
+    for s in &data.segs {
+        let k = key(s);
+        let i = next[k] as usize;
+        next[k] += 1;
+        let o = pos + i * 12;
+        for (j, v) in s.a.iter().chain(&s.b).enumerate() {
+            out[o + j * 2..o + j * 2 + 2].copy_from_slice(&q(*v, j % 3).to_le_bytes());
+        }
+        out[feat + i] = s.feature;
+        out[tool + i] = s.tool;
+        out[width + i] = s.width;
+        out[height + i] = if s.height > 0 { s.height } else { fallback };
     }
+
     // Colors: their count, then per head a flag (1 known, 0 unknown) and the
     // three RGB components.
-    let colors = &data.meta.colors;
-    out.push(colors.len().min(16) as u8);
+    let mut o = pos + n * 16;
+    out[o] = k as u8;
+    o += 1;
     for c in colors.iter().take(16) {
         let rgb = u32::from_str_radix(c.trim_start_matches('#'), 16).ok().filter(|_| c.len() == 7);
-        match rgb {
-            Some(v) => out.extend_from_slice(&[1, (v >> 16) as u8, (v >> 8) as u8, v as u8]),
-            None => out.extend_from_slice(&[0, 0, 0, 0]),
+        if let Some(v) = rgb {
+            out[o..o + 4].copy_from_slice(&[1, (v >> 16) as u8, (v >> 8) as u8, v as u8]);
         }
+        o += 4;
     }
     out
 }
@@ -821,26 +1046,214 @@ G1 X30 Y30 F9000
         assert_eq!(extr.len(), 1, "only the E increase is an extrusion");
     }
 
+    /// A version 4 buffer read back: (header fields, segments as
+    /// (start, end, feature, tool, width, height), per-layer ends and tops).
+    struct Decoded {
+        flags: u8,
+        feats: u16,
+        tools: u16,
+        layers: usize,
+        segs: Vec<([f32; 3], [f32; 3], u8, u8, u8, u8)>,
+        ends: Vec<u32>,
+        tops: Vec<f32>,
+        colors: Vec<u8>,
+    }
+
+    fn decode(b: &[u8]) -> Decoded {
+        assert_eq!(&b[0..4], b"3MFG");
+        assert_eq!(b[4], 4, "version 4");
+        let u32_at = |o: usize| u32::from_le_bytes(b[o..o + 4].try_into().unwrap());
+        let f32_at = |o: usize| f32::from_le_bytes(b[o..o + 4].try_into().unwrap());
+        let n = u32_at(8) as usize;
+        let layers = u32_at(12) as usize;
+        let origin = [f32_at(40), f32_at(44), f32_at(48)];
+        let span = [f32_at(52), f32_at(56), f32_at(60)];
+        let pos = 68 + layers * 8;
+        let segs = (0..n)
+            .map(|i| {
+                let v = |j: usize| {
+                    let q = u16::from_le_bytes(b[pos + i * 12 + j * 2..pos + i * 12 + j * 2 + 2].try_into().unwrap());
+                    origin[j % 3] + q as f32 / 65535.0 * span[j % 3]
+                };
+                let at = |k: usize| b[pos + n * k + i];
+                ([v(0), v(1), v(2)], [v(3), v(4), v(5)], at(12), at(13), at(14), at(15))
+            })
+            .collect();
+        Decoded {
+            flags: b[5],
+            feats: u16::from_le_bytes([b[6], b[7]]),
+            tools: u16::from_le_bytes([b[64], b[65]]),
+            layers,
+            segs,
+            ends: (0..layers).map(|l| u32_at(68 + l * 4)).collect(),
+            tops: (0..layers).map(|l| f32_at(68 + layers * 4 + l * 4)).collect(),
+            colors: b[pos + n * 16..].to_vec(),
+        }
+    }
+
     #[test]
     fn encode_sorted_by_layer() {
         let d = parse(SAMPLE.as_bytes()).unwrap();
         let b = encode(&d);
-        assert_eq!(&b[0..4], b"3MFG");
-        let n = u32::from_le_bytes(b[8..12].try_into().unwrap()) as usize;
-        assert_eq!(n, d.segs.len());
-        assert_eq!(u32::from_le_bytes(b[12..16].try_into().unwrap()), 3, "layers 0 to 2");
-        // 40-byte header, positions, attributes, widths, heights, then the
-        // colors (their count, 4 bytes each).
-        let colors = d.meta.colors.len();
-        assert_eq!(b[4], 3, "version 3");
-        assert_eq!(b.len(), 40 + n * 24 + n * 4 + n + n + 1 + colors * 4);
-        // Layers are increasing in the attribute buffer.
-        let base = 40 + n * 24;
-        let mut prev = 0u16;
-        for i in 0..n {
-            let l = u16::from_le_bytes(b[base + i * 4..base + i * 4 + 2].try_into().unwrap());
-            assert!(l >= prev, "sorted by layer");
-            prev = l;
+        let x = decode(&b);
+        assert_eq!(x.segs.len(), d.segs.len());
+        assert_eq!(x.layers, 3, "layers 0 to 2");
+        assert_eq!(b.len(), 68 + 3 * 8 + d.segs.len() * 16 + 1 + d.meta.colors.len() * 4);
+        // Per-layer ends: increasing, the last one the whole count.
+        assert!(x.ends.windows(2).all(|w| w[0] <= w[1]));
+        assert_eq!(*x.ends.last().unwrap() as usize, d.segs.len());
+        // Extrusions before travel within a layer, and the order of the
+        // file inside each.
+        let layer2 = &x.segs[x.ends[1] as usize..];
+        assert_eq!(layer2[0].2, 2, "inner wall first");
+        assert!((layer2[0].1[0] - 10.0).abs() < 0.01 && (layer2.last().unwrap().1[0] - 30.0).abs() < 0.01, "then the travel");
+        assert_eq!(x.feats, 1 << 1 | 1 << 2 | 1 << 5, "outer, inner wall, infill");
+        assert_eq!(x.tools, 1);
+        // Tops per layer: layer 0 has no extrusion (0), then 0.2 and 0.4.
+        assert_eq!(x.tops[0], 0.0);
+        assert!((x.tops[1] - 0.2).abs() < 1e-6 && (x.tops[2] - 0.4).abs() < 1e-6, "{:?}", x.tops);
+        assert_eq!(x.flags, 0);
+    }
+
+    /// Positions come back within the quantization step (1/65535 of the
+    /// box), here a 250 mm travel.
+    #[test]
+    fn encode_quantizes_positions() {
+        let g = "G1 X0 Y0 Z0.2
+G1 X12.345 Y67.891 E1
+G1 X250 Y3 F9000
+G1 X100.001 Y100 Z9.87 E2
+";
+        let d = parse(g.as_bytes()).unwrap();
+        let x = decode(&encode(&d));
+        assert_eq!(x.segs.len(), d.segs.len());
+        let close = |p: [f32; 3], q: [f32; 3]| (0..3).all(|c| (p[c] - q[c]).abs() < 0.004);
+        for s in &d.segs {
+            assert!(x.segs.iter().any(|e| close(s.a, e.0) && close(s.b, e.1)), "{:?} {:?}", s.a, s.b);
+        }
+    }
+
+    /// The viewer reads extrusions and travel apart; the layer count, the
+    /// tops and the framing are the same in both.
+    #[test]
+    fn keep_extrusions_or_travel() {
+        let e = parse_with(SAMPLE.as_bytes(), Keep::Extrusions).unwrap();
+        let t = parse_with(SAMPLE.as_bytes(), Keep::Travel).unwrap();
+        let n = parse_with(SAMPLE.as_bytes(), Keep::None).unwrap();
+        assert!(e.segs.iter().all(|s| !s.travel) && e.segs.len() == 4);
+        assert!(t.segs.iter().all(|s| s.travel) && !t.segs.is_empty());
+        assert!(n.segs.is_empty());
+        for d in [&t, &n] {
+            assert_eq!((d.layers, d.min, d.max), (e.layers, e.min, e.max));
+            assert_eq!(d.layer_top, e.layer_top);
+        }
+        assert_eq!(decode(&encode(&t)).flags, 2, "a travel buffer");
+        assert_eq!(stats(&n).layers, 3, "times and layers without any segment");
+    }
+
+    /// A layer of `steps` tiny moves around a circle of radius `r`, at `z`.
+    fn ring(g: &mut String, z: f32, r: f32, steps: usize) {
+        g.push_str(&format!(";LAYER_CHANGE\n;Z:{z}\nG1 X{r} Y0 Z{z} F9000\n;TYPE:Outer wall\n"));
+        for i in 1..=steps {
+            let a = i as f32 / steps as f32 * std::f32::consts::TAU;
+            g.push_str(&format!("G1 X{:.4} Y{:.4} E0.01\n", r * a.cos(), r * a.sin()));
+        }
+    }
+
+    /// The distance from `p` to the nearest kept extrusion of its layer.
+    fn gap(d: &GcodeData, p: [f32; 3]) -> f32 {
+        let mut best = f32::MAX;
+        for s in d.segs.iter().filter(|s| !s.travel && (s.b[2] - p[2]).abs() < 1e-4) {
+            let mut lo = 0f32;
+            let mut hi = 1f32;
+            // Distance to a segment, by bisection on near_segment.
+            for _ in 0..30 {
+                let mid = (lo + hi) / 2.0;
+                if near_segment(p, s.a, s.b, mid) {
+                    hi = mid;
+                } else {
+                    lo = mid;
+                }
+            }
+            best = best.min(hi);
+        }
+        best
+    }
+
+    /// Tiny segments in line merge into one; a corner, another feature,
+    /// width or height, or a curve's sag over 0.01 mm do not.
+    #[test]
+    fn merges_tiny_segments_in_line() {
+        let mut g = String::from("M83\nG1 X0 Y0 Z0.2\n;TYPE:Outer wall\n");
+        for i in 1..=30 {
+            g.push_str(&format!("G1 X{:.1} Y0 E0.01\n", i as f32 * 0.1));
+        }
+        g.push_str("G1 X3 Y5 E0.1\n;WIDTH:0.5\nG1 X3 Y10 E0.1\n;TYPE:Inner wall\nG1 X3 Y15 E0.1\n");
+        let d = parse(g.as_bytes()).unwrap();
+        let e: Vec<&Seg> = d.segs.iter().filter(|s| !s.travel).collect();
+        assert_eq!(e.len(), 4, "the line, the corner, a new width, a new feature");
+        assert_eq!((e[0].a[0], e[0].b[0]), (0.0, 3.0));
+        assert!(!d.simplified);
+        // A going back on itself is not "in line".
+        let d = parse("M83\nG1 X0 Y0 Z0.2\nG1 X5 Y0 E1\nG1 X1 Y0 E1\n".as_bytes()).unwrap();
+        assert_eq!(d.segs.iter().filter(|s| !s.travel).count(), 2);
+        // A circle of radius 10 in 0.5 mm steps: each joint sags 0.0125 mm
+        // from the chord over two steps, so nothing merges.
+        let mut g = String::from("M83\n");
+        ring(&mut g, 0.2, 10.0, 126);
+        let d = parse(g.as_bytes()).unwrap();
+        assert_eq!(d.segs.iter().filter(|s| !s.travel).count(), 126);
+    }
+
+    /// Over the budget, nothing is cut: every layer is there, the times
+    /// reach the total, and the path stays near the original points.
+    #[test]
+    fn over_the_budget_simplifies_without_cutting() {
+        let mut g = String::from("; total layer number: 40\nM83\n");
+        let mut points = Vec::new();
+        for l in 0..40 {
+            let z = 0.2 * (l + 1) as f32;
+            ring(&mut g, z, 20.0, 400);
+            for i in 1..=400 {
+                let a = i as f32 / 400.0 * std::f32::consts::TAU;
+                points.push([20.0 * a.cos(), 20.0 * a.sin(), z]);
+            }
+        }
+        g.push_str("; estimated printing time (normal mode) = 2h 0m 0s\n");
+        let full = parse(g.as_bytes()).unwrap();
+        let d = parse_capped(g.as_bytes(), Keep::Extrusions, 1_500).unwrap();
+        assert!(!full.simplified && d.simplified);
+        assert!(d.segs.len() <= 1_500, "{}", d.segs.len());
+        assert_eq!(d.layers, full.layers);
+        assert_eq!(stats(&d).layers, 41, "the start and the 40 layers");
+        assert_eq!(d.segs.iter().map(|s| s.layer).max(), Some(d.layers), "the top layer is drawn");
+        let st = stats(&d);
+        assert!((st.layer_end_s.last().unwrap() - 7200.0).abs() < 1.0, "{:?}", st.layer_end_s.last());
+        assert_eq!(st.layer_end_s, stats(&full).layer_end_s);
+        // Every layer keeps segments, and each point of the file stays
+        // within the tolerances added up (at most 2 × MAX_TOL).
+        for l in 1..=40u16 {
+            assert!(d.segs.iter().any(|s| s.layer == l), "layer {l}");
+        }
+        let worst = points.iter().step_by(7).map(|p| gap(&d, *p)).fold(0f32, f32::max);
+        assert!(worst <= 2.0 * MAX_TOL, "{worst}");
+    }
+
+    /// Segments that cannot merge (each between two travel moves): past the
+    /// largest tolerance, one in two is kept, over the whole height.
+    #[test]
+    fn unmergeable_segments_are_thinned_evenly() {
+        let mut g = String::from("M83\n");
+        for l in 0..20 {
+            g.push_str(&format!(";LAYER_CHANGE\nG1 Z{}\n", 0.2 * (l + 1) as f32));
+            for i in 0..100 {
+                g.push_str(&format!("G1 X{} Y{l}\nG1 X{} Y{l} E0.1\n", i * 2, i * 2 + 1));
+            }
+        }
+        let d = parse_capped(g.as_bytes(), Keep::Extrusions, 500).unwrap();
+        assert!(d.simplified && d.segs.len() <= 500);
+        for l in 1..=20u16 {
+            assert!(d.segs.iter().any(|s| s.layer == l), "layer {l}");
         }
     }
 
@@ -878,10 +1291,11 @@ G1 X30 Y30 F9000
         assert_eq!(d.meta.colors, vec!["#ff8800", "#00ff00", ""]);
         let w: Vec<u8> = d.segs.iter().filter(|s| !s.travel).map(|s| s.width).collect();
         assert_eq!(w, vec![45, 62]);
-        let bin = encode(&d);
-        assert_eq!(bin[4], 3, "version 3");
+        let x = decode(&encode(&d));
+        let w: Vec<u8> = x.segs.iter().map(|s| s.4).collect();
+        assert_eq!(w, vec![45, 62]);
         // End of the buffer: 3 colors × 4 bytes, preceded by their count.
-        let tail = &bin[bin.len() - 13..];
+        let tail = &x.colors[..];
         assert_eq!(tail[0], 3);
         assert_eq!(&tail[1..5], &[1, 0xff, 0x88, 0x00]);
         assert_eq!(&tail[9..13], &[0, 0, 0, 0], "unknown color");
@@ -906,9 +1320,7 @@ G1 X30 Y30 F9000
         // Neither: the profile's layer height, at encoding.
         let d = parse("G1 X10 Y0 E1\n; layer_height = 0.16\n".as_bytes()).unwrap();
         assert_eq!(d.segs[0].height, 0);
-        let b = encode(&d);
-        let n = d.segs.len();
-        let heights = &b[40 + n * 29..40 + n * 30];
+        let heights: Vec<u8> = decode(&encode(&d)).segs.iter().map(|s| s.5).collect();
         assert!(heights.iter().all(|&x| x == 32), "{heights:?}");
         assert_eq!(height_steps(0.0), 0);
         assert_eq!(height_steps(2.0), 255, "clamped");
@@ -955,6 +1367,12 @@ G1 X30 Y30 F9000
         assert!(near(t.w, 40.0) && near(t.d, 26.0) && near(t.x0, -2.0) && near(t.y0, -2.0), "{t:?}");
         assert!(near(t.h, 5.0), "{t:?}");
         assert_eq!(stats(&parse("G1 X1 E1\n".as_bytes()).unwrap()).tower, None, "no tower");
+        // The same box from a read that keeps no segment (the stats after a
+        // slice), or only the travel moves.
+        for keep in [Keep::None, Keep::Travel] {
+            let k = stats(&parse_with(g.as_bytes(), keep).unwrap()).tower.unwrap();
+            assert!(near(k.w, t.w) && near(k.d, t.d) && near(k.x0, t.x0) && near(k.h, t.h), "{keep:?} {k:?}");
+        }
     }
 
     #[test]

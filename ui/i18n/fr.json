@@ -704,7 +704,8 @@
     "one": "{n} segment",
     "other": "{n} segments"
   },
-  "viewer.truncated": "(tronqué)",
+  "viewer.simplified": "simplifié",
+  "viewer.simplified_tip": "Impression très longue : toutes les couches sont affichées, avec moins de détails. Couches, temps et filament sont exacts.",
   "viewer.triangles": {
     "one": "{n} triangle",
     "other": "{n} triangles"

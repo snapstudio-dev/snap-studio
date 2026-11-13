@@ -119,14 +119,48 @@ void main() {
   frag = vec4(c, 1.0);
 }`;
 
+/* Width assumed when the G-code does not say (mm). */
+const DEFAULT_WIDTH = 0.42;
+/* The encoded heights' step (mm, gcode.rs HEIGHT_STEP). */
+const HEIGHT_STEP = 0.005;
+
+/* The toolpath buffer's segments as read by the shaders, straight from the
+   buffer gcode.rs writes (one instance per segment): both ends quantized
+   in the box `uOrigin` + `uSpan`, then the feature, head, width
+   (1/100 mm) and height (HEIGHT_STEP) as bytes. The color comes from the
+   palette, a texture of one texel per head (column) and feature (row):
+   changing the color mode rewrites 192 texels, not the segments. `uFixed`
+   (alpha 1) paints them all one color: the travel moves. Their locations
+   are fixed (SEG_ATTRS), so one vertex array serves every program. */
+const SEG_ATTRS = ["aA", "aB", "aFeat", "aTool", "aW", "aH"];
+const SEG_GLSL = `
+in vec3 aA;
+in vec3 aB;
+in uint aFeat;
+in uint aTool;
+in uint aW;
+in uint aH;
+uniform vec3 uOrigin;
+uniform vec3 uSpan;
+uniform highp sampler2D uPal;
+uniform vec4 uFixed;
+vec3 segPos(vec3 q) { return uOrigin + q * uSpan; }
+vec3 segCol() {
+  if (uFixed.a > 0.0) return uFixed.rgb;
+  return texelFetch(uPal, ivec2(int(min(aTool, 15u)), int(min(aFeat, 11u))), 0).rgb;
+}
+float segWidth() { return aW > 0u ? float(aW) / 100.0 : ${DEFAULT_WIDTH.toFixed(2)}; }
+float segHeight() { return float(aH) * ${HEIGHT_STEP.toFixed(3)}; }
+`;
+
+/* Plain lines: two vertices per instance, a then b. */
 const PATH_VS = `#version 300 es
-in vec3 aPos;
-in vec3 aCol;
+${SEG_GLSL}
 uniform mat4 uMVP;
 out vec3 vCol;
 void main() {
-  vCol = aCol;
-  gl_Position = uMVP * vec4(aPos, 1.0);
+  vCol = segCol();
+  gl_Position = uMVP * vec4(segPos(gl_VertexID == 0 ? aA : aB), 1.0);
 }`;
 
 const PATH_FS = `#version 300 es
@@ -143,14 +177,10 @@ void main() { frag = vec4(vCol, uAlpha); }`;
    its top at the segment's Z. The quad spans that ellipse's outline as seen
    from the eye, so a line seen from the side is as tall as its layer, never
    as tall as it is wide: the alternating layers of a virtual head show as
-   thin bands, not overlapping strips. One pixel wide at least. The lines'
-   position and color buffers are used as is (no copy). */
+   thin bands, not overlapping strips. One pixel wide at least. The same
+   buffer as the lines (no copy). */
 const RIB_VS = `#version 300 es
-in vec3 aA;
-in vec3 aB;
-in vec3 aCol;
-in float aW;
-in float aH;
+${SEG_GLSL}
 uniform mat4 uMVP;
 uniform vec2 uViewport;
 uniform vec3 uEye;
@@ -161,7 +191,9 @@ void main() {
   int id = gl_VertexID;
   float t = (id == 1 || id == 2 || id == 4) ? 1.0 : 0.0;
   float s = (id == 2 || id == 4 || id == 5) ? 1.0 : -1.0;
-  vec3 seg = aB - aA;
+  vec3 A = segPos(aA), B = segPos(aB);
+  float aW = segWidth(), aH = segHeight();
+  vec3 seg = B - A;
   float len = length(seg);
   vec3 d = len > 1e-6 ? seg / len : vec3(1.0, 0.0, 0.0);
   // The cross-section's axes: n across (horizontal), u up.
@@ -173,7 +205,7 @@ void main() {
   float hh = 0.5 * (aH > 0.0 ? aH : aW);
   // Its top at the segment's Z, its ends past the segment by a half-width
   // along it (joints overlap).
-  vec3 c = mix(aA, aB, t) - u * hh + d * (t * 2.0 - 1.0) * hw;
+  vec3 c = mix(A, B, t) - u * hh + d * (t * 2.0 - 1.0) * hw;
   // The ellipse's outline seen from the eye: the point of the ellipse
   // furthest along e, across the line and the view.
   vec3 e = cross(d, uEye - c);
@@ -185,14 +217,14 @@ void main() {
   // One pixel wide at least: a line far away does not vanish.
   vec2 px = (p.xy / p.w - pc.xy / pc.w) * uViewport;
   if (length(px) < 0.5) {
-    vec4 pa = uMVP * vec4(aA, 1.0), pb = uMVP * vec4(aB, 1.0);
+    vec4 pa = uMVP * vec4(A, 1.0), pb = uMVP * vec4(B, 1.0);
     vec2 dir = pb.xy / pb.w - pa.xy / pa.w;
     dir = length(dir) > 1e-6 ? normalize(dir * uViewport) : vec2(1.0, 0.0);
     vec2 side = length(px) > 1e-4 ? normalize(px) : vec2(-dir.y, dir.x) * s;
     p = vec4((pc.xy / pc.w + side * 0.5 / uViewport) * p.w, p.z, p.w);
   }
   gl_Position = p;
-  vCol = aCol;
+  vCol = segCol();
   vSide = s;
 }`;
 
@@ -207,12 +239,13 @@ void main() {
   frag = vec4(col, 1.0);
 }`;
 
-/* Beyond this, back to plain lines: rendering stays smooth. */
-const RIBBON_MAX = 2_500_000;
-/* Width assumed when the G-code does not say (mm). */
-const DEFAULT_WIDTH = 0.42;
-/* The encoded heights' step (mm, gcode.rs HEIGHT_STEP). */
-const HEIGHT_STEP = 0.005;
+/* Beyond this, back to plain lines, which show no relief. The ribbons are
+   drawn from the same buffer as the lines (no memory of their own), so
+   this is the Rust cap (gcode.rs MAX_SEGS): a long print keeps its shading
+   now that all its layers are kept. */
+const RIBBON_MAX = 10_000_000;
+/* The travel moves' color. */
+const TRAVEL_RGB = [96, 104, 126];
 
 /* Feature keys and colors, the same as the thumbnails computed in Rust. */
 const FEATURES = [
@@ -258,10 +291,12 @@ function compile(gl, src, type) {
   return s;
 }
 
-function program(gl, vs, fs) {
+/* `attrs`: attribute names bound to locations 0, 1, … */
+function program(gl, vs, fs, attrs = []) {
   const p = gl.createProgram();
   gl.attachShader(p, compile(gl, vs, gl.VERTEX_SHADER));
   gl.attachShader(p, compile(gl, fs, gl.FRAGMENT_SHADER));
+  attrs.forEach((a, i) => gl.bindAttribLocation(p, i, a));
   gl.linkProgram(p);
   if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
     throw new Error("link: " + gl.getProgramInfoLog(p));
@@ -303,87 +338,48 @@ function decodeMesh(buf) {
   return { n, min, max, pos, col, truncated, ext };
 }
 
-/* Decodes the buffer produced by `gcode::encode` (40-byte header). */
+/* Decodes the buffer produced by `gcode::encode` (version 4, 68-byte
+   header): segments sorted by layer, each the 16 bytes the shaders read
+   (`segs`, sent to the GPU as is), then the filament colors. The small
+   arrays are copied, so the buffer goes once on the GPU. */
 function decodeGcode(buf) {
   const dv = new DataView(buf);
   const magic = String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3));
-  if (magic !== "3MFG") throw new Error("unexpected toolpath format");
-  const truncated = (dv.getUint8(5) & 1) === 1;
+  if (magic !== "3MFG" || dv.getUint8(4) !== 4) throw new Error("unexpected toolpath format");
+  const flags = dv.getUint8(5);
+  const featMask = dv.getUint16(6, true);
   const n = dv.getUint32(8, true);
   const layers = dv.getUint32(12, true);
-  const min = [dv.getFloat32(16, true), dv.getFloat32(20, true), dv.getFloat32(24, true)];
-  const max = [dv.getFloat32(28, true), dv.getFloat32(32, true), dv.getFloat32(36, true)];
-  const pos = new Float32Array(buf, 40, n * 6);
-  const attrs = new Uint8Array(buf, 40 + n * 24, n * 4);
-  // Version 2: width per segment, then filament colors; version 3: the
-  // height per segment between them (steps of 0.005 mm, gcode.rs).
-  const version = dv.getUint8(4);
-  const widths = version >= 2 ? new Uint8Array(buf, 40 + n * 28, n) : null;
-  const heights = version >= 3 ? new Uint8Array(buf, 40 + n * 29, n) : null;
+  const f3 = (o) => [0, 1, 2].map((i) => dv.getFloat32(o + i * 4, true));
+  const toolMask = dv.getUint16(64, true);
+  // Per layer: where its segments end (all the layers below included), and
+  // the top of its extrusions (the one below for a layer without).
+  const ends = new Uint32Array(buf.slice(68, 68 + layers * 4));
+  const layerZ = new Float32Array(buf.slice(68 + layers * 4, 68 + layers * 8));
+  const pos = 68 + layers * 8;
   const fileColors = [];
-  if (version >= 2) {
-    let o = 40 + n * (heights ? 30 : 29);
-    const k = dv.getUint8(o++);
-    for (let i = 0; i < k; i++, o += 4) {
-      fileColors.push(dv.getUint8(o) ? [dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3)] : null);
-    }
+  let o = pos + n * 16;
+  const k = dv.getUint8(o++);
+  for (let i = 0; i < k; i++, o += 4) {
+    fileColors.push(dv.getUint8(o) ? [dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3)] : null);
   }
-
-  // Extrusions and travel split; the per-layer order is kept.
-  const count = { e: 0, t: 0 };
-  for (let i = 0; i < n; i++) (attrs[i * 4 + 3] & 1 ? count.t++ : count.e++);
-  const out = {
-    e: {
-      pos: new Float32Array(count.e * 6),
-      col: new Float32Array(count.e * 6),
-      feat: new Uint8Array(count.e),
-      tool: new Uint8Array(count.e),
-      width: new Float32Array(count.e),
-      // 0: not known (the shader draws the line round).
-      height: new Float32Array(count.e),
-      ends: new Int32Array(layers + 1),
-    },
-    t: { pos: new Float32Array(count.t * 6), col: new Float32Array(count.t * 6), ends: new Int32Array(layers + 1) },
+  const bits = (m) => [...Array(16).keys()].filter((b) => m & (1 << b));
+  return {
+    n,
+    layers,
+    min: f3(16),
+    max: f3(28),
+    origin: f3(40),
+    span: f3(52),
+    simplified: (flags & 1) === 1,
+    travel: (flags & 2) === 2,
+    ends,
+    layerZ,
+    segs: new Uint8Array(buf, pos, n * 16),
+    fileColors,
+    feats: [...new Set(bits(featMask).map((f) => Math.min(f, FEATURES.length - 1)))],
+    tools: bits(toolMask),
   };
-  const layerZ = new Float32Array(layers);
-  const feats = new Set();
-  let ei = 0, ti = 0;
-  for (let i = 0; i < n; i++) {
-    const layer = attrs[i * 4] | (attrs[i * 4 + 1] << 8);
-    const feat = attrs[i * 4 + 2];
-    const travel = attrs[i * 4 + 3] & 1;
-    const dst = travel ? out.t : out.e;
-    const k = travel ? ti++ : ei++;
-    for (let v = 0; v < 6; v++) dst.pos[k * 6 + v] = pos[i * 6 + v];
-    if (!travel) {
-      feats.add(Math.min(feat, FEATURES.length - 1));
-      out.e.feat[k] = Math.min(feat, FEATURES.length - 1);
-      out.e.tool[k] = attrs[i * 4 + 3] >> 4;
-      out.e.width[k] = widths && widths[i] ? widths[i] / 100 : DEFAULT_WIDTH;
-      out.e.height[k] = heights ? heights[i] * HEIGHT_STEP : 0;
-    }
-    const c = travel ? [96, 104, 126] : FEATURES[Math.min(feat, FEATURES.length - 1)][1];
-    for (let v = 0; v < 2; v++) {
-      dst.col[k * 6 + v * 3] = c[0] / 255;
-      dst.col[k * 6 + v * 3 + 1] = c[1] / 255;
-      dst.col[k * 6 + v * 3 + 2] = c[2] / 255;
-    }
-    if (layer < layers) {
-      dst.ends[layer] = travel ? ti : ei;
-      if (!travel) layerZ[layer] = Math.max(layerZ[layer], pos[i * 6 + 5]);
-    }
-  }
-  // Cumulative bounds: a layer without segments takes the previous bound.
-  for (const d of [out.e, out.t]) {
-    let last = 0;
-    for (let l = 0; l <= layers; l++) {
-      if (d.ends[l] < last) d.ends[l] = last;
-      last = d.ends[l];
-    }
-    d.ends[layers] = d === out.e ? count.e : count.t;
-  }
-  for (let l = 1; l < layers; l++) if (layerZ[l] === 0) layerZ[l] = layerZ[l - 1];
-  return { n, layers, min, max, truncated, out, layerZ, fileColors, feats: [...feats].sort((a, b) => a - b) };
 }
 
 /* Color of a head: spool read on the printer (slice preview), otherwise
@@ -425,114 +421,104 @@ function shade(rgb, feat) {
   return [r, g, b].map((x) => Math.max(0, Math.min(1, x)) * 255);
 }
 
-/* Extrusion colors by mode: material (default), path feature, or head in
-   plain color. */
-function extrusionColors(e, mode) {
-  const col = new Float32Array(e.feat.length * 6);
-  for (let k = 0; k < e.feat.length; k++) {
-    const c =
-      mode === "material" ? shade(toolRgb(e.tool[k]), e.feat[k])
-      : mode === "tool" ? toolRgb(e.tool[k])
-      : FEATURES[e.feat[k]][1];
-    for (let v = 0; v < 2; v++) {
-      col[k * 6 + v * 3] = c[0] / 255;
-      col[k * 6 + v * 3 + 1] = c[1] / 255;
-      col[k * 6 + v * 3 + 2] = c[2] / 255;
+/* The palette by mode, one texel per head (16 columns) and feature (12
+   rows): material (default), path feature, or head in plain color. */
+function palette(mode) {
+  const px = new Uint8Array(16 * FEATURES.length * 4);
+  for (let f = 0; f < FEATURES.length; f++) {
+    for (let t = 0; t < 16; t++) {
+      const c = mode === "material" ? shade(toolRgb(t), f) : mode === "tool" ? toolRgb(t) : FEATURES[f][1];
+      px.set([...c.map(Math.round), 255], (f * 16 + t) * 4);
     }
   }
-  return col;
+  return px;
+}
+
+/* Palette texture on unit 1 (the bed's is on unit 0). */
+function uploadPalette(gl, tex, mode) {
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 16, FEATURES.length, 0, gl.RGBA, gl.UNSIGNED_BYTE, palette(mode));
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.activeTexture(gl.TEXTURE0);
 }
 
 function setColorMode(mode) {
   V.colorMode = mode;
   const p = V.paths;
-  if (!p || !p.extr.colBuf) return;
-  const gl = V.gl;
-  gl.bindBuffer(gl.ARRAY_BUFFER, p.extr.colBuf);
-  gl.bufferData(gl.ARRAY_BUFFER, extrusionColors(p.data, mode), gl.STATIC_DRAW);
+  if (!p) return;
+  uploadPalette(V.gl, p.pal, mode);
   document.querySelectorAll("#v-colors [data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
   renderLegend(p.feats);
   schedule();
 }
 
-function buildPathBuffers(gl, prog, part) {
+/* One decoded buffer on the GPU: its bytes as they came, one instance per
+   segment. */
+function buildSegments(gl, d) {
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
-  const pb = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, pb);
-  gl.bufferData(gl.ARRAY_BUFFER, part.pos, gl.STATIC_DRAW);
-  const aPos = gl.getAttribLocation(prog, "aPos");
-  gl.enableVertexAttribArray(aPos);
-  gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
-  const cb = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, cb);
-  gl.bufferData(gl.ARRAY_BUFFER, part.col, gl.STATIC_DRAW);
-  const aCol = gl.getAttribLocation(prog, "aCol");
-  gl.enableVertexAttribArray(aCol);
-  gl.vertexAttribPointer(aCol, 3, gl.FLOAT, false, 0, 0);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, d.segs, gl.STATIC_DRAW);
+  const n = d.n;
+  // Ends a then b, normalized: 12 bytes per segment.
+  for (const [loc, off] of [[0, 0], [1, 6]]) {
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 3, gl.UNSIGNED_SHORT, true, 12, off);
+    gl.vertexAttribDivisor(loc, 1);
+  }
+  // Feature, head, width, height: a byte each, one array after the other.
+  for (let a = 0; a < 4; a++) {
+    gl.enableVertexAttribArray(2 + a);
+    gl.vertexAttribIPointer(2 + a, 1, gl.UNSIGNED_BYTE, 0, n * (12 + a));
+    gl.vertexAttribDivisor(2 + a, 1);
+  }
   gl.bindVertexArray(null);
-  return { vao, ends: part.ends, colBuf: cb, posBuf: pb };
-}
-
-/* Ribbons: one instance per segment, read from the line buffers (positions
-   a then b, color of the first vertex), plus the width and the height. */
-function buildRibbons(gl, prog, part, lines) {
-  const vao = gl.createVertexArray();
-  gl.bindVertexArray(vao);
-  gl.bindBuffer(gl.ARRAY_BUFFER, lines.posBuf);
-  const aA = gl.getAttribLocation(prog, "aA"), aB = gl.getAttribLocation(prog, "aB");
-  gl.enableVertexAttribArray(aA);
-  gl.vertexAttribPointer(aA, 3, gl.FLOAT, false, 24, 0);
-  gl.vertexAttribDivisor(aA, 1);
-  gl.enableVertexAttribArray(aB);
-  gl.vertexAttribPointer(aB, 3, gl.FLOAT, false, 24, 12);
-  gl.vertexAttribDivisor(aB, 1);
-  gl.bindBuffer(gl.ARRAY_BUFFER, lines.colBuf);
-  const aCol = gl.getAttribLocation(prog, "aCol");
-  gl.enableVertexAttribArray(aCol);
-  gl.vertexAttribPointer(aCol, 3, gl.FLOAT, false, 24, 0);
-  gl.vertexAttribDivisor(aCol, 1);
-  const wb = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, wb);
-  gl.bufferData(gl.ARRAY_BUFFER, part.width, gl.STATIC_DRAW);
-  const aW = gl.getAttribLocation(prog, "aW");
-  gl.enableVertexAttribArray(aW);
-  gl.vertexAttribPointer(aW, 1, gl.FLOAT, false, 0, 0);
-  gl.vertexAttribDivisor(aW, 1);
-  const hb = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, hb);
-  gl.bufferData(gl.ARRAY_BUFFER, part.height, gl.STATIC_DRAW);
-  const aH = gl.getAttribLocation(prog, "aH");
-  gl.enableVertexAttribArray(aH);
-  gl.vertexAttribPointer(aH, 1, gl.FLOAT, false, 0, 0);
-  gl.vertexAttribDivisor(aH, 1);
-  gl.bindVertexArray(null);
-  return { vao, widthBuf: wb, heightBuf: hb };
+  return { vao, buf, ends: d.ends, origin: d.origin, span: d.span };
 }
 
 function buildPaths(gl, data) {
-  const prog = program(gl, PATH_VS, PATH_FS);
-  const extr = buildPathBuffers(gl, prog, data.out.e);
+  const prog = program(gl, PATH_VS, PATH_FS, SEG_ATTRS);
   // Shaded ribbons, except for a huge G-code: plain lines.
-  let ribbons = null;
-  if (data.out.e.feat.length <= RIBBON_MAX) {
-    const rprog = program(gl, RIB_VS, RIB_FS);
-    ribbons = { prog: rprog, ...buildRibbons(gl, rprog, data.out.e, extr) };
-  }
+  const ribbons = data.n <= RIBBON_MAX ? program(gl, RIB_VS, RIB_FS, SEG_ATTRS) : null;
+  const pal = gl.createTexture();
+  uploadPalette(gl, pal, V.colorMode);
   return {
     prog,
     ribbons,
-    extr,
-    trav: buildPathBuffers(gl, prog, data.out.t),
-    data: data.out.e,
+    pal,
+    extr: buildSegments(gl, data),
+    // Loaded when first shown (loadTravel).
+    trav: null,
+    travLoading: false,
     min: data.min,
     max: data.max,
     layers: data.layers,
     layerZ: data.layerZ,
-    truncated: data.truncated,
+    simplified: data.simplified,
     n: data.n,
     feats: data.feats,
+    tools: data.tools,
   };
+}
+
+/* The travel moves, fetched the first time they are shown. */
+function loadTravel() {
+  const p = V.paths;
+  if (!p || p.trav || p.travLoading) return;
+  p.travLoading = true;
+  fetchBinary("gcode", V.path, V.bust, "&t=1")
+    .then((buf) => {
+      if (V.paths !== p) return;
+      p.trav = buildSegments(V.gl, decodeGcode(buf));
+      schedule();
+    })
+    .catch((e) => {
+      p.travLoading = false;
+      console.warn("travel moves:", e);
+    });
 }
 
 function buildMesh(gl, data) {
@@ -906,30 +892,39 @@ function draw() {
   if (V.paths) {
     const p = V.paths;
     const upto = Math.min(V.layer, p.layers - 1);
-    gl.useProgram(p.prog);
-    gl.uniformMatrix4fv(gl.getUniformLocation(p.prog, "uMVP"), false, mvp);
-    const alpha = gl.getUniformLocation(p.prog, "uAlpha");
-    if (V.showTravel) {
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, p.pal);
+    gl.activeTexture(gl.TEXTURE0);
+    // The uniforms every segment program reads, for one buffer.
+    const use = (prog, part, fixed) => {
+      gl.useProgram(prog);
+      const u = (name) => gl.getUniformLocation(prog, name);
+      gl.uniformMatrix4fv(u("uMVP"), false, mvp);
+      gl.uniform3fv(u("uOrigin"), part.origin);
+      gl.uniform3fv(u("uSpan"), part.span);
+      gl.uniform1i(u("uPal"), 1);
+      gl.uniform4fv(u("uFixed"), fixed ? [...fixed.map((c) => c / 255), 1] : [0, 0, 0, 0]);
+      gl.bindVertexArray(part.vao);
+      return u;
+    };
+    if (V.showTravel && p.trav) {
+      const u = use(p.prog, p.trav, TRAVEL_RGB);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-      gl.uniform1f(alpha, 0.3);
-      gl.bindVertexArray(p.trav.vao);
-      gl.drawArrays(gl.LINES, 0, p.trav.ends[upto] * 2);
+      gl.uniform1f(u("uAlpha"), 0.3);
+      gl.drawArraysInstanced(gl.LINES, 0, 2, p.trav.ends[upto]);
       gl.disable(gl.BLEND);
     }
     if (p.ribbons) {
-      const r = p.ribbons;
-      gl.useProgram(r.prog);
-      gl.uniformMatrix4fv(gl.getUniformLocation(r.prog, "uMVP"), false, mvp);
+      const u = use(p.ribbons, p.extr);
       // Pixels per normalized screen unit, and the eye: the lines' outline.
-      gl.uniform2f(gl.getUniformLocation(r.prog, "uViewport"), w / 2, h / 2);
-      gl.uniform3fv(gl.getUniformLocation(r.prog, "uEye"), eye);
-      gl.bindVertexArray(r.vao);
+      gl.uniform2f(u("uViewport"), w / 2, h / 2);
+      gl.uniform3fv(u("uEye"), eye);
       gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, p.extr.ends[upto]);
     } else {
-      gl.uniform1f(alpha, 1);
-      gl.bindVertexArray(p.extr.vao);
-      gl.drawArrays(gl.LINES, 0, p.extr.ends[upto] * 2);
+      const u = use(p.prog, p.extr);
+      gl.uniform1f(u("uAlpha"), 1);
+      gl.drawArraysInstanced(gl.LINES, 0, 2, p.extr.ends[upto]);
     }
   }
 
@@ -957,9 +952,9 @@ window.addEventListener("themechange", () => {
 
 /* Depending on the platform, Tauri serves custom protocols in one form or
    the other: try both. */
-async function fetchBinary(scheme, path, bust) {
+async function fetchBinary(scheme, path, bust, extra = "") {
   const q =
-    `/b?p=${encodeURIComponent(path)}` + (bust ? `&v=${encodeURIComponent(bust)}` : "");
+    `/b?p=${encodeURIComponent(path)}` + (bust ? `&v=${encodeURIComponent(bust)}` : "") + extra;
   return fetchScheme(scheme, q);
 }
 
@@ -974,16 +969,13 @@ function disposeScene() {
   }
   if (V.paths) {
     const p = V.paths;
-    gl.deleteVertexArray(p.extr.vao);
-    gl.deleteVertexArray(p.trav.vao);
-    for (const b of [p.extr.posBuf, p.extr.colBuf, p.trav.posBuf, p.trav.colBuf]) gl.deleteBuffer(b);
-    if (p.ribbons) {
-      gl.deleteVertexArray(p.ribbons.vao);
-      gl.deleteBuffer(p.ribbons.widthBuf);
-      gl.deleteBuffer(p.ribbons.heightBuf);
-      gl.deleteProgram(p.ribbons.prog);
+    for (const part of [p.extr, p.trav].filter(Boolean)) {
+      gl.deleteVertexArray(part.vao);
+      gl.deleteBuffer(part.buf);
     }
+    if (p.ribbons) gl.deleteProgram(p.ribbons);
     gl.deleteProgram(p.prog);
+    gl.deleteTexture(p.pal);
     V.paths = null;
   }
 }
@@ -997,7 +989,7 @@ function viewerHint() {
 window.addEventListener("langchange", () => {
   if ($("viewer").classList.contains("hidden")) return;
   viewerHint();
-  if (V.statsText) $("v-stats").textContent = V.statsText();
+  if (V.statsText) showStats();
   if (V.paths) {
     updateLayerLabel();
     renderLegend(V.paths.feats);
@@ -1014,7 +1006,10 @@ async function openViewer(path, name, kind, bust) {
   $("v-msg").classList.remove("hidden");
   viewerHint();
   V.path = path;
+  V.bust = bust;
   V.statsText = null;
+  V.statsTip = null;
+  $("v-stats").title = "";
 
   const canvas = $("v-canvas");
   if (!V.gl) {
@@ -1051,15 +1046,17 @@ async function openViewer(path, name, kind, bust) {
       V.fileColors = data.fileColors;
       // G-code colors known: the preview panel picks them up.
       if (V.preview && V.preview.path === path) renderPreviewPanel();
-      if (V.colorMode !== "feature") data.out.e.col = extrusionColors(data.out.e, V.colorMode);
       V.paths = buildPaths(V.gl, data);
+      if (V.showTravel) loadTravel();
       document.querySelectorAll("#v-colors [data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === V.colorMode));
       V.layer = data.layers - 1;
       setupLayerSlider(data);
       renderLegend(data.feats);
       V.statsText = () =>
         `${dim(data.min, data.max)} · ${tr("viewer.layers", { n: data.layers })} · ` +
-        tr("viewer.segments", { n: data.n }) + (data.truncated ? " " + tr("viewer.truncated") : "");
+        tr("viewer.segments", { n: data.n }) + (data.simplified ? " · " + tr("viewer.simplified") : "");
+      // A very long print: every layer, less detail; said on hover.
+      if (data.simplified) V.statsTip = () => tr("viewer.simplified_tip");
     } else {
       const data = decodeMesh(buf);
       V.mesh = buildMesh(V.gl, data);
@@ -1067,7 +1064,7 @@ async function openViewer(path, name, kind, bust) {
         `${dim(data.min, data.max)} · ${tr("viewer.triangles", { n: data.n })}` +
         (data.truncated ? " " + tr("files.info.sampled") : "");
     }
-    $("v-stats").textContent = V.statsText();
+    showStats();
     $("v-msg").classList.add("hidden");
     frameCamera();
   } catch (e) {
@@ -1075,6 +1072,11 @@ async function openViewer(path, name, kind, bust) {
     if (V.path !== path) return;
     $("v-msg").textContent = tr(gcode ? "viewer.bad_paths" : "viewer.bad_mesh", { err: e.message });
   }
+}
+
+function showStats() {
+  $("v-stats").textContent = V.statsText();
+  $("v-stats").title = V.statsTip ? V.statsTip() : "";
 }
 
 function setupLayerSlider(data) {
@@ -1097,7 +1099,7 @@ function updateLayerLabel() {
 }
 
 function renderLegend(feats) {
-  const tools = [...new Set(V.paths?.data.tool || [])].sort((a, b) => a - b);
+  const tools = V.paths?.tools || [];
   const name = (t) => V.preview?.toolNames?.[t];
   const sw = (c) => `<i style="background:rgb(${c.map(Math.round).join(",")})"></i>`;
   if (V.colorMode === "tool" || V.colorMode === "material") {
@@ -1311,6 +1313,7 @@ $("v-layer").addEventListener("input", () => {
 });
 $("v-travel").addEventListener("change", () => {
   V.showTravel = $("v-travel").checked;
+  if (V.showTravel) loadTravel();
   draw();
 });
 $("v-close").addEventListener("click", closeViewer);

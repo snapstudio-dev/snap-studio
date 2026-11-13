@@ -192,7 +192,7 @@ fn meta_of(path: &str) -> MetaDto {
     }
     if scan::kind_of(Path::new(path)) == Some("gcode") {
         if let Ok(f) = std::fs::File::open(path) {
-            if let Ok(g) = gcode::parse(f) {
+            if let Ok(g) = gcode::parse_with(f, gcode::Keep::None) {
                 dto.title = None;
                 dto.application = g.meta.generator.or(g.meta.profile);
                 dto.printer = g.meta.printer;
@@ -1513,7 +1513,9 @@ fn handle_gcode(uri: &str) -> Response<Vec<u8>> {
         Ok(f) => f,
         Err(e) => return fail(404, &ui_err(e)),
     };
-    match gcode::parse(file) {
+    // The travel moves only when the viewer shows them (`t=1`).
+    let keep = if query_param(uri, "t").as_deref() == Some("1") { gcode::Keep::Travel } else { gcode::Keep::Extrusions };
+    match gcode::parse_with(file, keep) {
         Ok(d) => Response::builder()
             .status(200)
             .header("Content-Type", "application/octet-stream")
