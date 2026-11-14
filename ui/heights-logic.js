@@ -341,20 +341,34 @@ function hzPlanSettings(plan) {
 }
 
 /* The sheet's quick settings among them, each only when given:
-   { layer (rounded to the profiles' 0.01 mm), infill, walls, supports, brim }. */
+   { layer (rounded to the profiles' 0.01 mm), exact (the file's height is
+   that), infill, walls, supports, brim }. */
 function hzQuick(s) {
   const n = (k) => {
     const x = parseFloat(String(s?.[k] ?? "").replace("%", ""));
     return Number.isFinite(x) ? x : null;
   };
   const out = {};
-  if (n("layer_height") > 0) out.layer = Math.round(n("layer_height") * 100) / 100;
+  if (n("layer_height") > 0) {
+    out.layer = Math.round(n("layer_height") * 100) / 100;
+    out.exact = Math.abs(out.layer - n("layer_height")) < 1e-6;
+  }
   if (n("sparse_infill_density") != null) out.infill = Math.max(0, Math.min(100, n("sparse_infill_density")));
   if (n("wall_loops") != null) out.walls = Math.round(n("wall_loops"));
   if (s?.enable_support != null) out.supports = ["1", "true"].includes(String(s.enable_support));
-  if (s?.brim_type != null) out.brim = s.brim_type !== "no_brim";
+  // "auto_brim" is Orca's default, not the author's choice.
+  if (s?.brim_type != null && s.brim_type !== "auto_brim") out.brim = s.brim_type !== "no_brim";
   return out;
 }
+
+/* A file made for the U1 (its printer model): all its settings fit; from
+   another printer, not those of its machine and nozzle. */
+const hzForU1 = (cfg) => /\bU1\b/i.test(String(cfg?.printer_model || ""));
+const HZ_MACHINE_KEYS = new Set([
+  "line_width", "initial_layer_line_width", "outer_wall_line_width", "top_surface_line_width",
+  "elefant_foot_compensation", "xy_hole_compensation", "xy_contour_compensation", "resolution", "enable_arc_fitting",
+  "enable_overhang_speed", "overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed", "ironing_speed",
+]);
 
 /* What the sheet remembers for the machine once a file's settings were
    applied to it (`m`: { before, file }, each { process, simple, adv }): a
@@ -386,6 +400,6 @@ if (typeof module !== "undefined") {
   module.exports = {
     hcColours, hcFromFile, hcKey, hcRequest, hcMarks,
     hzLayerTop, hzSnap, hzBands, hzPlanHeads, hzRequest, hzColourGap, hzNearestHead, hzParseDescribe, hzColourOf, hzFromDescribe, hzFromFile, hzRematch, hzLayerZ,
-    hzPick, hzPlanSettings, hzQuick, hzMemo,
+    hzPick, hzPlanSettings, hzQuick, hzMemo, hzForU1, HZ_MACHINE_KEYS,
   };
 }

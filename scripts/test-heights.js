@@ -245,9 +245,16 @@ assert.deepStrictEqual(H.hzPlanSettings({ layers: null }), {});
 assert.deepStrictEqual(H.hzPlanSettings(null), {});
 // The quick settings among them.
 assert.deepStrictEqual(H.hzQuick({ layer_height: "0.075", sparse_infill_density: "100%", wall_loops: "3", enable_support: "0", brim_type: "no_brim" }), {
-  layer: 0.08, infill: 100, walls: 3, supports: false, brim: false,
+  layer: 0.08, exact: false, infill: 100, walls: 3, supports: false, brim: false,
 });
-assert.deepStrictEqual(H.hzQuick({ enable_support: "1", brim_type: "auto_brim" }), { supports: true, brim: true });
+assert.strictEqual(H.hzQuick({ layer_height: "0.08" }).exact, true);
+assert.deepStrictEqual(H.hzQuick({ enable_support: "1", brim_type: "outer_only" }), { supports: true, brim: true });
+assert.deepStrictEqual(H.hzQuick({ brim_type: "auto_brim" }), {}, "Orca's default is not a choice");
+// A file for the U1 keeps every setting; another printer's, not its machine's.
+assert.strictEqual(H.hzForU1({ printer_model: "Snapmaker U1" }), true);
+assert.strictEqual(H.hzForU1({ printer_model: "Bambu Lab P1S" }), false);
+assert.strictEqual(H.hzForU1(null), false);
+assert.ok(H.HZ_MACHINE_KEYS.has("line_width") && !H.HZ_MACHINE_KEYS.has("top_shell_layers"));
 assert.deepStrictEqual(H.hzQuick({}), {});
 
 // What the sheet remembers once the file's settings were applied: the

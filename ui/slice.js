@@ -268,7 +268,7 @@ async function onMachineChange(mem) {
     spdLoad(m.speed);
     advLoad(m.adv);
     // A plate "by height": the file's settings (prepare-heights.js).
-    if (typeof hzSheetApply === "function") await hzSheetApply();
+    if (typeof hzSheetApply === "function") await hzSheetApply(seq);
   } catch (e) {
     if (seq === SL.machineSeq) setSliceMessage(String(e), "err");
   }
