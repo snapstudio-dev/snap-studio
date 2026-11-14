@@ -43,7 +43,9 @@ with its packages for macOS, Windows and Linux. What comes next:
 ### Fixed
 - **Undo in Prepare**: ⌘Z / Ctrl+Z (and redo) now work right after using a
   slider or a switch of the inspector, such as the scale or Keep proportions.
-  They used to do nothing until the plate was clicked.
+  They used to do nothing until the plate was clicked. On macOS, ⌘Z and
+  ⇧⌘Z from the Edit menu reach the plate too (only Ctrl+Z did); in a text
+  field they still undo the typing (#103).
 - **Explore**: sites scroll more smoothly, on macOS above all. The floating
   navigation no longer checks the page's colors while it scrolls, only once
   it stops, and at most twice a second on pages that change all the time.

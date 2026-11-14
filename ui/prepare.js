@@ -2895,6 +2895,24 @@ $("act-slice").addEventListener("click", () => prepareFiles([...state.sel].slice
    are intercepted here before the Edit menu (which keeps them in text
    fields). */
 let nudgeAt = 0;
+/* Undo / redo on the plate, from its keys or the Edit menu (on macOS ⌘Z
+   is the menu's: app.js editHistory). The same press seen by both is done
+   once. */
+const PRH = { at: 0 };
+function prHistory(redo) {
+  if (Date.now() - PRH.at < 300) return;
+  PRH.at = Date.now();
+  redo ? prRedo() : prUndo();
+}
+/* The Edit menu's undo / redo, when the plate is what the keyboard is on:
+   true once done. */
+function prMenuHistory(redo) {
+  if (window.currentView !== "prepare" || document.querySelector(".modal:not(.hidden)")) return false;
+  if (!$("viewer").classList.contains("hidden")) return false;
+  prHistory(redo);
+  return true;
+}
+
 document.addEventListener("keydown", (e) => {
   if (window.currentView !== "prepare") return;
   if (document.querySelector(".modal:not(.hidden)")) return;
@@ -2909,10 +2927,10 @@ document.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT" && !(mod && (k === "z" || k === "y"))) return;
   if (mod && k === "z") {
     e.preventDefault();
-    e.shiftKey ? prRedo() : prUndo();
+    prHistory(e.shiftKey);
   } else if (mod && k === "y") {
     e.preventDefault();
-    prRedo();
+    prHistory(true);
   } else if (mod && k === "d") {
     e.preventDefault();
     prDuplicate();

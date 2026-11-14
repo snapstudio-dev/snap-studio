@@ -55,8 +55,18 @@ pub fn popup_menu(window: Window, items: Vec<Entry>, x: f64, y: f64) -> Result<(
     Ok(())
 }
 
-/// Single handler: every chosen entry goes to the webview.
+/// Single handler: every chosen entry goes to the webview. Undo and redo
+/// also reach the Library's sites, the one holding the keyboard undoing
+/// its own typing as the system's entry did.
 pub fn forward<R: Runtime>(app: &AppHandle<R>, id: &str) {
+    if let Some(what) = id.strip_prefix("edit:").filter(|w| *w == "undo" || *w == "redo") {
+        let js = format!("document.hasFocus() && document.execCommand('{what}');");
+        for (lbl, wv) in app.webviews() {
+            if lbl != "main" {
+                let _ = wv.eval(&js);
+            }
+        }
+    }
     let _ = app.emit("menu", id.to_string());
 }
 
@@ -111,8 +121,10 @@ pub fn app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         t!("menu.edit"),
         true,
         &[
-            &PredefinedMenuItem::undo(app, tr("menu.edit.undo").as_deref())?,
-            &PredefinedMenuItem::redo(app, tr("menu.edit.redo").as_deref())?,
+            // Ours, not the system's: the system's only undoes typing, and
+            // took ⌘Z from Prepare's plate (`forward`, app.js editHistory).
+            &item("edit:undo", "menu.edit.undo", Some("CmdOrCtrl+Z"))?,
+            &item("edit:redo", "menu.edit.redo", Some("CmdOrCtrl+Shift+Z"))?,
             &sep()?,
             &PredefinedMenuItem::cut(app, tr("menu.edit.cut").as_deref())?,
             &PredefinedMenuItem::copy(app, tr("menu.edit.copy").as_deref())?,
