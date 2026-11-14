@@ -1043,7 +1043,10 @@ onMenu("view", (v) => { switchView("files"); setView(v); });
    Library site holding the keyboard gets it from Rust (menu.rs forward). */
 function editHistory(what) {
   if (!document.hasFocus()) return;
-  if (!plTyping(document.activeElement) && typeof prMenuHistory === "function" && prMenuHistory(what === "redo")) return;
+  // A list has no typing to undo: the plate's, as a slider.
+  const el = document.activeElement;
+  const typing = plTyping(el) && el.tagName !== "SELECT";
+  if (!typing && typeof prMenuHistory === "function" && prMenuHistory(what === "redo")) return;
   document.execCommand(what);
 }
 onMenu("edit", (what) => {

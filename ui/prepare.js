@@ -2896,12 +2896,12 @@ $("act-slice").addEventListener("click", () => prepareFiles([...state.sel].slice
    fields). */
 let nudgeAt = 0;
 /* Undo / redo on the plate, from its keys or the Edit menu (on macOS ⌘Z
-   is the menu's: app.js editHistory). The same press seen by both is done
-   once. */
-const PRH = { at: 0 };
-function prHistory(redo) {
-  if (Date.now() - PRH.at < 300) return;
-  PRH.at = Date.now();
+   is the menu's: app.js editHistory). The keys always act; the menu skips
+   a press the keys have just done, should one reach both. */
+const PRH = { key: 0 };
+function prHistory(redo, fromMenu) {
+  if (fromMenu && Date.now() - PRH.key < 300) return;
+  if (!fromMenu) PRH.key = Date.now();
   redo ? prRedo() : prUndo();
 }
 /* The Edit menu's undo / redo, when the plate is what the keyboard is on:
@@ -2909,7 +2909,7 @@ function prHistory(redo) {
 function prMenuHistory(redo) {
   if (window.currentView !== "prepare" || document.querySelector(".modal:not(.hidden)")) return false;
   if (!$("viewer").classList.contains("hidden")) return false;
-  prHistory(redo);
+  prHistory(redo, true);
   return true;
 }
 
