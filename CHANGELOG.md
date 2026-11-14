@@ -40,7 +40,12 @@ with its packages for macOS, Windows and Linux. What comes next:
   the swaps are taken over, each colour going to the closest loaded spool,
   and the colours no spool holds are named in one line. With the printer
   offline, one line says so, the heads follow the file's order, and the
-  colours are matched once the printer answers (#103).
+  colours are matched once the printer answers. The slice sheet takes over
+  the file's settings when it opens: the profile at its layer height (or
+  that height itself when no profile has it), its infill, walls, supports
+  and brim, and its detailed settings (first layer, line widths, shells,
+  patterns, seam, ironing…); one line lists them, each can still be
+  changed, and the settings remembered for the printer stay yours (#103).
 
 ### Fixed
 - **Undo in Prepare**: ⌘Z / Ctrl+Z (and redo) now work right after using a

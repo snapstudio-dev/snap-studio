@@ -234,6 +234,10 @@ pub struct FileHeights {
     /// fine layer is printed everywhere.
     #[serde(default)]
     pub ranges: bool,
+    /// The file's own settings (`project_settings.config`), each a string (a
+    /// list's first value): the slice sheet takes over those it shows.
+    #[serde(default)]
+    pub settings: std::collections::BTreeMap<String, String>,
 }
 
 pub fn of_file(path: &std::path::Path) -> FileHeights {
@@ -256,7 +260,28 @@ pub fn of_file(path: &std::path::Path) -> FileHeights {
         layer_height: setting(&settings, "layer_height"),
         first_layer: setting(&settings, "initial_layer_print_height"),
         ranges,
+        settings: flat_settings(&settings),
     }
+}
+
+/// A project's settings as strings: a list gives its first value; what is
+/// neither a string, a number nor a boolean is left out.
+pub fn flat_settings(v: &Value) -> std::collections::BTreeMap<String, String> {
+    let Some(map) = v.as_object() else {
+        return Default::default();
+    };
+    map.iter()
+        .filter_map(|(k, x)| {
+            let x = x.as_array().and_then(|a| a.first()).unwrap_or(x);
+            let s = match x {
+                Value::String(s) => s.clone(),
+                Value::Number(n) => n.to_string(),
+                Value::Bool(b) => (if *b { "1" } else { "0" }).to_string(),
+                _ => return None,
+            };
+            Some((k.clone(), s))
+        })
+        .collect()
 }
 
 /// Whether Orca's `layer_config_ranges.xml` sets at least one range.
@@ -288,6 +313,18 @@ mod tests {
         // Never the first layer.
         assert_eq!(HUEFORGE.layer_of(0.0), 2);
         assert_eq!(HUEFORGE.snap(0.1), 0.24);
+    }
+
+    #[test]
+    fn file_settings_are_strings() {
+        let v = json!({"layer_height": "0.08", "wall_loops": 3, "enable_support": false, "filament_colour": ["#FF0000", "#00FF00"], "x": {"a": 1}, "y": []});
+        let s = flat_settings(&v);
+        assert_eq!(s.get("layer_height").map(String::as_str), Some("0.08"));
+        assert_eq!(s.get("wall_loops").map(String::as_str), Some("3"));
+        assert_eq!(s.get("enable_support").map(String::as_str), Some("0"));
+        assert_eq!(s.get("filament_colour").map(String::as_str), Some("#FF0000"));
+        assert!(!s.contains_key("x") && !s.contains_key("y"));
+        assert!(flat_settings(&Value::Null).is_empty());
     }
 
     #[test]

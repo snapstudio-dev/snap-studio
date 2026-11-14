@@ -256,7 +256,7 @@ async function hzAdoptFile(path, hc, heights) {
   if (PR.hz?.changes?.length) return toast(tr("hz.kept"), true);
   const { plan, warnings } = hzFromFile(hc, colours, layers, hzHeads());
   if (heights?.ranges) warnings.push({ kind: "ranges" });
-  PR.hz = { ...plan, warnings };
+  PR.hz = { ...plan, settings: hzPick(heights?.settings, hzSheetKeys()), warnings };
   PR.assoc = "height";
   prSave();
   prRenderInspector();
@@ -336,16 +336,86 @@ $("hz-go").addEventListener("click", () => {
   toast(tr(warnings.length ? "hz.imported.warn" : "hz.imported", { n: plan.changes.length }));
 });
 
-/* The slice's settings the plan imposes: the file's layers, and full
-   infill when the describe asks for it. */
-function hzOverrides() {
-  if (PR.assoc !== "height" || !PR.hz?.changes.length) return {};
-  const out = {};
-  const l = PR.hz.layers;
-  if (l?.layer_height > 0) {
-    out.layer_height = String(l.layer_height);
-    out.initial_layer_print_height = String(l.first_layer || l.layer_height);
+/* ------------------------------------------------------------ slice sheet */
+
+/* The file's settings the slice sheet takes over: its quick ones and those
+   of its detailed panels, not the heads' (the file's extruders are not the
+   plate's heads). */
+const HZ_QUICK_KEYS = ["layer_height", "initial_layer_print_height", "sparse_infill_density", "wall_loops", "enable_support", "brim_type"];
+function hzSheetKeys() {
+  const adv = typeof ADV_CATS === "undefined" ? [] : Object.keys(ADV_CATS).filter((c) => c !== "mm").flatMap((c) => advCatKeysAll(c));
+  return [...new Set([...HZ_QUICK_KEYS, ...adv])].filter((k) => typeof ADV_FILAMENT === "undefined" || !ADV_FILAMENT.has(k));
+}
+const hzSheetOn = () => PR.assoc === "height" && PR.hz?.changes?.length > 0;
+
+/* The sheet opened (or its machine changed) for a plate "by height": the
+   file's settings become the sheet's, as if chosen there, and stay
+   changeable. Its layer height picks the profile at that height; with
+   none, the file's is sent (hzOverrides). What the sheet remembers for
+   the machine stays the person's (hzMemo). */
+async function hzSheetApply() {
+  SL.hzSheet = null;
+  const s = hzSheetOn() ? hzPlanSettings(PR.hz) : {};
+  if (!Object.keys(s).length) return hzSheetLine();
+  const before = { process: $("s-process").value, simple: currentSimple(), adv: { ...SL.adv } };
+  const q = hzQuick(s);
+  let forced = null;
+  if (q.layer && parseProcess(before.process)?.h !== q.layer) {
+    const name = slProcessFor(q.layer, parseProcess(before.process)?.style);
+    if (name) {
+      $("s-process").value = name;
+      slQuality();
+      await loadDefaults(before.simple);
+    } else forced = s.layer_height;
   }
-  if (PR.hz.infill100) out.sparse_infill_density = "100%";
-  return out;
+  if (q.infill != null) setRange("s-infill", q.infill, (x) => Math.round(x) + " %");
+  if (q.walls != null) setRange("s-walls", Math.max(+$("s-walls").min, Math.min(+$("s-walls").max, q.walls)), (x) => String(Math.round(x)));
+  if (q.supports != null) $("s-supports").checked = q.supports;
+  if (q.brim != null) $("s-brim").checked = q.brim;
+  // As if set by hand: a profile chosen next keeps them.
+  for (const [k, key] of [["infill", "infill"], ["walls", "walls"], ["supports", "supports"], ["brim", "brim"]]) if (q[k] != null) (SL.touched ||= new Set()).add(key);
+  await advRefreshDefaults();
+  const adv = {};
+  for (const k of hzSheetKeys()) {
+    if (!(k in s) || ["layer_height", "sparse_infill_density", "wall_loops", "enable_support"].includes(k)) continue;
+    if (k === "brim_type" && s[k] === "no_brim") continue;
+    adv[k] = s[k];
+    if (String(s[k]) === String(ADV.defaults[k])) delete SL.adv[k];
+    else SL.adv[k] = s[k];
+  }
+  const now = currentSimple();
+  const simple = Object.fromEntries(["infill", "walls", "supports", "brim"].filter((k) => q[k] != null).map((k) => [k, now[k]]));
+  SL.hzSheet = { before, file: { process: $("s-process").value, simple, adv }, forced, layer: q.layer, n: Object.keys(adv).length };
+  advRenderRows();
+  if (ADV.cat) advRenderPanel();
+  slSummary();
+  hzSheetLine();
+}
+
+/* The sheet's line on what it took from the file, and the file's layer
+   height when no profile has it. */
+function hzSheetLine() {
+  const el = $("s-hzfile");
+  const m = SL.hzSheet;
+  el.classList.toggle("hidden", !m);
+  if (!m) return;
+  if (m.forced && $("s-process").value === m.file.process) $("s-layer-val").textContent = `${fmtDec(+m.forced, 2)} mm`;
+  const q = m.file.simple;
+  const parts = [
+    m.layer && `${fmtDec(m.layer, 2)} mm`,
+    q.infill != null && tr("slice.sum.infill", { v: Math.round(q.infill) + " %" }),
+    q.walls != null && tr("slice.sum.walls", { v: q.walls }),
+    q.supports && tr("slice.sum.supports"),
+    q.brim && tr("slice.sum.brim"),
+    m.n && tr("slice.hz.more", { n: m.n }),
+  ].filter(Boolean);
+  el.textContent = tr("slice.hz.file", { list: parts.join(", ") });
+}
+
+/* The file's layer height when no profile has it (the profile chosen
+   then still in place): the rest goes through the sheet. */
+function hzOverrides() {
+  const m = SL.hzSheet;
+  if (!hzSheetOn() || !m?.forced || $("s-process").value !== m.file.process) return {};
+  return { layer_height: String(m.forced) };
 }

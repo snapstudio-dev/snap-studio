@@ -24,7 +24,8 @@ function rememberFor(machine) {
 }
 
 function remember(machine, data) {
-  SL.memory[machine] = { ...rememberFor(machine), ...data };
+  // A plate "by height": the file's settings are not the person's choice.
+  SL.memory[machine] = { ...rememberFor(machine), ...(typeof hzMemo === "function" ? hzMemo(data, SL.hzSheet) : data) };
   SL.memory.last = machine;
   localStorage.setItem("snapstudio.slice", JSON.stringify(SL.memory));
 }
@@ -247,6 +248,7 @@ async function onMachineChange(mem) {
   // or the process list and the remembered adjustments would be the
   // other machine's.
   const seq = (SL.machineSeq = (SL.machineSeq || 0) + 1);
+  SL.hzSheet = null;
   try {
     const lists = await invoke("slice_lists", { machine });
     if (seq !== SL.machineSeq) return;
@@ -265,6 +267,8 @@ async function onMachineChange(mem) {
     if (seq !== SL.machineSeq) return;
     spdLoad(m.speed);
     advLoad(m.adv);
+    // A plate "by height": the file's settings (prepare-heights.js).
+    if (typeof hzSheetApply === "function") await hzSheetApply();
   } catch (e) {
     if (seq === SL.machineSeq) setSliceMessage(String(e), "err");
   }
@@ -451,6 +455,7 @@ async function loadDefaults(saved) {
   $("s-brim").checked = !!v.brim;
   slQuality();
   slSummary();
+  if (typeof hzSheetLine === "function") hzSheetLine();
 }
 
 document.querySelector("#smodal .sl-stepper").addEventListener("click", (e) => {
@@ -644,7 +649,7 @@ async function startSlice() {
     ? hzRequest(PR.hz, SL.source.items.map((it) => ({ base: it.base, scale: it.scale })), plate)
     : hcRequest(SL.source.items.map((it, i) => ({ base: it.base, hc: it.hc, hcl: it.hcl, scale: it.scale, map: scene[i].extruder_map })), plate);
   // The plan's heads as the engine numbers them (virtual heads after the
-  // physical ones); its layers are imposed (hzOverrides), not checked.
+  // physical ones); its layers are the sheet's (hzSheetApply), not checked.
   if (byHeight && heights.changes) heights = { changes: heights.changes.map((c) => ({ ...c, head: eng.index(c.head) })), layers: null };
   if (heights.error) {
     setSliceMessage(tr(`slice.heights.${heights.error}`), "err");

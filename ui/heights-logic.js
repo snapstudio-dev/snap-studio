@@ -320,9 +320,72 @@ function hzRematch(plan, heads) {
 /* A change's layer typed (from 2: the first is the start): its height. */
 const hzLayerZ = (n, lh, first) => (n >= 2 && lh > 0 && first > 0 ? hzLayerTop(Math.round(n), lh, first) : null);
 
+/* ------------------------------------------------------------ slice settings */
+
+/* A file's settings among `keys` (Orca keys), as strings. */
+const hzPick = (cfg, keys) =>
+  Object.fromEntries((keys || []).filter((k) => cfg?.[k] != null && cfg[k] !== "").map((k) => [k, String(cfg[k])]));
+
+/* The slice settings a plan brings: a 3MF's own (`settings`), a
+   describe's layers and full infill; a plan saved before them, its layers. */
+function hzPlanSettings(plan) {
+  if (!plan) return {};
+  const s = { ...(plan.settings || {}) };
+  const l = plan.layers;
+  if (l?.layer_height > 0) {
+    s.layer_height ??= String(l.layer_height);
+    s.initial_layer_print_height ??= String(l.first_layer || l.layer_height);
+  }
+  if (plan.infill100) s.sparse_infill_density ??= "100%";
+  return s;
+}
+
+/* The sheet's quick settings among them, each only when given:
+   { layer (rounded to the profiles' 0.01 mm), infill, walls, supports, brim }. */
+function hzQuick(s) {
+  const n = (k) => {
+    const x = parseFloat(String(s?.[k] ?? "").replace("%", ""));
+    return Number.isFinite(x) ? x : null;
+  };
+  const out = {};
+  if (n("layer_height") > 0) out.layer = Math.round(n("layer_height") * 100) / 100;
+  if (n("sparse_infill_density") != null) out.infill = Math.max(0, Math.min(100, n("sparse_infill_density")));
+  if (n("wall_loops") != null) out.walls = Math.round(n("wall_loops"));
+  if (s?.enable_support != null) out.supports = ["1", "true"].includes(String(s.enable_support));
+  if (s?.brim_type != null) out.brim = s.brim_type !== "no_brim";
+  return out;
+}
+
+/* What the sheet remembers for the machine once a file's settings were
+   applied to it (`m`: { before, file }, each { process, simple, adv }): a
+   value still the file's is not the person's choice, theirs from before
+   is kept; what they changed since is theirs. */
+function hzMemo(data, m) {
+  if (!m) return data;
+  const out = { ...data };
+  if ("process" in out && out.process === m.file.process) out.process = m.before.process;
+  if (out.simple) {
+    const s = { ...out.simple };
+    for (const k in m.file.simple) if (s[k] === m.file.simple[k]) s[k] = m.before.simple?.[k];
+    out.simple = s;
+  }
+  if (out.adv) {
+    const a = { ...out.adv };
+    for (const k in m.file.adv) {
+      // Absent: at the profile's value, the file's or one set back to it.
+      if (k in a && String(a[k]) !== String(m.file.adv[k])) continue;
+      if (m.before.adv && k in m.before.adv) a[k] = m.before.adv[k];
+      else delete a[k];
+    }
+    out.adv = a;
+  }
+  return out;
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     hcColours, hcFromFile, hcKey, hcRequest, hcMarks,
     hzLayerTop, hzSnap, hzBands, hzPlanHeads, hzRequest, hzColourGap, hzNearestHead, hzParseDescribe, hzColourOf, hzFromDescribe, hzFromFile, hzRematch, hzLayerZ,
+    hzPick, hzPlanSettings, hzQuick, hzMemo,
   };
 }

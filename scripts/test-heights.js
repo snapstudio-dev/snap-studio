@@ -231,4 +231,36 @@ assert.strictEqual(H.hzSnap(H.hzLayerZ(11, 0.08, 0.16), 0.08, 0.16).layer, 11, "
 assert.strictEqual(H.hzLayerZ(1, 0.08, 0.16), null);
 assert.strictEqual(H.hzLayerZ(5, 0, 0.16), null);
 
+// The slice settings a plan brings: a 3MF's own, among the sheet's keys.
+assert.deepStrictEqual(H.hzPick({ layer_height: "0.08", wall_loops: "3", filament_colour: "#fff", x: "" }, ["layer_height", "wall_loops", "x", "y"]), { layer_height: "0.08", wall_loops: "3" });
+assert.deepStrictEqual(H.hzPick(null, ["a"]), {});
+// A describe's layers and full infill; a 3MF's settings win over its layers.
+assert.deepStrictEqual(H.hzPlanSettings({ layers: { layer_height: 0.08, first_layer: 0.16 }, infill100: true }), {
+  layer_height: "0.08", initial_layer_print_height: "0.16", sparse_infill_density: "100%",
+});
+assert.deepStrictEqual(H.hzPlanSettings({ layers: { layer_height: 0.08, first_layer: 0.16 }, settings: { layer_height: "0.08", initial_layer_print_height: "0.2", wall_loops: "3" } }), {
+  layer_height: "0.08", initial_layer_print_height: "0.2", wall_loops: "3",
+});
+assert.deepStrictEqual(H.hzPlanSettings({ layers: null }), {});
+assert.deepStrictEqual(H.hzPlanSettings(null), {});
+// The quick settings among them.
+assert.deepStrictEqual(H.hzQuick({ layer_height: "0.075", sparse_infill_density: "100%", wall_loops: "3", enable_support: "0", brim_type: "no_brim" }), {
+  layer: 0.08, infill: 100, walls: 3, supports: false, brim: false,
+});
+assert.deepStrictEqual(H.hzQuick({ enable_support: "1", brim_type: "auto_brim" }), { supports: true, brim: true });
+assert.deepStrictEqual(H.hzQuick({}), {});
+
+// What the sheet remembers once the file's settings were applied: the
+// person's from before, unless they changed one since.
+const memo = {
+  before: { process: "0.20mm Standard @U1", simple: { infill: 15, walls: 2, supports: true, brim: false }, adv: { seam_position: "back", ironing_type: "top" } },
+  file: { process: "0.08mm Standard @U1", simple: { infill: 100, walls: 3 }, adv: { seam_position: "aligned", initial_layer_print_height: "0.16", top_shell_layers: "6" } },
+};
+assert.deepStrictEqual(
+  H.hzMemo({ process: "0.08mm Standard @U1", simple: { infill: 100, walls: 4, supports: true, brim: false }, adv: { initial_layer_print_height: "0.16", top_shell_layers: "8", ironing_type: "top" } }, memo),
+  { process: "0.20mm Standard @U1", simple: { infill: 15, walls: 4, supports: true, brim: false }, adv: { seam_position: "back", top_shell_layers: "8", ironing_type: "top" } },
+);
+assert.deepStrictEqual(H.hzMemo({ process: "0.12mm Standard @U1" }, memo), { process: "0.12mm Standard @U1" }, "a profile chosen since");
+assert.deepStrictEqual(H.hzMemo({ adv: { a: "1" } }, null), { adv: { a: "1" } });
+
 console.log("test-heights: ok");
