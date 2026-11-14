@@ -272,6 +272,20 @@ function plSupportBadge(objects, hintOf, supportsOn) {
 const plHintKey = (o, angle) =>
   [o.path, o.item, o.piece ?? "", +o.rot[0].toFixed(3), +o.rot[1].toFixed(3), ...o.scale.map((s) => +s.toFixed(4)), angle ?? ""].join("|");
 
+/* The keyboard is in a field where ⌘Z undoes typing: a text box, a number,
+   a list, a text area. A slider, a checkbox or a switch has nothing to undo,
+   so the plate's shortcuts still apply there (it keeps the keyboard after a
+   drag). `el`: the key event's target. */
+const PL_NOT_TYPED = new Set(["range", "checkbox", "radio", "button", "submit", "reset", "color", "file", "image"]);
+function plTyping(el) {
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  const tag = String(el.tagName || "").toUpperCase();
+  if (tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (tag !== "INPUT") return false;
+  return !PL_NOT_TYPED.has(String(el.type || "text").toLowerCase());
+}
+
 if (typeof module !== "undefined") {
-  module.exports = { plPalette, plUncoloured, plPlateColours, plMigrateToColour, plMigrateToObject, plUnmapped, plBulk, plBedState, plGroups, plSliced, plRange, plSnapAngle, plWrapDeg, plNudge, plInside, plParkSpot, plRangeIds, plProject, plScreenBox, plMarquee, plUniform, plScaleSplit, plTools, plSupportBadge, plHintKey };
+  module.exports = { plTyping, plPalette, plUncoloured, plPlateColours, plMigrateToColour, plMigrateToObject, plUnmapped, plBulk, plBedState, plGroups, plSliced, plRange, plSnapAngle, plWrapDeg, plNudge, plInside, plParkSpot, plRangeIds, plProject, plScreenBox, plMarquee, plUniform, plScaleSplit, plTools, plSupportBadge, plHintKey };
 }

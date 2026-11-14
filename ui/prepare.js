@@ -2871,9 +2871,12 @@ document.addEventListener("keydown", (e) => {
   // The slice preview covers the plate without leaving the view: its keys
   // (R reframes) must not reach the plate (R rotates, Backspace removes).
   if (!$("viewer").classList.contains("hidden")) return;
-  if (["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
+  if (plTyping(e.target)) return;
   const mod = e.metaKey || e.ctrlKey;
   const k = e.key.toLowerCase();
+  // A slider or a switch keeps the keyboard after use: only undo / redo
+  // reach the plate from there, its own keys (arrows, Space) stay its own.
+  if (e.target.tagName === "INPUT" && !(mod && (k === "z" || k === "y"))) return;
   if (mod && k === "z") {
     e.preventDefault();
     e.shiftKey ? prRedo() : prUndo();

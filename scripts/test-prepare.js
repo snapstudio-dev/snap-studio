@@ -246,4 +246,18 @@ assert.strictEqual(L.plTools({ n: 1 })["p-save"].on, true);
   assert.strictEqual(L.plPalette(null, 0).heads.length, 1, "at least one head");
 }
 
+
+// Undo shortcut: a slider or a switch keeps the keyboard, ⌘Z still undoes.
+assert.strictEqual(L.plTyping({ tagName: "INPUT", type: "range" }), false, "slider");
+assert.strictEqual(L.plTyping({ tagName: "INPUT", type: "checkbox" }), false, "switch");
+assert.strictEqual(L.plTyping({ tagName: "BUTTON" }), false);
+assert.strictEqual(L.plTyping({ tagName: "CANVAS" }), false);
+assert.strictEqual(L.plTyping(null), false);
+assert.strictEqual(L.plTyping({ tagName: "INPUT", type: "number" }), true, "typed value");
+assert.strictEqual(L.plTyping({ tagName: "INPUT", type: "text" }), true);
+assert.strictEqual(L.plTyping({ tagName: "INPUT" }), true, "no type is text");
+assert.strictEqual(L.plTyping({ tagName: "TEXTAREA" }), true);
+assert.strictEqual(L.plTyping({ tagName: "SELECT" }), true);
+assert.strictEqual(L.plTyping({ tagName: "DIV", isContentEditable: true }), true);
+
 console.log("prepare: ok");
