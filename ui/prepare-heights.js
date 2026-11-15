@@ -103,12 +103,15 @@ function hzBanner(live, slots, n) {
     `<span class="hz-col hz-want" title="${esc(tr("hz.want.title", { name: w.name }))}"><i style="--c:${esc(w.hex)}"></i>${w.named ? `<span>${esc(w.name)}</span>` : ""}</span>`;
   const far = (w, h) =>
     live && w && hzFar(w.hex, headsColorOf(pid, h))
-      ? `<span class="hz-far" tabindex="0" title="${esc(tr("hz.far", { name: w.name }))}" aria-label="${esc(tr("hz.far", { name: w.name }))}">⚠</span>`
-      : "";
-  const to = (w, h, i) => (w ? `${chip(w)}<span class="hz-to" aria-hidden="true">→</span>` : "") + tok(h, i) + far(w, h);
+      ? `<span class="hz-far" role="button" tabindex="0" data-tip="${esc(tr("hz.far", { name: w.name }))}" aria-label="${esc(tr("hz.far", { name: w.name }))}">⚠</span>`
+      : "<span></span>";
+  // Each row on one grid: the heads in one column, the mark, pause and
+  // delete in theirs (empty on the start), whatever the colours' width.
+  const to = (w, h, i) => (w ? `${chip(w)}<span class="hz-to" aria-hidden="true">→</span>` : "") + tok(h, i);
   const start = `<div class="p-color hz-line">
-      <span class="hz-z">${esc(tr("hz.start"))}</span>
+      <span class="hz-z"><span class="hz-lbl">${esc(tr("hz.start"))}</span></span>
       <span class="p-toks">${to(want(-1), hz.base, -1)}</span>
+      ${far(want(-1), hz.base)}<span></span><span></span>
     </div>`;
   let cur = hz.base;
   const top = hzTop();
@@ -120,7 +123,7 @@ function hzBanner(live, slots, n) {
       if (!pause) cur = c.head;
       const layer = hzSnap(c.z, lh, first).layer;
       // The other unit under the field, where it has the row's width.
-      const z = byLayer ? `<span>${esc(tr("hz.layer.at"))}</span>
+      const z = byLayer ? `<span class="hz-lbl">${esc(tr("hz.layer.at"))}</span>
           <span class="hz-zcol"><input type="number" class="hz-z-in" data-hzz="${i}" data-unit="layer" step="1" min="2" value="${layer}" aria-label="${esc(tr("hz.layer.input"))}" />
           <small>${esc(hzFmt(c.z))} mm</small></span>`
         : `<span class="hz-zcol"><span><input type="number" class="hz-z-in" data-hzz="${i}" step="${lh}" min="${first}" value="${+c.z.toFixed(3)}" aria-label="${esc(tr("hz.height"))}" /> mm</span>
@@ -132,9 +135,11 @@ function hzBanner(live, slots, n) {
           ? `<span class="hz-pause" title="${esc(tr("hz.pause.load.title", { name: w.name }))}">${esc(tr("hz.pause.load"))} ${chip(w)}</span>`
           : `<span class="hz-pause" title="${esc(tr("hz.pause.title"))}">${esc(tr("hz.pause"))}</span>`
         : to(w, c.head, i);
+      const mark = pause ? "<span></span>" : far(w, c.head);
       return `<div class="p-color hz-line${above ? " hz-out" : ""}" data-hzrow="${i}">
         <span class="hz-z">${z}${above}</span>
         <span class="p-toks">${who}</span>
+        ${mark}
         <button type="button" class="p-ico hz-kind${pause ? " on" : ""}" data-hzk="${i}" title="${esc(tr(pause ? "hz.kind.auto" : "hz.kind.pause"))}">${HZ_ICON.pause}</button>
         <button type="button" class="p-ico" data-hzdel="${i}" title="${esc(tr("hz.remove"))}">${HZ_ICON.del}</button>
       </div>`;
@@ -143,17 +148,17 @@ function hzBanner(live, slots, n) {
   // One short line, where the layers come from in its ⓘ.
   const [key, tip] = PR.hz?.layers ? ["hz.layers.file", "hz.layers.file.tip"] : ["hz.layers.profile", "hz.layers.profile.tip"];
   const layers = `<small class="vp-sub">${esc(tr(key, { lh: hzFmt(lh), first: hzFmt(first) }))}</small>
-        <span class="mt-info" tabindex="0" title="${esc(tr(tip))}" aria-label="${esc(tr(tip))}">i</span>`;
+        <span class="mt-info" role="button" tabindex="0" data-tip="${esc(tr(tip))}" aria-label="${esc(tr(tip))}">i</span>`;
   const warns = hzWarnsHtml(hz.warnings || []);
   const unit = (u, key) => `<button type="button" class="seg-btn${(u === "layer") === byLayer ? " on" : ""}" data-hzunit="${u}">${esc(tr(key))}</button>`;
   return `<div class="p-grp p-hz">
       <div class="p-grp-head">
         <span class="k">${esc(tr("hz.title", { n: hz.changes.length }))}</span>
-        <div class="seg hz-unit" role="group" aria-label="${esc(tr("hz.unit"))}">${unit("layer", "hz.unit.layers")}${unit("mm", "hz.unit.mm")}</div>
       </div>
       <div class="group">${start}${rows}</div>
       <div class="hz-foot">
         <button type="button" class="btn small" data-hzadd>${esc(tr("hz.add"))}</button>
+        <div class="seg compact hz-unit" role="group" aria-label="${esc(tr("hz.unit"))}">${unit("layer", "hz.unit.layers")}${unit("mm", "hz.unit.mm")}</div>
       </div>
       <div class="hz-layers">${layers}</div>
       ${warns}
@@ -179,15 +184,22 @@ function hzWarnText(w) {
    swatch and its name (a describe's) or hex (a 3MF's). */
 function hzWarnsHtml(warnings) {
   const out = (w) => `<div class="hz-warn">${w}</div>`;
+  const col = (hex, name) => `<span class="hz-col">${hex ? `<i style="--c:${esc(hex)}"></i>` : ""}${esc(name || hex || "?")}</span>`;
   const missing = warnings.filter((w) => w.kind === "unloaded");
-  const lines = warnings.filter((w) => w.kind !== "unloaded").map((w) => out(esc(hzWarnText(w))));
+  const lines = warnings
+    .filter((w) => w.kind !== "unloaded")
+    .map((w) => {
+      if (w.kind !== "same") return out(esc(hzWarnText(w)));
+      // The two colours as swatches: their quotes go (a line could break
+      // between a quote and its colour), the rest as translated.
+      const text = esc(tr("hz.warn.same", { a: "\u0001", b: "\u0002" })).replace(/[\u00ab\u201c\u201e\u300c]\s?(\u0001|\u0002)\s?[\u00bb\u201d\u201c\u300d]/g, "$1");
+      return out(text.replace("\u0001", col(w.hex, w.name)).replace("\u0002", col(w.with, w.withName)));
+    });
   if (missing.length) {
-    const names = missing
-      .map((w) => `<span class="hz-col">${w.hex ? `<i style="--c:${esc(w.hex)}"></i>` : ""}${esc(w.name || w.hex || "?")}</span>`)
-      .join(", ");
+    const names = missing.map((w) => col(w.hex, w.name)).join(", ");
     const [a, b] = tr("hz.warn.unloaded", { n: missing.length, names: "\u0000" }).split("\u0000");
     const help = esc(tr("hz.warn.unloaded.tip", { n: missing.length }));
-    const tip = `<span class="mt-info" tabindex="0" title="${help}" aria-label="${help}">i</span>`;
+    const tip = `<span class="mt-info" role="button" tabindex="0" data-tip="${help}" aria-label="${help}">i</span>`;
     lines.push(out(`${esc(a)}${names}${esc(b ?? "")} ${tip}`));
   }
   return lines.join("");

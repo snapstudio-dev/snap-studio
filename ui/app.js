@@ -820,6 +820,67 @@ async function updateDetails() {
 const esc = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+/* An ⓘ (or a mark) with `data-tip`: its text in a bubble on click, Enter
+   or Space, rather than a tooltip that waits under the pointer. One at a
+   time; a second click, a click elsewhere, Escape, a scroll or a resize
+   close it. */
+const TIP = { el: null, anchor: null };
+function tipClose() {
+  TIP.el?.remove();
+  TIP.anchor?.setAttribute("aria-expanded", "false");
+  TIP.el = TIP.anchor = null;
+}
+function tipOpen(a) {
+  tipClose();
+  const el = document.createElement("div");
+  el.className = "tip-pop";
+  el.setAttribute("role", "tooltip");
+  el.textContent = a.dataset.tip;
+  document.body.append(el);
+  // Under its anchor, centred on it, kept in the window; above when the
+  // window ends first.
+  const r = a.getBoundingClientRect();
+  const m = 8, w = el.offsetWidth, h = el.offsetHeight;
+  el.style.left = `${Math.max(m, Math.min(r.left + r.width / 2 - w / 2, innerWidth - w - m))}px`;
+  el.style.top = `${r.bottom + 6 + h <= innerHeight - m ? r.bottom + 6 : Math.max(m, r.top - 6 - h)}px`;
+  a.setAttribute("aria-expanded", "true");
+  Object.assign(TIP, { el, anchor: a });
+}
+// Captured: the click opens the bubble and goes no further (a row under it
+// is not selected); any other click closes it and carries on.
+document.addEventListener(
+  "click",
+  (e) => {
+    const a = e.target.closest?.("[data-tip]");
+    if (a) {
+      e.preventDefault();
+      e.stopPropagation();
+      return a === TIP.anchor ? tipClose() : tipOpen(a);
+    }
+    if (TIP.el && !TIP.el.contains(e.target)) tipClose();
+  },
+  true,
+);
+document.addEventListener(
+  "keydown",
+  (e) => {
+    const a = e.target.closest?.("[data-tip]");
+    if (a && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      e.stopPropagation();
+      return a === TIP.anchor ? tipClose() : tipOpen(a);
+    }
+    // Escape closes the bubble only, not the sheet under it.
+    if (e.key === "Escape" && TIP.el) {
+      e.stopPropagation();
+      tipClose();
+    }
+  },
+  true,
+);
+addEventListener("scroll", (e) => TIP.el && !TIP.el.contains(e.target) && tipClose(), true);
+addEventListener("resize", tipClose);
+
 async function analyzeSelected() {
   const path = [...state.sel][0];
   if (!path) return;

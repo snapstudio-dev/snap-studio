@@ -51,6 +51,14 @@ with its packages for macOS, Windows and Linux. What comes next:
   them, each can still be changed, and the settings remembered for the
   printer stay yours. Its colours show the plan by height, head by head,
   instead of the model's colours (#103).
+- **Help marks open on a click**: in Prepare's by height list and in
+  Maintenance, an ⓘ (and the ⚠ of a head far from its colour) opens its text
+  in a bubble on a click, or Enter, instead of a tooltip that needs the
+  pointer to wait on it. A click elsewhere or Escape closes it. The by height
+  list itself lines up: the heads, marks and buttons in columns, the start
+  included, each row on its field's line, the layers or mm switch beside
+  "Add a change", and its warnings in boxes, with swatches for the colours
+  (#103).
 
 ### Fixed
 - **Colour marks of the preview**: the first colour of a print changing
