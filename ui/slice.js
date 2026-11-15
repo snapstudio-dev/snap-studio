@@ -504,9 +504,11 @@ function slHzPlanRows() {
   return [
     row(tr("hz.start"), "", tok(PR.hz.base ?? 0)),
     ...PR.hz.changes.map((c) => {
-      const layer = hzSnapZ(c.z).layer;
+      // Layers only when the file sets them: otherwise they depend on the
+      // sheet's profile, which can change here; the mm stay right.
+      const layer = PR.hz.layers ? hzSnapZ(c.z).layer : null;
       const mm = `${hzFmt(c.z)} mm`;
-      const who = c.kind === "pause" ? `<span class="hz-pause">${esc(tr("hz.pause"))}</span>` : tok(c.head);
+      const who = c.kind === "pause" ? `<span class="hz-pause" title="${esc(tr("hz.pause.title"))}">${esc(tr("hz.pause"))}</span>` : tok(c.head);
       return layer ? row(up(tr("hz.layer", { n: layer })), mm, who) : row(mm, "", who);
     }),
   ].join("");
