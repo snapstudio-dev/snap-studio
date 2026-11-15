@@ -298,7 +298,7 @@ function mtRender() {
       : "";
   box.innerHTML = `${notice}${banner}
     <div class="mt-strip">${strip}</div>
-    <div class="vp-section">${esc(tr("maint.tasks"))} <span class="mt-info" title="${esc(tr("maint.note"))}">i</span></div>
+    <div class="vp-section">${esc(tr("maint.tasks"))} <span class="mt-info" role="button" tabindex="0" data-help="${esc(tr("maint.note"))}" aria-label="${esc(tr("maint.note"))}">i</span></div>
     <div class="group mt-tasks">${rows}</div>
     ${heads ? `<div class="vp-section">${esc(tr("maint.heads"))}</div><div class="mt-heads">${heads}</div>` : ""}
     ${mtHistory()}`;

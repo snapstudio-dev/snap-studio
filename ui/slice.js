@@ -24,7 +24,8 @@ function rememberFor(machine) {
 }
 
 function remember(machine, data) {
-  SL.memory[machine] = { ...rememberFor(machine), ...data };
+  // A plate "by height": the file's settings are not the person's choice.
+  SL.memory[machine] = { ...rememberFor(machine), ...(typeof hzMemo === "function" ? hzMemo(data, SL.hzSheet) : data) };
   SL.memory.last = machine;
   localStorage.setItem("snapstudio.slice", JSON.stringify(SL.memory));
 }
@@ -247,6 +248,7 @@ async function onMachineChange(mem) {
   // or the process list and the remembered adjustments would be the
   // other machine's.
   const seq = (SL.machineSeq = (SL.machineSeq || 0) + 1);
+  SL.hzSheet = null;
   try {
     const lists = await invoke("slice_lists", { machine });
     if (seq !== SL.machineSeq) return;
@@ -265,6 +267,8 @@ async function onMachineChange(mem) {
     if (seq !== SL.machineSeq) return;
     spdLoad(m.speed);
     advLoad(m.adv);
+    // A plate "by height": the file's settings (prepare-heights.js).
+    if (typeof hzSheetApply === "function") await hzSheetApply(seq);
   } catch (e) {
     if (seq === SL.machineSeq) setSliceMessage(String(e), "err");
   }
@@ -391,7 +395,18 @@ function renderModelMap(fromPrinter) {
       </div>`);
     }
   });
-  $("s-map").innerHTML = rows.join("");
+  // "By height": the plan is what the slice follows, every colour of the
+  // model going to the start head; the rows stay, hidden, for the slice.
+  const plan = slHzPlanRows();
+  $("s-map").innerHTML = plan ? `${plan}<div class="hidden">${rows.join("")}</div>` : rows.join("");
+  const title = $("s-map-title");
+  if (plan) {
+    title.removeAttribute("data-i18n");
+    title.textContent = tr("hz.title", { n: PR.hz.changes.length });
+  } else {
+    title.setAttribute("data-i18n", "slice.model_colors");
+    title.textContent = tr("slice.model_colors");
+  }
   slOrphanLine();
   slUsedHeads();
   // Bed temperatures depend on the heads used.
@@ -451,6 +466,7 @@ async function loadDefaults(saved) {
   $("s-brim").checked = !!v.brim;
   slQuality();
   slSummary();
+  if (typeof hzSheetLine === "function") hzSheetLine();
 }
 
 document.querySelector("#smodal .sl-stepper").addEventListener("click", (e) => {
@@ -466,7 +482,36 @@ document.querySelector("#smodal .sl-stepper").addEventListener("click", (e) => {
 /* Heads used by the model (colors → heads), a virtual head giving its two
    physical ones; empty if unknown. */
 function slUsedSet() {
-  return vhPhysical(slMapValues(), headsVirtual(currentPrinter()?.id || ""));
+  const values = slMapValues();
+  // "By height": the plan's heads too, as the slice sends them.
+  if (slHzOn()) for (const h of hzLiveHeads()) values.add(h);
+  return vhPhysical(values, headsVirtual(currentPrinter()?.id || ""));
+}
+const slHzOn = () => typeof hzSheetOn === "function" && hzSheetOn();
+
+/* "By height": the plan, read-only, as Prepare shows it: the start, then
+   each change with its layer and height, its head or a pause. */
+function slHzPlanRows() {
+  if (!slHzOn()) return "";
+  const pid = currentPrinter()?.id || "";
+  const tok = (h) => (vhIs(h) ? slVirtualToken(pid, h) : headToken({ h, slot: SL.slots.find((s) => s.index === h), tag: "span", cls: " ro", on: true }));
+  const row = (label, sub, who) => `<div class="sl-maprow">
+        <span class="sl-map-label"><b>${esc(label)}</b>${sub ? `<small>${esc(sub)}</small>` : ""}</span>
+        <span class="sl-arrow">→</span>
+        <span class="sl-tokens">${who}</span>
+      </div>`;
+  const up = (t) => t.charAt(0).toLocaleUpperCase() + t.slice(1);
+  return [
+    row(tr("hz.start"), "", tok(PR.hz.base ?? 0)),
+    ...PR.hz.changes.map((c) => {
+      // Layers only when the file sets them: otherwise they depend on the
+      // sheet's profile, which can change here; the mm stay right.
+      const layer = PR.hz.layers ? hzSnapZ(c.z).layer : null;
+      const mm = `${hzFmt(c.z)} mm`;
+      const who = c.kind === "pause" ? `<span class="hz-pause" title="${esc(tr("hz.pause.title"))}">${esc(tr("hz.pause"))}</span>` : tok(c.head);
+      return layer ? row(up(tr("hz.layer", { n: layer })), mm, who) : row(mm, "", who);
+    }),
+  ].join("");
 }
 /* The map's head values as they are (virtual ones included). */
 const slMapValues = () => new Set([...document.querySelectorAll("#s-map select")].map((s) => +s.value));
@@ -478,7 +523,12 @@ const slMixes = () => vhUsesVirtual(slMapValues(), headsVirtual(currentPrinter()
 /* Smooth mix applies: a virtual head, the plate's switch on (the default). */
 const slSmooth = () => slMixes() && vhSmoothOn(PR);
 
-const slOrphans = () => [...slMapValues()].filter((h) => vhOrphan(headsVirtual(currentPrinter()?.id || ""), h));
+const slOrphans = () => {
+  const values = slMapValues();
+  // "By height": the plan's heads are the slice's too.
+  if (typeof PR !== "undefined" && PR.assoc === "height" && PR.hz) for (const h of hzLiveHeads()) values.add(h);
+  return [...values].filter((h) => vhOrphan(headsVirtual(currentPrinter()?.id || ""), h));
+};
 function slOrphanLine() {
   const n = slOrphans().length;
   $("s-orphan").classList.toggle("hidden", !n);
@@ -629,21 +679,30 @@ async function startSlice() {
   for (const m of maps) for (let i = 0; i < m.length; i++) if (m[i] == null) m[i] = 0;
   // Virtual heads: after the physical ones (head n + k), their mixes sent.
   const pid = currentPrinter()?.id || "";
-  const eng = vhEngine(new Set(maps.flat()), headsVirtual(pid), filaments.length);
+  // "By height" mode: the plate's plan (prepare-heights.js), its heads used too.
+  const byHeight = typeof PR !== "undefined" && PR.assoc === "height" && PR.hz;
+  const hzHeadsUsed = byHeight ? hzLiveHeads() : [];
+  const used = new Set([...maps.flat(), ...hzHeadsUsed]);
+  const eng = vhEngine(used, headsVirtual(pid), filaments.length);
   const virtual_heads = eng.heads.map((v) => ({ a: v.a, b: v.b, pct: v.pct, color: headsVirtualColor(pid, v) || null }));
   const groupOf = (i) => SL.groups.findIndex((g) => g.items.includes(i));
   const scene = SL.source.items.map(({ id, colors, heads, base, hc, hcl, ...it }, i) => ({ ...it, extruder_map: (maps[groupOf(i)] || []).map(eng.index) }));
   // Colour changes at a height (HueForge): the plate's single head
   // switched from each height up, by the engine.
-  const heights = hcRequest(
-    SL.source.items.map((it, i) => ({ base: it.base, hc: it.hc, hcl: it.hcl, scale: it.scale, map: scene[i].extruder_map })),
-    { pillars: prPillarsRequest().length > 0, byObject: String(prTowerSetting("print_sequence") || "") === "by object" },
-  );
+  const plate = { pillars: prPillarsRequest().length > 0, byObject: String(prTowerSetting("print_sequence") || "") === "by object", top: byHeight ? hzTop() : 0 };
+  let heights = byHeight
+    ? hzRequest(PR.hz, SL.source.items.map((it) => ({ base: it.base, scale: it.scale })), plate)
+    : hcRequest(SL.source.items.map((it, i) => ({ base: it.base, hc: it.hc, hcl: it.hcl, scale: it.scale, map: scene[i].extruder_map })), plate);
+  // The plan's heads as the engine numbers them (virtual heads after the
+  // physical ones). The layers an imported plan was placed on go with it:
+  // the sheet starts on them (hzSheetApply), a profile changed there since
+  // would change colour elsewhere, the engine says so.
+  if (byHeight && heights.changes) heights = { changes: heights.changes.map((c) => ({ ...c, head: eng.index(c.head) })), layers: heights.layers || null };
   if (heights.error) {
     setSliceMessage(tr(`slice.heights.${heights.error}`), "err");
     return;
   }
-  const heads = [...vhPhysical(new Set(maps.flat()), headsVirtual(pid))];
+  const heads = [...vhPhysical(used, headsVirtual(pid))];
   const empty = heads.filter((h) => SL.slots.find((s) => s.index === h && !s.present));
   if (empty.length) {
     setSliceMessage(tr("slice.head_empty", { heads: empty.map((h) => "T" + h).join(", ") }), "err");
@@ -696,7 +755,7 @@ async function startSlice() {
         // Each layer of a virtual head split between its two heads: sent
         // with virtual heads only (otherwise the request is unchanged).
         ...(virtual_heads.length && vhSmoothOn(PR) ? { smooth_mix: true } : {}),
-        overrides: { ...advOverrides(), ...spdOverrides(), ...prTowerOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
+        overrides: { ...advOverrides(), ...spdOverrides(), ...prTowerOverrides(), ...(typeof hzOverrides === "function" ? hzOverrides() : {}), ...(bed ? { curr_bed_type: bed } : {}) },
       },
     });
     const bedLabel = $("s-bed").selectedOptions[0]?.textContent || "";

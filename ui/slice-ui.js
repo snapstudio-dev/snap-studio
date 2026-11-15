@@ -535,10 +535,8 @@ function slTokens() {
     const fil = SL.models.find((m) => m.path === SL.groups[gi]?.path)?.filaments.find((f) => f.index === ext);
     // A virtual head: its token after the physical ones, or "Choose" once
     // it is gone (the slice waits for Prepare).
-    const pid = currentPrinter()?.id || "", list = headsVirtual(pid), v = +sel.value;
-    const virt = !vhIs(v) ? "" : vhFind(list, v)
-      ? vhToken({ name: vhName(list, v), color: headsColorOf(pid, v), ca: hdSpoolColor(pid, vhFind(list, v).a), cb: hdSpoolColor(pid, vhFind(list, v).b), on: true, cls: " ro" })
-      : `<span class="sl-token p-choose ro">${esc(tr("prepare.choose_head"))}</span>`;
+    const pid = currentPrinter()?.id || "", v = +sel.value;
+    const virt = vhIs(v) ? slVirtualToken(pid, v) : "";
     box.innerHTML = Array.from({ length: n }, (_, h) => {
       const slot = SL.slots.find((s) => s.index === h);
       const empty = slot && !slot.present;
@@ -547,6 +545,15 @@ function slTokens() {
       return headToken({ h, slot, tag: "span", cls: " ro", on: +sel.value === h, empty, title, after: clash ? "<em>⚠</em>" : "" });
     }).join("") + virt;
   });
+}
+
+/* A virtual head's token, or "Choose" once it is gone (the slice waits
+   for Prepare). */
+function slVirtualToken(pid, v) {
+  const list = headsVirtual(pid), vh = vhFind(list, v);
+  return vh
+    ? vhToken({ name: vhName(list, v), color: headsColorOf(pid, v), ca: hdSpoolColor(pid, vh.a), cb: hdSpoolColor(pid, vh.b), on: true, cls: " ro" })
+    : `<span class="sl-token p-choose ro">${esc(tr("prepare.choose_head"))}</span>`;
 }
 
 /* ------------------------------------------------------------ refreshes */
@@ -558,6 +565,10 @@ window.addEventListener("langchange", () => {
   slRenderPrinters();
   slRenderMachine();
   slQuality();
+  // The plan's title and layers are written, not tagged; so is the line
+  // of the file's settings.
+  if (slHzOn()) renderModelMap(false);
+  if (typeof hzSheetLine === "function") hzSheetLine();
 });
 
 $("smodal").addEventListener("change", (e) => {

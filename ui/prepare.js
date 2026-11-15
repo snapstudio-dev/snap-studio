@@ -16,8 +16,13 @@ const PR = {
   /* How colours get their heads: "object" (each object chooses, under its
      row) or "colour" (the plate's colours are assigned once for every
      object, above the list, as Snapmaker Orca does). Starts from the
-     Settings default; never kept per file. */
+     Settings default; never kept per file. "height": the whole plate
+     prints with one head, changed at heights (HueForge, heights-logic.js);
+     a plate keeping such a list comes back in that mode. */
   assoc: "object",
+  /* "height" mode: { base, changes: [{ z, head, kind }], layers, src }
+     (hzBands), null until the mode is first used. */
+  hz: null,
   /* "colour" mode: colour → head, null while unchosen (blocks the slice). */
   colourHeads: {},
   nextId: 1,
@@ -59,7 +64,21 @@ const PREP_VS = MESH_VS.replace("in vec3 aCol;", "in vec3 aCol;\nin float aExt;\
    hidden: a second pass (uOver 2) draws the
    hidden ones only, hatched, through what covers them; the winding tells
    their outward side (uFlip: a mirroring scale). */
-const PREP_FS = MESH_FS.replace("in vec3 vPosV;", "in vec3 vPosV;\nin vec3 vPosW;")
+/* The tint's bands at most: a HueForge print changes colour some ten to
+   thirty times; within WebGL 2's 224 fragment uniform vectors. */
+const HZ_BANDS = 64;
+const PREP_FS = MESH_FS.replace("in vec3 vPosV;", `in vec3 vPosV;\nin vec3 vPosW;\nuniform int uHzN;\nuniform float uHzZ[${HZ_BANDS}];\nuniform vec3 uHzCol[${HZ_BANDS}];`)
+  // "By height" mode (prepare-heights.js): each band's spool colour from
+  // its bottom up, before the light.
+  .replace(
+    "vec3 c = vCol * (",
+    `vec3 col = vCol;
+  if (uHzN > 0) {
+    col = uHzCol[0];
+    for (int i = 1; i < ${HZ_BANDS}; i++) if (i < uHzN && vPosW.z >= uHzZ[i]) col = uHzCol[i];
+  }
+  vec3 c = col * (`
+  )
   .replace("out vec4 frag;", "uniform vec4 uTint;\nuniform float uAlpha;\nuniform float uOver;\nuniform float uOverCos;\nuniform float uFlip;\nuniform vec3 uOverCol;\nuniform vec3 uEye;\nout vec4 frag;")
   .replace(
     "frag = vec4(c, 1.0);",
@@ -101,7 +120,7 @@ const prStored = ({ id, name, path, item, piece, pos, rot, scale, size, plate, e
 
 function prSave() {
   const objects = PR.objects.map(prStored);
-  localStorage.setItem("snapstudio.plate", JSON.stringify({ objects, nextId: PR.nextId, colourHeads: PR.colourHeads, tower: prTowerStored(), smoothMix: vhSmoothOn(PR) }));
+  localStorage.setItem("snapstudio.plate", JSON.stringify({ objects, nextId: PR.nextId, colourHeads: PR.colourHeads, hz: PR.hz, hzFrom: PR.hzFrom, tower: prTowerStored(), smoothMix: vhSmoothOn(PR) }));
   prStatus();
   prPruneMeshes();
   prHintRefresh();
@@ -155,14 +174,18 @@ function prLoadState() {
       PR.objects = s.objects;
       PR.nextId = s.nextId || PR.objects.length + 1;
       PR.colourHeads = s.colourHeads && typeof s.colourHeads === "object" ? s.colourHeads : {};
+      PR.hz = s.hz && Array.isArray(s.hz.changes) ? s.hz : null;
+      // The mode "by height" came from, to go back to as it was.
+      PR.hzFrom = s.hzFrom === "colour" || s.hzFrom === "object" ? s.hzFrom : undefined;
       // Read by prepare-tower.js (prTowerRestore).
       PR.tower = s.tower;
       // Smooth mix (virtual heads): on unless the plate says otherwise.
       PR.smoothMix = vhSmoothOn(s);
     }
   } catch {}
-  // The mode is the Settings default at each start, never the file's.
-  PR.assoc = PRUI.assocDefault;
+  // The mode is the Settings default at each start, never the file's;
+  // a plate with colour changes at a height keeps that mode.
+  PR.assoc = PR.hz?.changes?.length ? "height" : PRUI.assocDefault;
 }
 
 /* ------------------------------------------------------------ history */
@@ -174,6 +197,7 @@ const HIST = { undo: [], redo: [] };
 const prSnap = () =>
   JSON.stringify({
     objects: PR.objects,
+    hz: PR.hz,
     tower: { x: PR.tower?.x ?? null, y: PR.tower?.y ?? null, rot: PR.tower?.rot || 0, row: PR.tower?.row || { rot: 0 }, groups: PR.tower?.groups || {}, pillars: PR.tower?.pillars || {} },
   });
 
@@ -182,6 +206,9 @@ const prSnap = () =>
 function prUnsnap(snapshot) {
   const s = JSON.parse(snapshot);
   PR.objects = Array.isArray(s) ? s : s.objects;
+  if (!Array.isArray(s)) PR.hz = s.hz ?? null;
+  // The mode is not undone: "by height" keeps a plan, if an empty one.
+  if (typeof hzEnsure === "function") hzEnsure();
   if (s.tower && PR.tower) Object.assign(PR.tower, s.tower);
 }
 
@@ -202,6 +229,9 @@ function prRestore(from, to) {
   prRenderInspector();
   prSchedule();
   if (PR.gl) Promise.all(PR.objects.map(prLoadMesh)).then(prSchedule);
+  // Back to a plan imported while the printer was off, its spools known
+  // since: its colours go to their heads again.
+  if (typeof hzRematchNow === "function") hzRematchNow();
 }
 const prUndo = () => prRestore(HIST.undo, HIST.redo);
 const prRedo = () => prRestore(HIST.redo, HIST.undo);
@@ -389,7 +419,8 @@ function prLoadingShow() {
 /* An object's mesh, loaded once (copies share it), counted in the plate's
    loading feedback. */
 async function prLoadMesh(o) {
-  if (PR.meshes.has(meshKey(o))) return PR.meshes.get(meshKey(o));
+  const had = PR.meshes.get(meshKey(o));
+  if (had && !prMeshRetry(had)) return had;
   PRL.total++;
   prLoadingShow();
   try {
@@ -400,12 +431,14 @@ async function prLoadMesh(o) {
   }
 }
 
+/* A read that failed is tried again after a moment: a passing error must
+   not leave the object invisible (yet selectable) for the session. */
+const prMeshRetry = (m) => !!m.failed && Date.now() - m.at > 5000;
+
 async function prLoadMeshNow(o) {
   const key = meshKey(o);
   const had = PR.meshes.get(key);
-  // A read that failed is tried again after a moment: a passing error
-  // must not leave the object invisible (yet selectable) for the session.
-  if (had && !(had.failed && Date.now() - had.at > 5000)) return had;
+  if (had && !prMeshRetry(had)) return had;
   const entry = { loading: true };
   PR.meshes.set(key, entry);
   const q = `/b?p=${encodeURIComponent(o.path)}&i=${o.item}${o.piece != null ? "&c=" + o.piece : ""}&b=400000`;
@@ -415,15 +448,26 @@ async function prLoadMeshNow(o) {
   } catch (e) {
     err = e;
   }
-  if (!buf) {
-    PR.meshes.set(key, { failed: String(err?.message || err), at: Date.now() });
-    toast(tr("prepare.bad_mesh", { name: o.name }), true);
-    return null;
-  }
   // Pruned meanwhile (its object removed), or loaded again (undo): the
   // entry now in the cache, if any, is the one to use.
   if (PR.meshes.get(key) !== entry) return PR.meshes.get(key) || null;
-  const data = decodeMesh(buf);
+  let data = null;
+  if (buf) {
+    try {
+      data = decodeMesh(buf);
+    } catch (e) {
+      err = e;
+    }
+  }
+  // Unread or unreadable: said, with why, and tried again later. Left
+  // "loading", the object would stay invisible without a word.
+  if (!data) {
+    const why = String(err?.message || err || "");
+    console.warn("mesh:", o.name, why);
+    PR.meshes.set(key, { failed: why, at: Date.now() });
+    toast(tr("prepare.bad_mesh", { name: o.name }) + (why ? ` (${why})` : ""), true);
+    return null;
+  }
   const gl = PR.gl;
   const bufs = [];
   const vao = gl.createVertexArray();
@@ -521,6 +565,7 @@ function prDraw() {
   gl.uniform3fv(gl.getUniformLocation(PR.prog, "uOverCol"), prTok("--danger", [1, 0.23, 0.19]));
   gl.uniform3fv(gl.getUniformLocation(PR.prog, "uEye"), eye);
   gl.uniform1f(uOver, PR.overhangs ? 1 : 0);
+  if (typeof hzUniforms === "function") hzUniforms(gl, PR.prog);
   const boxes = [];
   const overlap = prOverlaps();
   for (const o of PR.objects) {
@@ -1282,6 +1327,8 @@ const PRUI = (() => {
     assocExplained: !!s.assocExplained,
     /* The sheet saying a virtual head goes with its spools, likewise. */
     vhExplained: !!s.vhExplained,
+    /* "By height": changes typed in layers (default) or mm. */
+    hzUnit: s.hzUnit === "mm" ? "mm" : "layer",
   };
 })();
 const pruiSave = () =>
@@ -1295,6 +1342,7 @@ const pruiSave = () =>
       assocDefault: PRUI.assocDefault,
       assocExplained: PRUI.assocExplained,
       vhExplained: PRUI.vhExplained,
+      hzUnit: PRUI.hzUnit,
     })
   );
 
@@ -1347,7 +1395,7 @@ function prRenderInspector() {
     const out = st === "out";
     // No colour/heads frame off the plate, nor in "by colour" mode: the
     // plate's banner holds the choices then.
-    const bare = out || PR.assoc === "colour";
+    const bare = out || PR.assoc !== "object";
     const heads = live && !bare ? prHeads(o, pid, slots, n) : {};
     // A color left without a head (its virtual head deleted) unfolds its
     // row: it has to be chosen again.
@@ -1378,7 +1426,7 @@ function prRenderInspector() {
   // when part of a side is selected, "Add All" / "Take All Off" otherwise.
   const onBulk = plBulk(PR.sel, g.on), offBulk = plBulk(PR.sel, g.off);
   const bulk = (b, all, some) => (b.mode === "some" ? tr(some, { n: b.n }) : tr(all));
-  $("p-list").innerHTML = `${PR.assoc === "colour" ? prColourBanner(live, slots, n) : ""}
+  $("p-list").innerHTML = `${PR.assoc === "colour" ? prColourBanner(live, slots, n) : PR.assoc === "height" ? hzBanner(live, slots, n) : ""}
     <div class="p-grp p-on">
       <div class="p-grp-head">
         <span class="k">${esc(tr("prepare.on_bed", { n: g.on.length }))}</span>
@@ -1808,7 +1856,10 @@ $("p-list").addEventListener("click", (e) => {
   const tok = e.target.closest("[data-hpick]");
   if (tok) {
     if (PK.prep && PK.anchor === tok && !$("picker").classList.contains("hidden")) return closePicker(true);
-    if (tok.dataset.ch != null) {
+    if (tok.dataset.hzi != null) {
+      const i = +tok.dataset.hzi;
+      hzPickHead(tok, i);
+    } else if (tok.dataset.ch != null) {
       const ext = +tok.dataset.ch;
       prHeadPicker(tok, PR.colourHeads[ext], (h) => prSetColourHead(ext, h));
     } else {
@@ -2002,6 +2053,8 @@ async function prepareAddFile(path, { remember = true } = {}) {
   // With the layers it placed them on: the slice checks the profile's.
   const hcl = { layer_height: heights?.layer_height ?? null, first_layer: heights?.first_layer ?? null };
   if (hc.length) for (const o of main) Object.assign(o, { hc, hcl });
+  // Its list becomes the plate's, in "by height" mode (prepare-heights.js).
+  if (hc.length) hzAdoptFile(path, hc, heights, main[0]?.extruders?.[0] ?? null);
   const box = groupBox(main);
   const { w, d } = PR.bed;
   const fits = box.x0 >= 0 && box.y0 >= 0 && box.x1 <= w && box.y1 <= d;
@@ -2392,6 +2445,9 @@ async function prSavePlate() {
    object's that has some: the slice wants them all alike), with each
    extruder's colour from its file. */
 function prSaveHeights() {
+  // "By height": the plate's own plan (prepare-heights.js), none when it
+  // was emptied (never the file's list it came from).
+  if (PR.assoc === "height") return PR.hz?.changes?.length ? hzSaved() : null;
   const o = PR.objects.find((x) => x.hc?.length);
   if (!o) return null;
   const fils = (typeof headsModelNow === "function" && headsModelNow(o.path)?.filaments) || [];
@@ -2722,6 +2778,7 @@ function prEmpty() {
   // A new plate starts in the Settings default mode, with no colour mapped.
   PR.assoc = PRUI.assocDefault;
   PR.colourHeads = {};
+  PR.hz = null;
   // Nor a prime tower: a new project starts without one. Smooth mix back
   // to its default.
   prTowerRestore(null);
@@ -2865,6 +2922,24 @@ $("act-slice").addEventListener("click", () => prepareFiles([...state.sel].slice
    are intercepted here before the Edit menu (which keeps them in text
    fields). */
 let nudgeAt = 0;
+/* Undo / redo on the plate, from its keys or the Edit menu (on macOS ⌘Z
+   is the menu's: app.js editHistory). The keys always act; the menu skips
+   a press the keys have just done, should one reach both. */
+const PRH = { key: 0 };
+function prHistory(redo, fromMenu) {
+  if (fromMenu && Date.now() - PRH.key < 300) return;
+  if (!fromMenu) PRH.key = Date.now();
+  redo ? prRedo() : prUndo();
+}
+/* The Edit menu's undo / redo, when the plate is what the keyboard is on:
+   true once done. */
+function prMenuHistory(redo) {
+  if (window.currentView !== "prepare" || document.querySelector(".modal:not(.hidden)")) return false;
+  if (!$("viewer").classList.contains("hidden")) return false;
+  prHistory(redo, true);
+  return true;
+}
+
 document.addEventListener("keydown", (e) => {
   if (window.currentView !== "prepare") return;
   if (document.querySelector(".modal:not(.hidden)")) return;
@@ -2879,10 +2954,10 @@ document.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT" && !(mod && (k === "z" || k === "y"))) return;
   if (mod && k === "z") {
     e.preventDefault();
-    e.shiftKey ? prRedo() : prUndo();
+    prHistory(e.shiftKey);
   } else if (mod && k === "y") {
     e.preventDefault();
-    prRedo();
+    prHistory(true);
   } else if (mod && k === "d") {
     e.preventDefault();
     prDuplicate();
@@ -2930,7 +3005,11 @@ window.addEventListener("langchange", () => {
 });
 
 prLoadState();
-prStatus();
+// Once every script has run: a saved plate's status reaches functions
+// declared further down (prColors) and in files loaded after this one
+// (prepare-heights.js); run now, it threw and left this file half set up.
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", prStatus, { once: true });
+else setTimeout(prStatus);
 
 /* ---------------------------------------------------- heads and spools */
 
@@ -2995,9 +3074,11 @@ function prHeadPicker(anchor, value, onPick) {
 
 /* How many of the plate's colors use these head values (virtual heads
    being deleted): by object, each object's color; by colour, each plate
-   colour and each object with its own pick. */
+   colour and each object with its own pick; by height, the plan's heads. */
 function prVirtualUsers(values) {
   const set = new Set(values.map(Number));
+  // "By height": the plan's start and head changes are its users.
+  if (PR.assoc === "height") return hzPlanHeads(PR.hz).filter((h) => set.has(+h)).length;
   let n = 0;
   for (const o of PR.objects) {
     if (bedState(o) === "out") continue;
@@ -3051,9 +3132,9 @@ function prPlateColours() {
 }
 
 /* What blocks the slice in "by colour" mode: the plate's colours without
-   a head, and the uncoloured objects without a picked one. Declarations:
-   `prStatus` may run before this point of the file. */
+   a head, and the uncoloured objects without a picked one. */
 function prBlockers() {
+  if (PR.assoc === "height") return { colours: [], objects: [], orphans: hzOrphans() };
   const orphans = prOrphans();
   if (PR.assoc !== "colour") return { colours: [], objects: [], orphans };
   return {
@@ -3071,6 +3152,8 @@ function prUnmapped() {
    its row, which prints the whole object (a colour still unmapped keeps
    the object's; the slice is blocked while one is). */
 function prSliceHeads(o) {
+  // "By height": the whole plate starts on one head (the engine changes it).
+  if (PR.assoc === "height") return Object.fromEntries(prColors(o).map((ext) => [ext, PR.hz?.base ?? 0]));
   if (PR.assoc !== "colour") return o.heads || {};
   const heads = { ...(o.heads || {}) };
   for (const ext of prColors(o)) {
@@ -3120,6 +3203,8 @@ const prPaletteClose = () => PK.prep && PK.grid && closePicker();
    mode the object's colour/heads frame, unfolded in the list. */
 function prColourAction(o, x, y) {
   if (!o) return;
+  // "By height": the plate's list holds the heads.
+  if (PR.assoc === "height") return prSelect([o.id], false);
   if (PR.assoc === "colour") return prColourPalette(o, x, y);
   PR.fold.delete(o.id);
   if (PRUI.listFolded) {
@@ -3184,14 +3269,25 @@ function prAssocSwitch(mode) {
 function prAssocApply(mode) {
   if (mode === PR.assoc) return;
   prRemember();
-  if (mode === "colour") {
+  // Back from "by height": the choices are the mode's it came from, as
+  // they were (the plan does not touch them).
+  const from = PR.assoc === "height" ? PR.hzFrom || PRUI.assocDefault : PR.assoc;
+  if (mode === "height") {
+    // The plate starts with the head its first object prints with now.
+    const o = PR.objects.find((x) => bedState(x) !== "out");
+    const h = o ? Object.values(prShownHeads(o, headsActive(), headsSlots(headsActive())))[0] : null;
+    hzEnter();
+    hzEnsure(h);
+  } else if (mode === from) {
+    // Nothing to carry over.
+  } else if (mode === "colour") {
     // Only the objects that bring colours to the banner vote: an
     // uncoloured one (its colour is a stand-in) or one with a picked head
     // would otherwise weigh on colour 1.
     const effective = (o) =>
       prBannerColours(o).length ? Object.fromEntries(Object.entries(prHeads(o)).map(([ext, v]) => [ext, v.h])) : {};
     PR.colourHeads = plMigrateToColour(PR.objects, bedState, effective, plPlateColours(PR.objects, bedState, prBannerColours));
-  } else {
+  } else if (from === "colour") {
     const heads = plMigrateToObject(PR.objects, bedState, prBannerColours, PR.colourHeads);
     for (const o of PR.objects) {
       if (heads[o.id]) o.heads = heads[o.id];
@@ -3241,6 +3337,7 @@ async function prRefreshColors() {
    head picked for the object, else the plate's for that colour — an
    unmapped colour has none, and keeps the file's colour as a cue. */
 function prShownHeads(o, pid, slots) {
+  if (PR.assoc === "height") return prSliceHeads(o);
   if (PR.assoc !== "colour") return Object.fromEntries(Object.entries(prHeads(o, pid, slots)).map(([ext, v]) => [ext, v.h]));
   const out = {};
   for (const ext of prColors(o)) {

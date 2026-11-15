@@ -2694,6 +2694,53 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .p-colours .p-color.unmapped .p-color-lbl { color: var(--danger); }
 .p-colours .p-color .tag { margin-left: 4px; }
 
+/* Prepare, "by height" mode: one row per change (layer or height, head
+   or pause), heights typed in layers or mm. */
+/* One grid per row: height, colours → head, mark, pause, delete. Every
+   cell sits on the field's line (--hz-h), the other unit under the field. */
+.p-hz .hz-line { --hz-h: 22px; display: grid; grid-template-columns: minmax(0, 1fr) auto 14px 20px 20px; column-gap: 6px; align-items: start; padding-left: 10px; }
+.p-hz .hz-line > * { min-height: var(--hz-h); }
+.p-hz .hz-line > .p-toks, .p-hz .hz-line > .hz-far, .p-hz .hz-line > .p-ico { align-self: start; height: var(--hz-h); display: flex; align-items: center; justify-content: center; }
+.p-hz .hz-line > .p-toks { justify-content: flex-end; }
+.p-hz .hz-line > .p-ico { display: grid; place-items: center; }
+.hz-z { min-width: 0; display: flex; align-items: flex-start; gap: 4px; font-size: 12px; white-space: nowrap; }
+.hz-lbl { line-height: var(--hz-h); }
+.hz-z small { color: var(--text-secondary); font-size: 11px; }
+.hz-z-in { box-sizing: border-box; width: 56px; height: var(--hz-h); padding: 0 4px; font: inherit; font-variant-numeric: tabular-nums; }
+/* A change above the objects: never reached, said under its height. */
+.hz-out .hz-z { flex-wrap: wrap; }
+.hz-z small.hz-above { flex-basis: 100%; white-space: normal; color: var(--warning, #c98a00); }
+.hz-pause { padding: 1px 6px; border-radius: 999px; border: 1px dashed var(--border); font-size: 11px; color: var(--text-secondary); }
+.p-ico.hz-kind.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.hz-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 6px 2px 0; }
+.hz-layers { display: flex; align-items: center; gap: 6px; margin: 4px 2px 0; }
+.hz-zcol { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1.2; }
+.hz-zcol > span { display: inline-flex; align-items: center; gap: 4px; line-height: var(--hz-h); }
+.hz-zcol small { margin-top: 1px; }
+.hz-warn .mt-info { vertical-align: -3px; }
+.hz-warn { margin: 6px 0 0; padding: 6px 8px; border-radius: 6px; font-size: 11px; line-height: 1.45; color: var(--warning, #c98a00); background: color-mix(in srgb, var(--warning, #c98a00) 10%, transparent); }
+.hz-warn + .hz-warn { margin-top: 4px; }
+.hz-warn .hz-col i { margin-left: 2px; }
+/* The unit switch beside "Add a change", where any translation of the
+   title leaves it room. */
+.hz-unit { margin-left: auto; }
+.hz-unit .seg-btn { padding: 0 7px; font-size: 11px; }
+.hz-col { white-space: nowrap; }
+.hz-col i { display: inline-block; width: 9px; height: 9px; margin-right: 3px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent); vertical-align: -1px; }
+.p-hz .p-toks { align-items: center; min-width: 0; }
+.hz-want { display: inline-flex; align-items: center; font-size: 11px; color: var(--text-secondary); min-width: 0; }
+.hz-want span { max-width: 72px; overflow: hidden; text-overflow: ellipsis; }
+.hz-to { font-size: 11px; color: var(--text-secondary); }
+.hz-far { font-size: 12px; color: var(--warning, #c98a00); cursor: pointer; border-radius: 4px; }
+.hz-far:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.hz-pause .hz-want { margin-left: 2px; }
+/* The HueForge import sheet. */
+.modal-box.hz-box { width: 480px; }
+.hz-text { width: 100%; box-sizing: border-box; font: 12px/1.4 var(--font-mono, ui-monospace, monospace); resize: vertical; }
+.hz-row { display: flex; gap: 8px; }
+.hz-preview { font-size: 12px; }
+.hz-preview:empty { display: none; }
+
 .p-float-head {
   flex: none;
   display: flex;
@@ -4225,7 +4272,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .mt-banner-text small { display: block; color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
 .mt-strip { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 16px; color: var(--text-secondary); font-size: 12px; }
 .mt-strip b { color: var(--text); font-size: 15px; font-weight: 600; margin-right: 5px; }
-.mt-info { width: 15px; height: 15px; border-radius: 50%; border: 1px solid var(--text-tertiary); color: var(--text-tertiary); font-size: 10px; display: inline-grid; place-items: center; text-transform: none; cursor: help; }
+.mt-info { width: 15px; height: 15px; border-radius: 50%; border: 1px solid var(--text-tertiary); color: var(--text-tertiary); font-size: 10px; display: inline-grid; place-items: center; flex: none; text-transform: none; cursor: pointer; }
+.mt-info:hover, .mt-info[aria-expanded="true"] { border-color: var(--text-secondary); color: var(--text-secondary); }
+.mt-info:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* The text of an ⓘ (or a mark) with data-help, opened on click (app.js). */
+.tip-pop { position: fixed; z-index: 10000; max-width: 260px; padding: 7px 10px; border-radius: 8px; font-size: 12px; line-height: 1.45; color: var(--text); background: var(--sheet-bg); border: 1px solid var(--card-border); box-shadow: var(--sheet-shadow), 0 6px 20px rgba(0, 0, 0, 0.18); white-space: normal; text-transform: none; letter-spacing: normal; }
 .mt-task { border-top: 1px solid var(--separator); }
 .mt-task:first-child { border-top: 0; }
 .mt-row { display: flex; align-items: center; gap: 11px; padding: 9px 14px; cursor: pointer; }

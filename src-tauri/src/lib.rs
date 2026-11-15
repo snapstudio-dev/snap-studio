@@ -1976,6 +1976,9 @@ fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
     // STL and 3MF go through the same protocol (older AI conversations kept
     // STL versions); the extension decides.
     let is_stl = Path::new(&path).extension().is_some_and(|e| e.eq_ignore_ascii_case("stl"));
+    // Never kept by the webview: a file changed on disk (a `git pull`, a new
+    // export under the same name) is read again, and a bad answer is not
+    // served again for an hour.
     // `i`: a single object of the file, in its own frame (Prepare view).
     if let Some(index) = query_param(uri, "i").and_then(|s| s.parse::<usize>().ok()) {
         // `c`: one piece of it, once split.
@@ -1984,7 +1987,7 @@ fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
             Ok(m) => Response::builder()
                 .status(200)
                 .header("Content-Type", "application/octet-stream")
-                .header("Cache-Control", "public, max-age=3600")
+                .header("Cache-Control", "no-store")
                 .header("Access-Control-Allow-Origin", "*")
                 .body(mesh::encode(&m))
                 .unwrap(),
@@ -2009,7 +2012,7 @@ fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
         Ok(m) => Response::builder()
             .status(200)
             .header("Content-Type", "application/octet-stream")
-            .header("Cache-Control", "public, max-age=3600")
+            .header("Cache-Control", "no-store")
             .header("Access-Control-Allow-Origin", "*")
             .body(mesh::encode(&m))
             .unwrap(),
