@@ -70,6 +70,10 @@ assert.deepStrictEqual(H.hcMarks([0, 0, 0], [2]), [{ layer: 2, kind: "pause" }],
 // A virtual head alternating at every layer: no head marks, pauses kept.
 const alt = Array.from({ length: 100 }, (_, l) => (l % 3 === 2 ? 2 : 0));
 assert.deepStrictEqual(H.hcMarks(alt, [40]), [{ layer: 40, kind: "pause" }]);
+// At the limit: `max` changes still marked, with the start mark.
+const two = (n) => Array.from({ length: n + 1 }, (_, l) => l % 2);
+assert.strictEqual(H.hcMarks(two(32), []).length, 33, "32 changes: 32 marks and the start");
+assert.deepStrictEqual(H.hcMarks(two(33), []), [], "33 changes: none");
 
 // ---- "By height" mode (step 2).
 

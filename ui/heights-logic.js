@@ -81,8 +81,9 @@ function hcMarks(tools, pauses, max = 32) {
     else if (t !== prev) heads.push({ layer: l, kind: "head", tool: t });
     prev = t;
   }
-  if (heads.length && heads.length <= max) heads.unshift(first);
-  if (heads.length <= max) for (const h of heads) if (!marks.some((m) => m.layer === h.layer)) marks.push(h);
+  const show = heads.length > 0 && heads.length <= max;
+  if (show) heads.unshift(first);
+  if (show) for (const h of heads) if (!marks.some((m) => m.layer === h.layer)) marks.push(h);
   return marks.sort((a, b) => a.layer - b.layer);
 }
 
