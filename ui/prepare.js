@@ -442,7 +442,7 @@ async function prLoadMeshNow(o) {
   }
   // Pruned meanwhile (its object removed), or loaded again (undo): the
   // entry now in the cache, if any, is the one to use.
-  if (buf && PR.meshes.get(key) !== entry) return PR.meshes.get(key) || null;
+  if (PR.meshes.get(key) !== entry) return PR.meshes.get(key) || null;
   let data = null;
   if (buf) {
     try {
@@ -456,7 +456,7 @@ async function prLoadMeshNow(o) {
   if (!data) {
     const why = String(err?.message || err || "");
     console.warn("mesh:", o.name, why);
-    if (PR.meshes.get(key) === entry) PR.meshes.set(key, { failed: why, at: Date.now() });
+    PR.meshes.set(key, { failed: why, at: Date.now() });
     toast(tr("prepare.bad_mesh", { name: o.name }) + (why ? ` (${why})` : ""), true);
     return null;
   }
