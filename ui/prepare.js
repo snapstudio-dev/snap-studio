@@ -411,7 +411,8 @@ function prLoadingShow() {
 /* An object's mesh, loaded once (copies share it), counted in the plate's
    loading feedback. */
 async function prLoadMesh(o) {
-  if (PR.meshes.has(meshKey(o))) return PR.meshes.get(meshKey(o));
+  const had = PR.meshes.get(meshKey(o));
+  if (had && !prMeshRetry(had)) return had;
   PRL.total++;
   prLoadingShow();
   try {
@@ -422,12 +423,14 @@ async function prLoadMesh(o) {
   }
 }
 
+/* A read that failed is tried again after a moment: a passing error must
+   not leave the object invisible (yet selectable) for the session. */
+const prMeshRetry = (m) => !!m.failed && Date.now() - m.at > 5000;
+
 async function prLoadMeshNow(o) {
   const key = meshKey(o);
   const had = PR.meshes.get(key);
-  // A read that failed is tried again after a moment: a passing error
-  // must not leave the object invisible (yet selectable) for the session.
-  if (had && !(had.failed && Date.now() - had.at > 5000)) return had;
+  if (had && !prMeshRetry(had)) return had;
   const entry = { loading: true };
   PR.meshes.set(key, entry);
   const q = `/b?p=${encodeURIComponent(o.path)}&i=${o.item}${o.piece != null ? "&c=" + o.piece : ""}&b=400000`;
@@ -437,15 +440,26 @@ async function prLoadMeshNow(o) {
   } catch (e) {
     err = e;
   }
-  if (!buf) {
-    PR.meshes.set(key, { failed: String(err?.message || err), at: Date.now() });
-    toast(tr("prepare.bad_mesh", { name: o.name }), true);
-    return null;
-  }
   // Pruned meanwhile (its object removed), or loaded again (undo): the
   // entry now in the cache, if any, is the one to use.
-  if (PR.meshes.get(key) !== entry) return PR.meshes.get(key) || null;
-  const data = decodeMesh(buf);
+  if (buf && PR.meshes.get(key) !== entry) return PR.meshes.get(key) || null;
+  let data = null;
+  if (buf) {
+    try {
+      data = decodeMesh(buf);
+    } catch (e) {
+      err = e;
+    }
+  }
+  // Unread or unreadable: said, with why, and tried again later. Left
+  // "loading", the object would stay invisible without a word.
+  if (!data) {
+    const why = String(err?.message || err || "");
+    console.warn("mesh:", o.name, why);
+    if (PR.meshes.get(key) === entry) PR.meshes.set(key, { failed: why, at: Date.now() });
+    toast(tr("prepare.bad_mesh", { name: o.name }) + (why ? ` (${why})` : ""), true);
+    return null;
+  }
   const gl = PR.gl;
   const bufs = [];
   const vao = gl.createVertexArray();

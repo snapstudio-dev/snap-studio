@@ -52,6 +52,11 @@ with its packages for macOS, Windows and Linux. What comes next:
   printer stay yours (#103).
 
 ### Fixed
+- **Invisible objects in Prepare**: an object whose shape could not be read
+  stayed invisible on the plate, with no message and no new attempt. It now
+  says so, with the reason, and is read again later. The shapes are no
+  longer kept by the window for an hour either: a file changed on disk is
+  read again (#103).
 - **Undo in Prepare**: ⌘Z / Ctrl+Z (and redo) now work right after using a
   slider or a switch of the inspector, such as the scale or Keep proportions.
   They used to do nothing until the plate was clicked. On macOS, ⌘Z and
