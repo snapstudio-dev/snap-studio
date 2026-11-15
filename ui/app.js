@@ -820,22 +820,27 @@ async function updateDetails() {
 const esc = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-/* An ⓘ (or a mark) with `data-tip`: its text in a bubble on click, Enter
+/* An ⓘ (or a mark) with `data-help`: its text in a bubble on click, Enter
    or Space, rather than a tooltip that waits under the pointer. One at a
    time; a second click, a click elsewhere, Escape, a scroll or a resize
-   close it. */
+   close it, and so does its mark redrawn away (a list repainted under it).
+   Not data-tip: Control's buttons already use it for their title. */
 const TIP = { el: null, anchor: null };
+// The mark gone from the page: the bubble goes with it.
+const TIP_WATCH = new MutationObserver(() => TIP.anchor && !TIP.anchor.isConnected && tipClose());
 function tipClose() {
+  TIP_WATCH.disconnect();
   TIP.el?.remove();
   TIP.anchor?.setAttribute("aria-expanded", "false");
   TIP.el = TIP.anchor = null;
 }
 function tipOpen(a) {
   tipClose();
+  TIP_WATCH.observe(document.body, { childList: true, subtree: true });
   const el = document.createElement("div");
   el.className = "tip-pop";
   el.setAttribute("role", "tooltip");
-  el.textContent = a.dataset.tip;
+  el.textContent = a.dataset.help;
   document.body.append(el);
   // Under its anchor, centred on it, kept in the window; above when the
   // window ends first.
@@ -851,7 +856,7 @@ function tipOpen(a) {
 document.addEventListener(
   "click",
   (e) => {
-    const a = e.target.closest?.("[data-tip]");
+    const a = e.target.closest?.("[data-help]");
     if (a) {
       e.preventDefault();
       e.stopPropagation();
@@ -864,7 +869,7 @@ document.addEventListener(
 document.addEventListener(
   "keydown",
   (e) => {
-    const a = e.target.closest?.("[data-tip]");
+    const a = e.target.closest?.("[data-help]");
     if (a && (e.key === "Enter" || e.key === " ")) {
       e.preventDefault();
       e.stopPropagation();

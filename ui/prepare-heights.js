@@ -103,7 +103,7 @@ function hzBanner(live, slots, n) {
     `<span class="hz-col hz-want" title="${esc(tr("hz.want.title", { name: w.name }))}"><i style="--c:${esc(w.hex)}"></i>${w.named ? `<span>${esc(w.name)}</span>` : ""}</span>`;
   const far = (w, h) =>
     live && w && hzFar(w.hex, headsColorOf(pid, h))
-      ? `<span class="hz-far" role="button" tabindex="0" data-tip="${esc(tr("hz.far", { name: w.name }))}" aria-label="${esc(tr("hz.far", { name: w.name }))}">⚠</span>`
+      ? `<span class="hz-far" role="button" tabindex="0" data-help="${esc(tr("hz.far", { name: w.name }))}" aria-label="${esc(tr("hz.far", { name: w.name }))}">⚠</span>`
       : "<span></span>";
   // Each row on one grid: the heads in one column, the mark, pause and
   // delete in theirs (empty on the start), whatever the colours' width.
@@ -148,7 +148,7 @@ function hzBanner(live, slots, n) {
   // One short line, where the layers come from in its ⓘ.
   const [key, tip] = PR.hz?.layers ? ["hz.layers.file", "hz.layers.file.tip"] : ["hz.layers.profile", "hz.layers.profile.tip"];
   const layers = `<small class="vp-sub">${esc(tr(key, { lh: hzFmt(lh), first: hzFmt(first) }))}</small>
-        <span class="mt-info" role="button" tabindex="0" data-tip="${esc(tr(tip))}" aria-label="${esc(tr(tip))}">i</span>`;
+        <span class="mt-info" role="button" tabindex="0" data-help="${esc(tr(tip))}" aria-label="${esc(tr(tip))}">i</span>`;
   const warns = hzWarnsHtml(hz.warnings || []);
   const unit = (u, key) => `<button type="button" class="seg-btn${(u === "layer") === byLayer ? " on" : ""}" data-hzunit="${u}">${esc(tr(key))}</button>`;
   return `<div class="p-grp p-hz">
@@ -199,7 +199,7 @@ function hzWarnsHtml(warnings) {
     const names = missing.map((w) => col(w.hex, w.name)).join(", ");
     const [a, b] = tr("hz.warn.unloaded", { n: missing.length, names: "\u0000" }).split("\u0000");
     const help = esc(tr("hz.warn.unloaded.tip", { n: missing.length }));
-    const tip = `<span class="mt-info" role="button" tabindex="0" data-tip="${help}" aria-label="${help}">i</span>`;
+    const tip = `<span class="mt-info" role="button" tabindex="0" data-help="${help}" aria-label="${help}">i</span>`;
     lines.push(out(`${esc(a)}${names}${esc(b ?? "")} ${tip}`));
   }
   return lines.join("");

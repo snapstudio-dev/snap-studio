@@ -4275,7 +4275,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .mt-info { width: 15px; height: 15px; border-radius: 50%; border: 1px solid var(--text-tertiary); color: var(--text-tertiary); font-size: 10px; display: inline-grid; place-items: center; flex: none; text-transform: none; cursor: pointer; }
 .mt-info:hover, .mt-info[aria-expanded="true"] { border-color: var(--text-secondary); color: var(--text-secondary); }
 .mt-info:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-/* The text of an ⓘ (or a mark) with data-tip, opened on click (app.js). */
+/* The text of an ⓘ (or a mark) with data-help, opened on click (app.js). */
 .tip-pop { position: fixed; z-index: 10000; max-width: 260px; padding: 7px 10px; border-radius: 8px; font-size: 12px; line-height: 1.45; color: var(--text); background: var(--sheet-bg); border: 1px solid var(--card-border); box-shadow: var(--sheet-shadow), 0 6px 20px rgba(0, 0, 0, 0.18); white-space: normal; text-transform: none; letter-spacing: normal; }
 .mt-task { border-top: 1px solid var(--separator); }
 .mt-task:first-child { border-top: 0; }
