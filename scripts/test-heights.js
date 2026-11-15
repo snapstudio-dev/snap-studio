@@ -66,7 +66,8 @@ assert.deepStrictEqual(H.hcMarks([undefined, 0, 0, 1, 1, 0], [5]), [
   { layer: 5, kind: "pause" },
 ]);
 assert.deepStrictEqual(H.hcMarks([0, undefined, 0], []), [], "a layer without extrusion changes nothing");
-assert.deepStrictEqual(H.hcMarks([0, 0, 0], [2]), [{ layer: 2, kind: "pause" }], "one head: no start mark");
+assert.deepStrictEqual(H.hcMarks([0, 0, 0], [2]), [{ layer: 0, kind: "head", tool: 0, start: true }, { layer: 2, kind: "pause" }], "pauses only: the head it starts on too");
+assert.deepStrictEqual(H.hcMarks([0, 0, 0], []), [], "one head, nothing to mark: no start mark either");
 // A virtual head alternating at every layer: no head marks, pauses kept.
 const alt = Array.from({ length: 100 }, (_, l) => (l % 3 === 2 ? 2 : 0));
 assert.deepStrictEqual(H.hcMarks(alt, [40]), [{ layer: 40, kind: "pause" }]);
@@ -183,7 +184,72 @@ assert.deepStrictEqual(fromD.plan, {
   src: "describe",
   names: { "#000000": "PLA Bambu Lab Basic Black", "#8c6239": "PLA Polymaker Bronze", "#f5e663": "PLA Elegoo Yellow", "#ffffff": "PLA Generic White" },
 });
-assert.deepStrictEqual(fromD.warnings, [{ kind: "unloaded", name: "PLA Elegoo Yellow", hex: "#f5e663" }], "1.69 → 1.68 is within 0.01");
+// Four colours, three loaded heads: yellow shares white's head, said.
+assert.deepStrictEqual(
+  fromD.warnings,
+  [
+    { kind: "unloaded", name: "PLA Elegoo Yellow", hex: "#f5e663" },
+    { kind: "same", hex: "#ffffff", name: "PLA Generic White", with: "#f5e663", withName: "PLA Elegoo Yellow" },
+  ],
+  "1.69 → 1.68 is within 0.01",
+);
+// Each colour on its own head while there are enough: two greys never on
+// black's and white's heads while red and blue are free.
+const four = [{ head: 0, color: "#000000" }, { head: 1, color: "#ffffff" }, { head: 2, color: "#ff0000" }, { head: 3, color: "#0000ff" }];
+const greys = H.hzAssign(["#000000", "#404040", "#c0c0c0", "#ffffff"], four);
+assert.deepStrictEqual([...greys.values()].map((x) => x.head).sort(), [0, 1, 2, 3], "four colours, four heads");
+assert.strictEqual(greys.get("#000000").head, 0);
+assert.strictEqual(greys.get("#ffffff").head, 1);
+assert.strictEqual(H.hzAssign(["#000000"], [{ head: 0, color: null }]), null, "no spool known");
+// A 3MF object on its own extruder starts with it.
+const own = H.hzFromFile([{ z: 0.5, ext: 1, kind: "auto" }], { 1: "#000000", 2: "#ffffff" }, hcl, four, 2);
+assert.strictEqual(own.plan.base, 1, "the object's extruder 2, white");
+assert.strictEqual(own.plan.baseHex, "#ffffff");
+assert.strictEqual(own.plan.changes[0].head, 0);
+
+// Saved with the plate: the list for Orca (a pause on the head in force),
+// the plan read back while the file's list is still the one saved.
+const saving = { base: 1, changes: [{ z: 0.48, head: 2, kind: "auto" }, { z: 0.8, head: 2, kind: "pause" }, { z: 1.2, head: 0, kind: "auto" }], layers: null, src: null };
+const toFile = H.hzToFile(saving, (h) => h + 1);
+assert.deepStrictEqual(toFile, [{ z: 0.48, extruder: 3, kind: "auto" }, { z: 0.8, extruder: 3, kind: "pause" }, { z: 1.2, extruder: 1, kind: "auto" }]);
+const fileHc = H.hcFromFile(toFile.map((c) => ({ ...c, z: Math.fround(c.z) })));
+const check = H.hcKey(toFile.map((c) => ({ z: c.z, ext: c.extruder, kind: c.kind })));
+assert.deepStrictEqual(H.hzFromSaved({ ...saving, check }, fileHc), { ...saving, warnings: [] }, "read back as saved");
+assert.strictEqual(H.hzFromSaved({ ...saving, check }, fileHc.slice(1)), null, "edited elsewhere since: the file's list");
+assert.strictEqual(H.hzFromSaved(null, fileHc), null);
+
+// The head in force: a pause keeps the one before it (a change added after
+// a pause goes on from there, not from the start).
+assert.strictEqual(H.hzHeadAt(saving, Infinity), 0);
+assert.strictEqual(H.hzHeadAt(saving, 0.8), 2, "at the pause");
+assert.strictEqual(H.hzHeadAt(saving, 0.1), 1, "below the first change");
+assert.strictEqual(H.hzHeadAt({ base: 1, changes: [{ z: 0.5, head: 3, kind: "auto" }, { z: 0.9, head: 3, kind: "pause" }] }, Infinity), 3);
+// A head chosen by hand forgets what the import said of that colour only.
+const said = [{ kind: "unloaded", hex: "#ff0000" }, { kind: "same", hex: "#00ff00", with: "#ff0000" }, { kind: "unloaded", hex: "#0000ff" }, { kind: "offline" }, { kind: "gap", z: 1, to: 1.04 }];
+assert.deepStrictEqual(H.hzForget(said, "#ff0000"), [{ kind: "unloaded", hex: "#0000ff" }, { kind: "offline" }, { kind: "gap", z: 1, to: 1.04 }]);
+// ...and keeps it at the rematch, the other colours going to their heads.
+const byHand = { base: 0, baseHex: "#000000", changes: [{ z: 0.5, head: 3, hex: "#ffffff", kind: "auto", hand: true }, { z: 1, head: 0, hex: "#ff0000", kind: "auto" }], warnings: [{ kind: "offline" }] };
+const rh = H.hzRematch(byHand, four);
+assert.strictEqual(rh.changes[0].head, 3, "chosen by hand: kept");
+assert.strictEqual(rh.changes[1].head, 2, "red to the red spool");
+assert.strictEqual(rh.base, 0);
+// A colour change (M600): to the head holding that colour, else a pause.
+assert.deepStrictEqual(H.hcFromFile([{ z: 0.8, extruder: 1, kind: "pause", color: "#ff0000" }, { z: 1, extruder: 1, kind: "pause" }]), [
+  { z: 0.8, ext: 1, kind: "pause", swap: "#ff0000" },
+  { z: 1, ext: 1, kind: "pause" },
+]);
+const m600 = H.hzFromFile([{ z: 0.8, ext: 1, kind: "pause", swap: "#fe0101" }, { z: 1.2, ext: 1, kind: "pause", swap: "#123456" }], { 1: "#000000" }, null, four);
+assert.deepStrictEqual(m600.plan.changes.map((c) => [c.kind, c.head]), [["auto", 2], ["pause", 2]], "red loaded on head 2; #123456 nowhere: swapped by hand");
+const m600off = H.hzFromFile([{ z: 0.8, ext: 1, kind: "pause", swap: "#ff0000" }], { 1: "#000000" }, null, [{ head: 0, color: null }]);
+assert.strictEqual(m600off.plan.changes[0].kind, "pause", "spools unknown: a pause for now");
+const m600re = H.hzRematch({ ...m600off.plan, warnings: m600off.warnings }, four);
+assert.deepStrictEqual([m600re.changes[0].kind, m600re.changes[0].head], ["auto", 2], "...a head change once they are");
+assert.strictEqual(H.hzSwap({ z: 1, head: 0, kind: "pause", swap: "#ff0000", hand: true }, four).kind, "pause", "a pause put by hand stays");
+
+// Changes the objects never reach: left out of the slice.
+assert.deepStrictEqual(H.hzRequest(saving, [{ base: [1] }], { top: 1.0 }).changes.map((c) => c.z), [0.48, 0.8], "1.2 above a 1 mm object");
+assert.strictEqual(H.hzRequest(saving, [{ base: [1] }], { top: 0 }).changes.length, 3, "top unknown: all kept");
+assert.ok(H.hzAbove(1.0, 1.0) && !H.hzAbove(0.96, 1.0));
 const far = H.hzFromDescribe({ ...d, swaps: [{ layer: 11, z: 0.99, name: "Pink" }] }, heads);
 assert.deepStrictEqual(far.warnings, [{ kind: "gap", z: 0.99, to: 0.96 }, { kind: "unknown", name: "Pink" }]);
 
@@ -225,7 +291,11 @@ assert.deepStrictEqual(offD.warnings, [{ kind: "offline" }]);
 assert.strictEqual(H.hzRematch({ ...offD.plan, warnings: offD.warnings }, offline), null, "still none known");
 const reD = H.hzRematch({ ...offD.plan, warnings: [...offD.warnings, { kind: "gap", z: 1.69, to: 1.68 }] }, heads);
 assert.deepStrictEqual([reD.base, ...reD.changes.map((c) => c.head)], [fromD.plan.base, ...fromD.plan.changes.map((c) => c.head)], "as if imported online");
-assert.deepStrictEqual(reD.warnings, [{ kind: "gap", z: 1.69, to: 1.68 }, { kind: "unloaded", name: "PLA Elegoo Yellow", hex: "#f5e663" }]);
+assert.deepStrictEqual(reD.warnings, [
+  { kind: "gap", z: 1.69, to: 1.68 },
+  { kind: "unloaded", name: "PLA Elegoo Yellow", hex: "#f5e663" },
+  { kind: "same", hex: "#ffffff", name: "PLA Generic White", with: "#f5e663", withName: "PLA Elegoo Yellow" },
+]);
 const offP = H.hzFromFile([{ z: 0.48, ext: 3, kind: "auto" }, { z: 0.96, ext: 1, kind: "pause" }], { 1: "#ffffff", 3: "#8c6239" }, hcl, []).plan;
 const reP = H.hzRematch(offP, heads);
 assert.deepStrictEqual([reP.base, ...reP.changes.map((c) => c.head)], [2, 1, 1]);

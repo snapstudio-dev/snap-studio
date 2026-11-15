@@ -64,7 +64,10 @@ const PREP_VS = MESH_VS.replace("in vec3 aCol;", "in vec3 aCol;\nin float aExt;\
    hidden: a second pass (uOver 2) draws the
    hidden ones only, hatched, through what covers them; the winding tells
    their outward side (uFlip: a mirroring scale). */
-const PREP_FS = MESH_FS.replace("in vec3 vPosV;", "in vec3 vPosV;\nin vec3 vPosW;\nuniform int uHzN;\nuniform float uHzZ[16];\nuniform vec3 uHzCol[16];")
+/* The tint's bands at most: a HueForge print changes colour some ten to
+   thirty times; within WebGL 2's 224 fragment uniform vectors. */
+const HZ_BANDS = 64;
+const PREP_FS = MESH_FS.replace("in vec3 vPosV;", `in vec3 vPosV;\nin vec3 vPosW;\nuniform int uHzN;\nuniform float uHzZ[${HZ_BANDS}];\nuniform vec3 uHzCol[${HZ_BANDS}];`)
   // "By height" mode (prepare-heights.js): each band's spool colour from
   // its bottom up, before the light.
   .replace(
@@ -72,7 +75,7 @@ const PREP_FS = MESH_FS.replace("in vec3 vPosV;", "in vec3 vPosV;\nin vec3 vPosW
     `vec3 col = vCol;
   if (uHzN > 0) {
     col = uHzCol[0];
-    for (int i = 1; i < 16; i++) if (i < uHzN && vPosW.z >= uHzZ[i]) col = uHzCol[i];
+    for (int i = 1; i < ${HZ_BANDS}; i++) if (i < uHzN && vPosW.z >= uHzZ[i]) col = uHzCol[i];
   }
   vec3 c = col * (`
   )
@@ -224,6 +227,9 @@ function prRestore(from, to) {
   prRenderInspector();
   prSchedule();
   if (PR.gl) Promise.all(PR.objects.map(prLoadMesh)).then(prSchedule);
+  // Back to a plan imported while the printer was off, its spools known
+  // since: its colours go to their heads again.
+  if (typeof hzRematchNow === "function") hzRematchNow();
 }
 const prUndo = () => prRestore(HIST.undo, HIST.redo);
 const prRedo = () => prRestore(HIST.redo, HIST.undo);
@@ -2046,7 +2052,7 @@ async function prepareAddFile(path, { remember = true } = {}) {
   const hcl = { layer_height: heights?.layer_height ?? null, first_layer: heights?.first_layer ?? null };
   if (hc.length) for (const o of main) Object.assign(o, { hc, hcl });
   // Its list becomes the plate's, in "by height" mode (prepare-heights.js).
-  if (hc.length) hzAdoptFile(path, hc, heights);
+  if (hc.length) hzAdoptFile(path, hc, heights, main[0]?.extruders?.[0] ?? null);
   const box = groupBox(main);
   const { w, d } = PR.bed;
   const fits = box.x0 >= 0 && box.y0 >= 0 && box.x1 <= w && box.y1 <= d;
@@ -2437,6 +2443,8 @@ async function prSavePlate() {
    object's that has some: the slice wants them all alike), with each
    extruder's colour from its file. */
 function prSaveHeights() {
+  // "By height": the plate's own plan (prepare-heights.js).
+  if (PR.assoc === "height" && PR.hz?.changes?.length) return hzSaved();
   const o = PR.objects.find((x) => x.hc?.length);
   if (!o) return null;
   const fils = (typeof headsModelNow === "function" && headsModelNow(o.path)?.filaments) || [];
@@ -3059,9 +3067,11 @@ function prHeadPicker(anchor, value, onPick) {
 
 /* How many of the plate's colors use these head values (virtual heads
    being deleted): by object, each object's color; by colour, each plate
-   colour and each object with its own pick. */
+   colour and each object with its own pick; by height, the plan's heads. */
 function prVirtualUsers(values) {
   const set = new Set(values.map(Number));
+  // "By height": the plan's start and head changes are its users.
+  if (PR.assoc === "height") return hzPlanHeads(PR.hz).filter((h) => set.has(+h)).length;
   let n = 0;
   for (const o of PR.objects) {
     if (bedState(o) === "out") continue;
@@ -3253,12 +3263,17 @@ function prAssocSwitch(mode) {
 function prAssocApply(mode) {
   if (mode === PR.assoc) return;
   prRemember();
+  // Back from "by height": the choices are the mode's it came from, as
+  // they were (the plan does not touch them).
+  const from = PR.assoc === "height" ? PR.hzFrom || PRUI.assocDefault : PR.assoc;
   if (mode === "height") {
     // The plate starts with the head its first object prints with now.
     const o = PR.objects.find((x) => bedState(x) !== "out");
     const h = o ? Object.values(prShownHeads(o, headsActive(), headsSlots(headsActive())))[0] : null;
-    PR.assoc = mode;
+    hzEnter();
     hzEnsure(h);
+  } else if (mode === from) {
+    // Nothing to carry over.
   } else if (mode === "colour") {
     // Only the objects that bring colours to the banner vote: an
     // uncoloured one (its colour is a stand-in) or one with a picked head
@@ -3266,7 +3281,7 @@ function prAssocApply(mode) {
     const effective = (o) =>
       prBannerColours(o).length ? Object.fromEntries(Object.entries(prHeads(o)).map(([ext, v]) => [ext, v.h])) : {};
     PR.colourHeads = plMigrateToColour(PR.objects, bedState, effective, plPlateColours(PR.objects, bedState, prBannerColours));
-  } else if (PR.assoc === "colour") {
+  } else if (from === "colour") {
     const heads = plMigrateToObject(PR.objects, bedState, prBannerColours, PR.colourHeads);
     for (const o of PR.objects) {
       if (heads[o.id]) o.heads = heads[o.id];

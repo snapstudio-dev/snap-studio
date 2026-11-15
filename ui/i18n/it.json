@@ -2858,6 +2858,8 @@
   "hz.warn.unloaded": {"one": "Nessuna bobina di questa tinta esatta: {names}", "other": "Nessuna bobina di queste tinte esatte: {names}"},
   "hz.warn.unloaded.tip": {"one": "Il file indica colori teorici (HueForge scrive ad esempio #ff0000 per un rosso) e nessuna bobina caricata ha esattamente questa tinta. Viene usata la bobina dal colore più vicino: la sua testina è quella mostrata nell'elenco. Se è la bobina giusta (un rosso per #ff0000), non c'è nulla da fare. Altrimenti carica la bobina giusta prima di stampare, o scegli un'altra testina nell'elenco.", "other": "Il file indica colori teorici (HueForge scrive ad esempio #ff0000 per un rosso) e nessuna bobina caricata ha esattamente queste tinte. Vengono usate le bobine dal colore più vicino: le loro testine sono quelle mostrate nell'elenco. Se sono le bobine giuste (un rosso per #ff0000), non c'è nulla da fare. Altrimenti carica le bobine giuste prima di stampare, o scegli altre testine nell'elenco."},
   "hz.warn.unknown": "«{name}» non è nell'elenco dei colori: si usa la prima testina",
+  "hz.warn.same": "Più colori che testine caricate: «{a}» viene stampato con la stessa testina di «{b}»",
+  "hz.above": "Sopra l'oggetto ({top} mm): ignorato",
   "hz.warn.ranges": "Il file stampa la base con strati più spessi: non ripreso, lo strato fine è stampato ovunque (stesso risultato, più lento).",
   "hz.imported": {"one": "{n} cambio di colore importato", "other": "{n} cambi di colore importati"},
   "hz.imported.warn": {"one": "{n} cambio di colore importato, con avvisi: vedi l'elenco", "other": "{n} cambi di colore importati, con avvisi: vedi l'elenco"},

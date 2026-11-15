@@ -43,6 +43,11 @@ pub struct FileChange {
     pub extruder: u8,
     #[serde(default)]
     pub kind: ChangeKind,
+    /// A colour change (`M600`, read as a pause): the colour the file swaps
+    /// to, "#rrggbb". Prepare sends it to the head holding that colour when
+    /// one does, else keeps the pause for the swap by hand.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
 }
 
 /// The layers of a print: the first one's height, then every other one's.
@@ -137,8 +142,8 @@ const TYPE_TOOL_CHANGE: u8 = 2;
 /// The first plate's changes in `custom_gcode_per_layer.xml`. A file
 /// without `<plate>` is the first plate's; the older format without `type`
 /// says it with its G-code. A colour change (`M600`: the spool of the head
-/// in use swapped by hand) is taken as a pause; custom G-code and
-/// templates are left out.
+/// in use swapped by hand) is taken as a pause, with the colour it swaps to;
+/// custom G-code and templates are left out.
 pub fn read_xml(data: &[u8]) -> Vec<FileChange> {
     use quick_xml::events::Event;
     let mut reader = quick_xml::Reader::from_reader(data);
@@ -180,13 +185,20 @@ fn layer(e: &quick_xml::events::BytesStart) -> Option<FileChange> {
         Some("tool_change") => Some(TYPE_TOOL_CHANGE),
         _ => None,
     });
-    let kind = match ty? {
+    let ty = ty?;
+    let kind = match ty {
         TYPE_TOOL_CHANGE => ChangeKind::Auto,
         TYPE_PAUSE | TYPE_COLOR_CHANGE => ChangeKind::Pause,
         _ => return None,
     };
     let extruder = attr("extruder").and_then(|v| v.parse::<u8>().ok()).unwrap_or(1).clamp(1, 16);
-    Some(FileChange { z, extruder, kind })
+    // The colour swapped to, when it is one ("#rrggbb", the alpha dropped).
+    let color = (ty == TYPE_COLOR_CHANGE)
+        .then(|| attr("color"))
+        .flatten()
+        .and_then(|c| crate::plate::hex_rgb(&c))
+        .map(|[r, g, b]| format!("#{r:02x}{g:02x}{b:02x}"));
+    Some(FileChange { z, extruder, kind, color })
 }
 
 /// The XML Orca writes for the first plate: `colors` per model extruder
@@ -212,15 +224,27 @@ pub fn write_xml(changes: &[FileChange], colors: &[Option<String>]) -> String {
 
 /// The changes a saved plate keeps, with each model extruder's colour (from
 /// 1: entry `i` is extruder `i + 1`'s).
+/// A plate "by height" also keeps Snap Studio's own plan (`plan`: heads as
+/// Prepare numbers them, layers, the file's settings), read back as it was,
+/// and the layers its heights were placed on (`layer_height`,
+/// `first_layer`), in the project's settings for Orca.
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct Saved {
     pub changes: Vec<FileChange>,
     #[serde(default)]
     pub colors: Vec<Option<String>>,
+    #[serde(default)]
+    pub plan: Option<Value>,
+    #[serde(default)]
+    pub layer_height: Option<f32>,
+    #[serde(default)]
+    pub first_layer: Option<f32>,
 }
 
 /// Where a 3MF keeps its changes.
 pub const XML_ENTRY: &str = "Metadata/custom_gcode_per_layer.xml";
+/// Where Snap Studio keeps its own plan beside them (Orca ignores it).
+pub const PLAN_ENTRY: &str = "Metadata/snapstudio_heights.json";
 
 /// What a 3MF says about colour changes: the first plate's list and the
 /// layers it was made for (`project_settings.config`), if it says.
@@ -238,6 +262,9 @@ pub struct FileHeights {
     /// list's first value): the slice sheet takes over those it shows.
     #[serde(default)]
     pub settings: std::collections::BTreeMap<String, String>,
+    /// The plan Snap Studio saved with the plate (`Saved::plan`), if any.
+    #[serde(default)]
+    pub plan: Option<Value>,
 }
 
 pub fn of_file(path: &std::path::Path) -> FileHeights {
@@ -255,12 +282,15 @@ pub fn of_file(path: &std::path::Path) -> FileHeights {
         .and_then(|d| serde_json::from_slice(&d).ok())
         .unwrap_or(Value::Null);
     let ranges = crate::model3mf::read_entry(&mut zip, "Metadata/layer_config_ranges.xml").is_some_and(|d| has_ranges(&d));
+    let plan =
+        crate::model3mf::read_entry(&mut zip, PLAN_ENTRY).and_then(|d| serde_json::from_slice::<Value>(&d).ok()).filter(Value::is_object);
     FileHeights {
         changes,
         layer_height: setting(&settings, "layer_height"),
         first_layer: setting(&settings, "initial_layer_print_height"),
         ranges,
         settings: flat_settings(&settings),
+        plan,
     }
 }
 
@@ -370,7 +400,10 @@ mod tests {
         let c = read_xml(xml);
         assert_eq!(
             c,
-            vec![FileChange { z: 0.48, extruder: 2, kind: ChangeKind::Auto }, FileChange { z: 1.04, extruder: 1, kind: ChangeKind::Pause },]
+            vec![
+                FileChange { z: 0.48, extruder: 2, kind: ChangeKind::Auto, color: None },
+                FileChange { z: 1.04, extruder: 1, kind: ChangeKind::Pause, color: None },
+            ]
         );
     }
 
@@ -379,7 +412,7 @@ mod tests {
         let xml = br##"<custom_gcodes_per_layer><code print_z="0" /><layer top_z="0.6" extruder="2" color="#fff" gcode="tool_change"/><layer top_z="0.9" extruder="1" gcode="M601"/><layer top_z="1.2" extruder="2" color="#000" gcode="M600"/></custom_gcodes_per_layer>"##;
         let c = read_xml(xml);
         assert_eq!(c.len(), 3);
-        assert_eq!(c[0], FileChange { z: 0.6, extruder: 2, kind: ChangeKind::Auto });
+        assert_eq!(c[0], FileChange { z: 0.6, extruder: 2, kind: ChangeKind::Auto, color: None });
         assert_eq!(c[1].kind, ChangeKind::Pause);
         // A colour change swaps the spool by hand: a pause.
         assert_eq!(c[2].kind, ChangeKind::Pause);
@@ -387,14 +420,24 @@ mod tests {
 
     #[test]
     fn a_colour_change_is_a_pause() {
-        let xml = br##"<custom_gcodes_per_layer><plate><plate_info id="1"/><layer top_z="0.8" type="0" extruder="1" color="#ff0000" extra="" gcode="M600"/></plate></custom_gcodes_per_layer>"##;
-        assert_eq!(read_xml(xml), vec![FileChange { z: 0.8, extruder: 1, kind: ChangeKind::Pause }]);
+        let xml = br##"<custom_gcodes_per_layer><plate><plate_info id="1"/><layer top_z="0.8" type="0" extruder="1" color="#FF0000FF" extra="" gcode="M600"/><layer top_z="1.2" type="0" extruder="1" color="" extra="" gcode="M600"/></plate></custom_gcodes_per_layer>"##;
+        // With the colour it swaps to (alpha dropped), when it says one.
+        assert_eq!(
+            read_xml(xml),
+            vec![
+                FileChange { z: 0.8, extruder: 1, kind: ChangeKind::Pause, color: Some("#ff0000".into()) },
+                FileChange { z: 1.2, extruder: 1, kind: ChangeKind::Pause, color: None },
+            ]
+        );
+        // A pause has no colour to go to, even when the file writes one.
+        let pause = br##"<custom_gcodes_per_layer><layer top_z="0.8" type="1" extruder="1" color="#ff0000" gcode="M601"/></custom_gcodes_per_layer>"##;
+        assert_eq!(read_xml(pause)[0].color, None);
     }
 
     #[test]
     fn a_plate_without_info_is_the_first() {
         let xml = br##"<custom_gcodes_per_layer><plate><layer top_z="0.4" type="2" extruder="2" color="" extra="" gcode="tool_change"/></plate><plate><plate_info id="2"/><layer top_z="0.6" type="2" extruder="3" color="" extra="" gcode="tool_change"/></plate></custom_gcodes_per_layer>"##;
-        assert_eq!(read_xml(xml), vec![FileChange { z: 0.4, extruder: 2, kind: ChangeKind::Auto }]);
+        assert_eq!(read_xml(xml), vec![FileChange { z: 0.4, extruder: 2, kind: ChangeKind::Auto, color: None }]);
     }
 
     #[test]
@@ -410,8 +453,10 @@ mod tests {
 
     #[test]
     fn written_xml_reads_back() {
-        let changes =
-            vec![FileChange { z: 0.48, extruder: 2, kind: ChangeKind::Auto }, FileChange { z: 1.04, extruder: 3, kind: ChangeKind::Pause }];
+        let changes = vec![
+            FileChange { z: 0.48, extruder: 2, kind: ChangeKind::Auto, color: None },
+            FileChange { z: 1.04, extruder: 3, kind: ChangeKind::Pause, color: None },
+        ];
         let xml = write_xml(&changes, &[None, Some("#ff0000".into())]);
         assert!(xml.contains(r##"<layer top_z="0.48" type="2" extruder="2" color="#ff0000" extra="" gcode="tool_change"/>"##));
         assert_eq!(read_xml(xml.as_bytes()), changes);

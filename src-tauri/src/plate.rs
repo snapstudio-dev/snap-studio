@@ -356,6 +356,15 @@ pub fn save_scene(
             settings[k] = serde_json::Value::String(if on { "1" } else { "0" }.into());
         }
     }
+    // The layers a plate "by height" placed its changes on: Orca slices
+    // with them, and the file says them when opened again.
+    if let Some(h) = heights.filter(|h| !h.changes.is_empty()) {
+        for (k, v) in [("layer_height", h.layer_height), ("initial_layer_print_height", h.first_layer)] {
+            if let Some(v) = v.filter(|v| v.is_finite() && *v > 0.0) {
+                settings[k] = serde_json::Value::String(format!("{}", (v * 1000.0).round() / 1000.0));
+            }
+        }
+    }
     if settings.as_object().is_some_and(|m| !m.is_empty()) {
         crate::write3mf::append_entry(dst, PROJECT_SETTINGS, &serde_json::to_vec_pretty(&settings)?)?;
     }
@@ -365,6 +374,9 @@ pub fn save_scene(
     if let Some(h) = heights.filter(|h| !h.changes.is_empty()) {
         let xml = crate::heights::write_xml(&h.changes, &h.colors);
         crate::write3mf::append_entry(dst, crate::heights::XML_ENTRY, xml.as_bytes())?;
+        if let Some(plan) = &h.plan {
+            crate::write3mf::append_entry(dst, crate::heights::PLAN_ENTRY, &serde_json::to_vec_pretty(plan)?)?;
+        }
     }
     Ok(())
 }
@@ -1198,6 +1210,48 @@ mod tests {
         assert_eq!((a.tris.len(), b.tris.len()), (12, 12));
         assert!(a.paint.is_empty());
         assert_eq!(b.extruders, vec![2; 12], "color 2 → T1, written 2");
+    }
+
+    /// A plate "by height" saved: the changes for Orca, the layers in the
+    /// project's settings, Snap Studio's own plan beside them, all read back.
+    #[test]
+    fn saved_plate_keeps_its_height_plan() {
+        let tmp = std::env::temp_dir().join("snapstudio-plate-heights");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let src = tmp.join("one.3mf");
+        crate::write3mf::write_scene(
+            &src,
+            &[crate::write3mf::SceneObject { name: "a".into(), tris: cube(0., 10.), transform: Mat::IDENTITY, extruder: None }],
+        )
+        .unwrap();
+        let item = SceneItem {
+            path: src.to_string_lossy().to_string(),
+            item: 0,
+            name: "a".into(),
+            pos: [100.0, 100.0],
+            rot: [0.0; 3],
+            scale: unit_scale(),
+            extruder_map: vec![],
+            piece: None,
+        };
+        use crate::heights::{ChangeKind, FileChange, Saved};
+        let plan = serde_json::json!({ "base": 1, "changes": [{ "z": 0.48, "head": 2, "kind": "auto" }], "src": null });
+        let saved = Saved {
+            changes: vec![FileChange { z: 0.48, extruder: 3, kind: ChangeKind::Auto, color: None }],
+            colors: vec![None, Some("#ff0000".into()), Some("#00ff00".into())],
+            plan: Some(plan.clone()),
+            layer_height: Some(0.08),
+            first_layer: Some(0.16),
+        };
+        let out = tmp.join("saved.3mf");
+        save_scene(std::slice::from_ref(&item), None, None, None, Some(&saved), &out).unwrap();
+        let back = crate::heights::of_file(&out);
+        assert_eq!(back.changes, saved.changes);
+        assert_eq!(back.layer_height, Some(0.08));
+        assert_eq!(back.first_layer, Some(0.16));
+        assert_eq!(back.plan, Some(plan));
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }
 

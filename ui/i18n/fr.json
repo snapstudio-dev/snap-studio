@@ -2816,6 +2816,8 @@
   "hz.warn.unloaded": {"one": "Pas de bobine de cette teinte exacte : {names}", "other": "Pas de bobine de ces teintes exactes : {names}"},
   "hz.warn.unloaded.tip": {"one": "Le fichier donne des couleurs théoriques (HueForge écrit par exemple #ff0000 pour un rouge), et aucune bobine chargée n'a exactement cette teinte. La bobine de couleur la plus proche est utilisée : c'est sa tête qui apparaît dans la liste. Si c'est la bonne bobine (un rouge pour #ff0000), il n'y a rien à faire. Sinon, chargez la bonne bobine avant d'imprimer, ou choisissez une autre tête dans la liste.", "other": "Le fichier donne des couleurs théoriques (HueForge écrit par exemple #ff0000 pour un rouge), et aucune bobine chargée n'a exactement ces teintes. Les bobines de couleur la plus proche sont utilisées : ce sont leurs têtes qui apparaissent dans la liste. Si ce sont les bonnes bobines (un rouge pour #ff0000), il n'y a rien à faire. Sinon, chargez les bonnes bobines avant d'imprimer, ou choisissez d'autres têtes dans la liste."},
   "hz.warn.unknown": "« {name} » n'est pas dans la liste des couleurs : la première tête est utilisée",
+  "hz.warn.same": "Plus de couleurs que de têtes chargées : « {a} » est imprimée avec la même tête que « {b} »",
+  "hz.above": "Au-dessus de l'objet ({top} mm) : ignoré",
   "hz.warn.ranges": "Le fichier imprime sa base en couches plus épaisses : ce n'est pas repris, la couche fine est imprimée partout (même résultat, plus lent).",
   "hz.imported": {"one": "{n} changement de couleur importé", "other": "{n} changements de couleur importés"},
   "hz.imported.warn": {"one": "{n} changement de couleur importé, avec des avertissements : voir la liste", "other": "{n} changements de couleur importés, avec des avertissements : voir la liste"},

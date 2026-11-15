@@ -56,6 +56,34 @@ with its packages for macOS, Windows and Linux. What comes next:
 - **Colour marks of the preview**: the first colour of a print changing
   colours by height now has its mark on the layer slider too, at the first
   layer, with the head it starts on; only the changes had one (#103).
+- **By height mode, after a full review** (#103):
+  - a plate saved by height keeps its plan, its heads and its layer heights:
+    reopened, it comes back as it was (the file's list is used if it was
+    edited in another slicer since);
+  - the slice checks the layer heights an imported plan was placed on: a
+    profile changed in the sheet since no longer moves the colours silently;
+  - going to "By height" and back keeps the head choices of the mode it came
+    from;
+  - the tint of the plate shows up to 64 colour bands, instead of 16;
+  - a change above the objects is marked "ignored" in the list and left out
+    of the slice;
+  - a plan using a deleted virtual head blocks the slice sheet, and the
+    deletion counts it among the head's users;
+  - emptying the plate and adding a HueForge 3MF takes that file's plan, not
+    the old one;
+  - each colour of a 3MF or a describe goes to its own head while there are
+    enough, and a line says which colours share a head when there are not; a
+    3MF object assigned to an extruder starts on that one;
+  - a colour change of the file (M600) goes to the head holding that colour,
+    and stays a pause for a swap by hand when none does;
+  - a change added after a pause goes on from the head in force;
+  - choosing a head by hand only clears what the import said of that colour,
+    and keeps the choice when the colours are matched again once the printer
+    answers; undoing back to a plan imported offline matches it again too;
+  - a plate with pauses only shows the head it starts on beside the layer
+    slider;
+  - the line of the file's settings in the slice sheet follows a language
+    change.
 - **Invisible objects in Prepare**: an object whose shape could not be read
   stayed invisible on the plate, with no message and no new attempt. It now
   says so, with the reason, and is read again later. The shapes are no

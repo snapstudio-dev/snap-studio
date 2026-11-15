@@ -565,8 +565,10 @@ window.addEventListener("langchange", () => {
   slRenderPrinters();
   slRenderMachine();
   slQuality();
-  // The plan's title and layers are written, not tagged.
+  // The plan's title and layers are written, not tagged; so is the line
+  // of the file's settings.
   if (slHzOn()) renderModelMap(false);
+  if (typeof hzSheetLine === "function") hzSheetLine();
 });
 
 $("smodal").addEventListener("change", (e) => {

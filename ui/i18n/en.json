@@ -2813,6 +2813,8 @@
   "hz.warn.unloaded": {"one": "No spool of this exact shade: {names}", "other": "No spool of these exact shades: {names}"},
   "hz.warn.unloaded.tip": {"one": "The file gives ideal colours (HueForge writes #ff0000 for a red, for example), and no loaded spool has exactly this shade. The spool with the closest colour is used: its head is the one shown in the list. If it is the right spool (a red for #ff0000), there is nothing to do. Otherwise, load the right spool before printing, or pick another head in the list.", "other": "The file gives ideal colours (HueForge writes #ff0000 for a red, for example), and no loaded spool has exactly these shades. The spools with the closest colours are used: their heads are the ones shown in the list. If they are the right spools (a red for #ff0000), there is nothing to do. Otherwise, load the right spools before printing, or pick other heads in the list."},
   "hz.warn.unknown": "“{name}” is not in the colour list: the first head is used",
+  "hz.warn.same": "More colours than loaded heads: “{a}” is printed with the same head as “{b}”",
+  "hz.above": "Above the object ({top} mm): ignored",
   "hz.warn.ranges": "The file prints its base with thicker layers: not taken over, the fine layer is printed everywhere (same result, slower).",
   "hz.imported": {"one": "{n} colour change imported", "other": "{n} colour changes imported"},
   "hz.imported.warn": {"one": "{n} colour change imported, with warnings: see the list", "other": "{n} colour changes imported, with warnings: see the list"},

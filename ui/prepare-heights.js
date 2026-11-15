@@ -54,6 +54,13 @@ function hzEnsure(base = null) {
   PR.hz = { base: base ?? own ?? 0, changes: [], layers: null, src: null };
 }
 
+/* "By height" chosen: the mode it came from is the one to go back to as
+   it was (prAssocApply), its colour choices included. */
+function hzEnter() {
+  if (PR.assoc !== "height") PR.hzFrom = PR.assoc;
+  PR.assoc = "height";
+}
+
 /* One undoable edit of the plan; what the import said of its heights no
    longer holds. */
 function hzEdit(fn) {
@@ -84,9 +91,12 @@ function hzBanner(live, slots, n) {
       <span class="p-toks">${tok(hz.base, -1)}</span>
     </div>`;
   let cur = hz.base;
+  const top = hzTop();
   const rows = hz.changes
     .map((c, i) => {
       const pause = c.kind === "pause";
+      // Above the objects: never reached, the slice leaves it out.
+      const above = hzAbove(c.z, top) ? `<small class="hz-above">${esc(tr("hz.above", { top: hzFmt(top) }))}</small>` : "";
       if (!pause) cur = c.head;
       const layer = hzSnap(c.z, lh, first).layer;
       // The other unit under the field, where it has the row's width.
@@ -98,8 +108,8 @@ function hzBanner(live, slots, n) {
       const who = pause
         ? `<span class="hz-pause" title="${esc(tr("hz.pause.title"))}">${esc(tr("hz.pause"))}</span>`
         : tok(c.head, i);
-      return `<div class="p-color hz-line" data-hzrow="${i}">
-        <span class="hz-z">${z}</span>
+      return `<div class="p-color hz-line${above ? " hz-out" : ""}" data-hzrow="${i}">
+        <span class="hz-z">${z}${above}</span>
         <span class="p-toks">${who}</span>
         <button type="button" class="p-ico hz-kind${pause ? " on" : ""}" data-hzk="${i}" title="${esc(tr(pause ? "hz.kind.auto" : "hz.kind.pause"))}">${HZ_ICON.pause}</button>
         <button type="button" class="p-ico" data-hzdel="${i}" title="${esc(tr("hz.remove"))}">${HZ_ICON.del}</button>
@@ -138,6 +148,7 @@ function hzWarnText(w) {
   if (w.kind === "offline") return tr("hz.warn.offline");
   if (w.kind === "unknown") return tr("hz.warn.unknown", { name: w.name });
   if (w.kind === "ranges") return tr("hz.warn.ranges");
+  if (w.kind === "same") return tr("hz.warn.same", { a: w.name || w.hex, b: w.withName || w.with });
   return "";
 }
 
@@ -163,10 +174,14 @@ function hzPickHead(tok, i) {
   const cur = i < 0 ? PR.hz?.base : PR.hz?.changes[i]?.head;
   prHeadPicker(tok, cur, (h) =>
     hzEdit((hz) => {
-      if (i < 0) hz.base = h;
-      else if (hz.changes[i]) hz.changes[i].head = h;
-      // A head chosen by hand: what the import said of its colours is past.
-      if (hz.warnings) hz.warnings = hz.warnings.filter((w) => w.kind !== "unloaded" && w.kind !== "unknown" && w.kind !== "offline");
+      const c = i < 0 ? null : hz.changes[i];
+      if (i >= 0 && !c) return;
+      // A head chosen by hand stays (hzRematch): what the import said of
+      // this colour is past, not what it said of the others.
+      if (c) Object.assign(c, { head: h, hand: true });
+      else Object.assign(hz, { base: h, baseHand: true });
+      const hex = c ? c.hex : hz.baseHex;
+      if (hex && hz.warnings) hz.warnings = hzForget(hz.warnings, hex);
     }),
   );
 }
@@ -183,7 +198,8 @@ function hzAdd(z) {
   const snap = hzSnapZ(want);
   if (hz.changes.some((c) => Math.abs(c.z - snap.z) < 1e-4)) return toast(tr("hz.taken", { z: hzFmt(snap.z) }), true);
   const n = Math.max(1, headsCount(headsActive()));
-  const head = ((last && last.kind !== "pause" ? last.head : hz.base) + 1) % n;
+  // The head in force at the top, a pause keeping the one before it.
+  const head = (hzHeadAt(hz, Infinity) + 1) % n;
   hzEdit((p) => p.changes.push({ z: snap.z, head, kind: "auto" }));
 }
 
@@ -218,9 +234,11 @@ $("p-list").addEventListener("click", (e) => {
     return hzEdit((hz) => {
       const c = hz.changes[i];
       if (!c) return;
-      // Back to a head change: the head in force, to be changed.
+      // Back to a head change: the head in force, to be changed. Chosen
+      // by hand: a colour change of the file stays as it is put.
       if (c.kind === "pause") c.kind = "auto";
       else c.kind = "pause";
+      c.hand = true;
     });
   }
   const del = e.target.closest("[data-hzdel]");
@@ -237,8 +255,8 @@ $("p-list").addEventListener("change", (e) => {
    colour; none outside "by height" mode. */
 function hzUniforms(gl, prog) {
   const on = PR.assoc === "height" && PR.hz;
-  const bands = on ? hzBands(PR.hz).slice(0, 16) : [];
-  const z = new Float32Array(16), col = new Float32Array(16 * 3);
+  const bands = on ? hzBands(PR.hz).slice(0, HZ_BANDS) : [];
+  const z = new Float32Array(HZ_BANDS), col = new Float32Array(HZ_BANDS * 3);
   const pid = typeof headsActive === "function" ? headsActive() : "";
   bands.forEach((b, i) => {
     z[i] = b.from;
@@ -252,18 +270,50 @@ function hzUniforms(gl, prog) {
 
 /* ------------------------------------------------------------ import */
 
+/* The plan as a saved 3MF keeps it (prSaveHeights): the list for Orca
+   (a virtual head on its first head), each head's spool colour, the layers
+   its heights are on, and the plan itself, read back as it is (hzAdoptFile). */
+function hzSaved() {
+  const pid = typeof headsActive === "function" ? headsActive() : "";
+  const list = headsVirtual(pid);
+  const extOf = (h) => (vhIs(h) ? (vhFind(list, h)?.a ?? 0) : +h) + 1;
+  const changes = hzToFile(PR.hz, extOf);
+  const n = Math.max(1, ...changes.map((c) => c.extruder), extOf(PR.hz.base ?? 0));
+  const colors = Array.from({ length: n }, (_, i) => hdSpoolColor(pid, i) || null);
+  const { lh, first } = hzLayers();
+  const { warnings, ...plan } = PR.hz;
+  plan.check = hcKey(changes.map((c) => ({ z: c.z, ext: c.extruder, kind: c.kind })));
+  return { changes, colors, plan, layer_height: lh, first_layer: first };
+}
+
+
+
 /* A HueForge 3MF added to the plate: its list becomes the plate's, the
-   mode switches to "by height", its colours go to the loaded heads. */
-async function hzAdoptFile(path, hc, heights) {
+   mode switches to "by height", its colours go to the loaded heads. A
+   plate Snap Studio saved "by height" gets its plan back as it was. `own`
+   is the file's object's extruder (from 1), its start. */
+async function hzAdoptFile(path, hc, heights, own = null) {
+  // A plan made by hand or from a file still on the plate is kept; an
+  // emptied plate's, or one whose file is gone from it, is not.
+  const others = PR.objects.filter((o) => o.path !== path);
+  const kept = PR.hz?.changes?.length && others.length && (!PR.hz.path || others.some((o) => o.path === PR.hz.path));
   const model = await headsModel(path).catch(() => null);
+  if (kept) return toast(tr("hz.kept"), true);
+  const saved = hzFromSaved(heights?.plan, hc);
+  if (saved) {
+    PR.hz = { ...saved, path };
+    hzEnter();
+    prSave();
+    prRenderInspector();
+    prSchedule();
+    return toast(tr("hz.imported", { n: saved.changes.length }));
+  }
   const colours = Object.fromEntries((model?.filaments || []).map((f) => [f.index, f.color]));
   const layers = heights?.layer_height ? { layer_height: heights.layer_height, first_layer: heights.first_layer ?? heights.layer_height } : null;
-  // A plan already made (by hand, or by a file added before) is kept.
-  if (PR.hz?.changes?.length) return toast(tr("hz.kept"), true);
-  const { plan, warnings } = hzFromFile(hc, colours, layers, hzHeads());
+  const { plan, warnings } = hzFromFile(hc, colours, layers, hzHeads(), own);
   if (heights?.ranges) warnings.push({ kind: "ranges" });
-  PR.hz = { ...plan, settings: hzPick(heights?.settings, hzSheetKeys(hzForU1(heights?.settings))), warnings };
-  PR.assoc = "height";
+  PR.hz = { ...plan, path, settings: hzPick(heights?.settings, hzSheetKeys(hzForU1(heights?.settings))), warnings };
+  hzEnter();
   prSave();
   prRenderInspector();
   prSchedule();
@@ -334,7 +384,7 @@ $("hz-go").addEventListener("click", () => {
   const { plan, warnings } = hzFromDescribe(d, hzHeads());
   prRemember();
   PR.hz = { ...plan, infill100: d.infill100, warnings };
-  PR.assoc = "height";
+  hzEnter();
   closeSheet($("hzmodal"));
   prSave();
   prRenderInspector();

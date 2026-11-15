@@ -2858,6 +2858,8 @@
   "hz.warn.unloaded": {"one": "Ninguna bobina de este tono exacto: {names}", "other": "Ninguna bobina de estos tonos exactos: {names}"},
   "hz.warn.unloaded.tip": {"one": "El archivo indica colores teóricos (HueForge escribe, por ejemplo, #ff0000 para un rojo) y ninguna bobina cargada tiene exactamente este tono. Se usa la bobina de color más cercano: su cabezal es el que aparece en la lista. Si es la bobina correcta (un rojo para #ff0000), no hay nada que hacer. Si no, carga la bobina correcta antes de imprimir o elige otro cabezal en la lista.", "other": "El archivo indica colores teóricos (HueForge escribe, por ejemplo, #ff0000 para un rojo) y ninguna bobina cargada tiene exactamente estos tonos. Se usan las bobinas de color más cercano: sus cabezales son los que aparecen en la lista. Si son las bobinas correctas (un rojo para #ff0000), no hay nada que hacer. Si no, carga las bobinas correctas antes de imprimir o elige otros cabezales en la lista."},
   "hz.warn.unknown": "«{name}» no está en la lista de colores: se usa el primer cabezal",
+  "hz.warn.same": "Más colores que cabezales cargados: «{a}» se imprime con el mismo cabezal que «{b}»",
+  "hz.above": "Por encima del objeto ({top} mm): se ignora",
   "hz.warn.ranges": "El archivo imprime su base con capas más gruesas: no se aplica, la capa fina se imprime en todo (mismo resultado, más lento).",
   "hz.imported": {"one": "{n} cambio de color importado", "other": "{n} cambios de color importados"},
   "hz.imported.warn": {"one": "{n} cambio de color importado, con avisos: ve la lista", "other": "{n} cambios de color importados, con avisos: ve la lista"},

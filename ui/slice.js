@@ -523,7 +523,12 @@ const slMixes = () => vhUsesVirtual(slMapValues(), headsVirtual(currentPrinter()
 /* Smooth mix applies: a virtual head, the plate's switch on (the default). */
 const slSmooth = () => slMixes() && vhSmoothOn(PR);
 
-const slOrphans = () => [...slMapValues()].filter((h) => vhOrphan(headsVirtual(currentPrinter()?.id || ""), h));
+const slOrphans = () => {
+  const values = slMapValues();
+  // "By height": the plan's heads are the slice's too.
+  if (typeof PR !== "undefined" && PR.assoc === "height" && PR.hz) for (const h of hzPlanHeads(PR.hz)) values.add(h);
+  return [...values].filter((h) => vhOrphan(headsVirtual(currentPrinter()?.id || ""), h));
+};
 function slOrphanLine() {
   const n = slOrphans().length;
   $("s-orphan").classList.toggle("hidden", !n);
@@ -684,13 +689,15 @@ async function startSlice() {
   const scene = SL.source.items.map(({ id, colors, heads, base, hc, hcl, ...it }, i) => ({ ...it, extruder_map: (maps[groupOf(i)] || []).map(eng.index) }));
   // Colour changes at a height (HueForge): the plate's single head
   // switched from each height up, by the engine.
-  const plate = { pillars: prPillarsRequest().length > 0, byObject: String(prTowerSetting("print_sequence") || "") === "by object" };
+  const plate = { pillars: prPillarsRequest().length > 0, byObject: String(prTowerSetting("print_sequence") || "") === "by object", top: byHeight ? hzTop() : 0 };
   let heights = byHeight
     ? hzRequest(PR.hz, SL.source.items.map((it) => ({ base: it.base, scale: it.scale })), plate)
     : hcRequest(SL.source.items.map((it, i) => ({ base: it.base, hc: it.hc, hcl: it.hcl, scale: it.scale, map: scene[i].extruder_map })), plate);
   // The plan's heads as the engine numbers them (virtual heads after the
-  // physical ones); its layers are the sheet's (hzSheetApply), not checked.
-  if (byHeight && heights.changes) heights = { changes: heights.changes.map((c) => ({ ...c, head: eng.index(c.head) })), layers: null };
+  // physical ones). The layers an imported plan was placed on go with it:
+  // the sheet starts on them (hzSheetApply), a profile changed there since
+  // would change colour elsewhere, the engine says so.
+  if (byHeight && heights.changes) heights = { changes: heights.changes.map((c) => ({ ...c, head: eng.index(c.head) })), layers: heights.layers || null };
   if (heights.error) {
     setSliceMessage(tr(`slice.heights.${heights.error}`), "err");
     return;

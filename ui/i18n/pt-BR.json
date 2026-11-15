@@ -2858,6 +2858,8 @@
   "hz.warn.unloaded": {"one": "Nenhum carretel deste tom exato: {names}", "other": "Nenhum carretel destes tons exatos: {names}"},
   "hz.warn.unloaded.tip": {"one": "O arquivo indica cores teóricas (o HueForge escreve, por exemplo, #ff0000 para um vermelho) e nenhum carretel carregado tem exatamente este tom. O carretel de cor mais próxima é usado: o cabeçote dele é o que aparece na lista. Se for o carretel certo (um vermelho para #ff0000), não há nada a fazer. Caso contrário, carregue o carretel certo antes de imprimir ou escolha outro cabeçote na lista.", "other": "O arquivo indica cores teóricas (o HueForge escreve, por exemplo, #ff0000 para um vermelho) e nenhum carretel carregado tem exatamente estes tons. Os carretéis de cor mais próxima são usados: os cabeçotes deles são os que aparecem na lista. Se forem os carretéis certos (um vermelho para #ff0000), não há nada a fazer. Caso contrário, carregue os carretéis certos antes de imprimir ou escolha outros cabeçotes na lista."},
   "hz.warn.unknown": "“{name}” não está na lista de cores: o primeiro cabeçote é usado",
+  "hz.warn.same": "Mais cores do que cabeçotes carregados: “{a}” é impresso com o mesmo cabeçote que “{b}”",
+  "hz.above": "Acima do objeto ({top} mm): ignorado",
   "hz.warn.ranges": "O arquivo imprime a base com camadas mais grossas: isso não é aplicado, a camada fina é impressa em tudo (mesmo resultado, mais lento).",
   "hz.imported": {"one": "{n} troca de cor importada", "other": "{n} trocas de cor importadas"},
   "hz.imported.warn": {"one": "{n} troca de cor importada, com avisos: veja a lista", "other": "{n} trocas de cor importadas, com avisos: veja a lista"},

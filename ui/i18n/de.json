@@ -2858,6 +2858,8 @@
   "hz.warn.unloaded": {"one": "Keine Spule genau dieses Farbtons: {names}", "other": "Keine Spulen genau dieser Farbtöne: {names}"},
   "hz.warn.unloaded.tip": {"one": "Die Datei nennt Idealfarben (HueForge schreibt z. B. #ff0000 für ein Rot), und keine geladene Spule hat genau diesen Farbton. Die Spule mit der nächstliegenden Farbe wird verwendet: Ihr Kopf steht in der Liste. Ist es die richtige Spule (ein Rot für #ff0000), ist nichts zu tun. Andernfalls laden Sie vor dem Drucken die richtige Spule oder wählen Sie in der Liste einen anderen Kopf.", "other": "Die Datei nennt Idealfarben (HueForge schreibt z. B. #ff0000 für ein Rot), und keine geladene Spule hat genau diese Farbtöne. Die Spulen mit den nächstliegenden Farben werden verwendet: Ihre Köpfe stehen in der Liste. Sind es die richtigen Spulen (ein Rot für #ff0000), ist nichts zu tun. Andernfalls laden Sie vor dem Drucken die richtigen Spulen oder wählen Sie in der Liste andere Köpfe."},
   "hz.warn.unknown": "„{name}“ steht nicht in der Farbliste: Der erste Kopf wird verwendet",
+  "hz.warn.same": "Mehr Farben als geladene Köpfe: „{a}“ wird mit demselben Kopf wie „{b}“ gedruckt",
+  "hz.above": "Über dem Objekt ({top} mm): ignoriert",
   "hz.warn.ranges": "Die Datei druckt ihre Basis mit dickeren Schichten: nicht übernommen, die feine Schicht wird überall gedruckt (gleiches Ergebnis, langsamer).",
   "hz.imported": {"one": "{n} Farbwechsel importiert", "other": "{n} Farbwechsel importiert"},
   "hz.imported.warn": {"one": "{n} Farbwechsel importiert, mit Warnungen: siehe Liste", "other": "{n} Farbwechsel importiert, mit Warnungen: siehe Liste"},

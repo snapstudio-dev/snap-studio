@@ -19,7 +19,13 @@ function hcColours(base, hc) {
 
 /* A list as the UI keeps it, from `plate_heights`' changes (extruder from 1). */
 const hcFromFile = (changes) =>
-  (changes || []).map((c) => ({ z: +c.z, ext: c.extruder, kind: c.kind === "pause" ? "pause" : "auto" })).filter((c) => c.z > 0 && c.ext >= 1);
+  (changes || [])
+    .map((c) => {
+      const kind = c.kind === "pause" ? "pause" : "auto";
+      // A colour change (M600): the colour the spool is swapped to.
+      return kind === "pause" && c.color ? { z: +c.z, ext: c.extruder, kind, swap: c.color } : { z: +c.z, ext: c.extruder, kind };
+    })
+    .filter((c) => c.z > 0 && c.ext >= 1);
 
 const hcKey = (hc) => JSON.stringify((hc || []).map((c) => [Math.round(c.z * 1000), c.ext, c.kind]));
 
@@ -66,7 +72,7 @@ function hcRequest(items, plate = {}) {
 /* The layers (from 1) the preview marks on its slider: the pauses, and
    the layers whose main tool differs from the layer below's, and then the
    first printed layer with its head (`start`), so the first colour is
-   marked too. `tools[l]` is layer `l`'s main tool (undefined: no
+   marked too (with a head change or a pause to mark). `tools[l]` is layer `l`'s main tool (undefined: no
    extrusion). A plate changing
    heads more than `max` times (a virtual head alternates at every layer)
    gets no head marks: they would say nothing. */
@@ -81,7 +87,8 @@ function hcMarks(tools, pauses, max = 32) {
     else if (t !== prev) heads.push({ layer: l, kind: "head", tool: t });
     prev = t;
   }
-  const show = heads.length > 0 && heads.length <= max;
+  // A plate with pauses only still says which head it starts on.
+  const show = first != null && (heads.length > 0 || marks.length > 0) && heads.length <= max;
   if (show) heads.unshift(first);
   if (show) for (const h of heads) if (!marks.some((m) => m.layer === h.layer)) marks.push(h);
   return marks.sort((a, b) => a.layer - b.layer);
@@ -132,6 +139,10 @@ function hzPlanHeads(plan) {
   return [plan.base ?? 0, ...(plan.changes || []).filter((c) => c.kind !== "pause").map((c) => c.head)];
 }
 
+/* A change at `z` the objects never reach (`top` their tallest, mm; 0 or
+   none: unknown, all reached). */
+const hzAbove = (z, top) => top > 0 && z >= top - 1e-4;
+
 /* What the slice sends in "by height" mode, or why it cannot: `items` the
    sliced objects ({ base: own colours, scale }), `plate` as hcRequest's.
    Every object prints with the plate's head until the first change: an
@@ -147,7 +158,9 @@ function hzRequest(plan, items, plate = {}) {
   const out = changes.map((c) => {
     if (c.kind !== "pause") cur = c.head;
     return { z: c.z, head: cur, kind: c.kind === "pause" ? "pause" : "auto" };
-  });
+  // At or above the tallest object's top (`plate.top`): never reached, left
+  // out (the engine would put them after the last layer).
+  }).filter((c) => !hzAbove(c.z, plate.top));
   return { changes: out, base: plan.base ?? 0, layers: plan.layers || null };
 }
 
@@ -172,6 +185,34 @@ function hzNearestHead(hex, heads) {
     if (gap < (best?.gap ?? Infinity)) best = { head: h.head, gap };
   }
   return best && { head: best.head, exact: best.gap <= HZ_LOADED };
+}
+
+/* Each colour of a plan (`hexes`, in order) on its own head when there are
+   enough: the closest pairs first, so two shades never share a head while
+   another is free. Map hex → { head, exact, with } (`with` the colour
+   already on that head when there were more colours than heads, or none
+   left near); null when no head has a colour. */
+function hzAssign(hexes, heads) {
+  const want = [...new Set((hexes || []).filter(Boolean))];
+  const known = (heads || []).filter((h) => hzColourGap(h.color, h.color) === 0);
+  if (!known.length) return null;
+  const pairs = [];
+  for (const hex of want) for (const h of known) pairs.push({ hex, head: h.head, gap: hzColourGap(hex, h.color) });
+  pairs.sort((a, b) => a.gap - b.gap);
+  const out = new Map(), taken = new Map();
+  for (const p of pairs) {
+    if (out.has(p.hex) || taken.has(p.head) || !Number.isFinite(p.gap)) continue;
+    out.set(p.hex, { head: p.head, exact: p.gap <= HZ_LOADED, with: null });
+    taken.set(p.head, p.hex);
+  }
+  // More colours than heads: the nearest, shared.
+  for (const hex of want) {
+    if (out.has(hex)) continue;
+    const near = hzNearestHead(hex, known);
+    if (!near) continue;
+    out.set(hex, { ...near, with: taken.get(near.head) ?? null });
+  }
+  return out;
 }
 
 /* A HueForge "describe" (the text file, or its copy in a MakerWorld page):
@@ -232,6 +273,9 @@ const hzUniq = (warnings) => {
   });
 };
 
+/* Two colours of the file on one head (more colours than heads). */
+const hzSame = (a, b, nameOf = () => null) => ({ kind: "same", hex: a, name: nameOf(a), with: b, withName: nameOf(b) });
+
 /* A plan from a describe and the printer's heads ([{ head, color }]):
    { plan, warnings: [{ kind: "gap" | "unloaded" | "unknown" | "offline", ... }] }.
    Each height goes to the top of a real layer of the file's layers; the
@@ -241,6 +285,9 @@ function hzFromDescribe(d, heads) {
   const known = hzKnown(heads);
   if (!known) warnings.push({ kind: "offline" });
   const lh = d.layer_height, first = d.first_layer ?? d.layer_height;
+  const names = [d.start, ...d.swaps.map((s) => s.name)].filter(Boolean);
+  const map = known ? hzAssign(names.map((n) => hzColourOf(n, d.colours)?.hex), heads) : null;
+  const nameOf = (hex) => d.colours.find((c) => c.hex === hex)?.name || null;
   const headOf = (name) => {
     const c = hzColourOf(name, d.colours);
     if (!c) {
@@ -248,8 +295,9 @@ function hzFromDescribe(d, heads) {
       return { head: 0, hex: null };
     }
     if (!known) return { head: d.colours.indexOf(c) % 4, hex: c.hex };
-    const h = hzNearestHead(c.hex, heads);
+    const h = map?.get(c.hex);
     if (!h?.exact) warnings.push({ kind: "unloaded", name: c.name || name, hex: c.hex });
+    if (h?.with) warnings.push(hzSame(h.with, c.hex, nameOf));
     return { head: h?.head ?? 0, hex: c.hex };
   };
   const start = d.start ? headOf(d.start) : { head: 0, hex: null };
@@ -271,16 +319,21 @@ function hzFromDescribe(d, heads) {
 
 /* A plan from a 3MF's list (hcFromFile's, extruders from 1), the file's
    colours by extruder ({ 1: "#rrggbb" }) and the printer's heads. A pause
-   keeps the head in force. */
-function hzFromFile(hc, colours, layers, heads) {
+   keeps the head in force; a colour change goes to a loaded head (hzSwap). */
+function hzFromFile(hc, colours, layers, heads, own = null) {
   const warnings = [];
   const known = hzKnown(heads);
   if (!known) warnings.push({ kind: "offline" });
+  // The object's own extruder starts (the first, when the file says none).
+  const start = own >= 1 ? own : 1;
+  const exts = [start, ...(hc || []).filter((c) => c.kind !== "pause").map((c) => c.ext)];
+  const map = known ? hzAssign(exts.map((e) => colours?.[e]), heads) : null;
   const headOf = (ext) => {
     const hex = colours?.[ext] || null;
     if (!known) return (ext - 1) % 4;
-    const h = hzNearestHead(hex, heads);
+    const h = hex ? map?.get(hex) : hzNearestHead(hex, heads);
     if (!h?.exact) warnings.push({ kind: "unloaded", name: null, hex });
+    if (h?.with) warnings.push(hzSame(h.with, hex));
     return h?.head ?? (ext - 1) % 4;
   };
   const lh = layers?.layer_height, first = layers?.first_layer ?? lh;
@@ -289,16 +342,25 @@ function hzFromFile(hc, colours, layers, heads) {
     .map((c) => {
       const snap = lh ? hzSnap(c.z, lh, first) : { z: c.z, gap: 0 };
       if (Math.abs(snap.gap) > 0.01) warnings.push({ kind: "gap", z: c.z, to: snap.z });
-      if (c.kind === "pause") return { z: snap.z, head: null, kind: c.kind };
+      if (c.kind === "pause") return hzSwap({ z: snap.z, head: null, kind: c.kind, ...(c.swap ? { swap: c.swap } : {}) }, known ? heads : null);
       return { z: snap.z, head: headOf(c.ext), kind: c.kind, hex: colours?.[c.ext] || null };
     });
-  const base = headOf(1);
+  const base = headOf(start);
   let cur = base;
   for (const c of changes) c.head = c.kind === "pause" ? cur : (cur = c.head);
   return {
-    plan: { base, baseHex: colours?.[1] || null, changes, layers: lh ? { layer_height: lh, first_layer: first } : null, src: "3mf" },
+    plan: { base, baseHex: colours?.[start] || null, changes, layers: lh ? { layer_height: lh, first_layer: first } : null, src: "3mf" },
     warnings: hzUniq(warnings),
   };
+}
+
+/* A colour change of the file (a pause with `swap`, the colour the spool
+   is swapped to by hand): a head change to the head holding that colour
+   when one does (`heads`, the loaded ones), else the pause, for the swap. */
+function hzSwap(c, heads) {
+  if (c.kind !== "pause" || !c.swap || c.hand) return c;
+  const near = heads ? hzNearestHead(c.swap, heads) : null;
+  return near?.exact ? { ...c, kind: "auto", head: near.head, hex: c.swap } : c;
 }
 
 /* An imported plan made while no spool was known, once the printer's
@@ -306,20 +368,64 @@ function hzFromFile(hc, colours, layers, heads) {
    the colours no head holds. Null while still none is known. */
 function hzRematch(plan, heads) {
   if (!plan || !hzKnown(heads)) return null;
-  const warnings = (plan.warnings || []).filter((w) => w.kind !== "offline" && w.kind !== "unloaded");
-  const headOf = (hex, was) => {
-    if (!hex) return was;
-    const h = hzNearestHead(hex, heads);
+  const warnings = (plan.warnings || []).filter((w) => w.kind !== "offline" && w.kind !== "unloaded" && w.kind !== "same");
+  // Heads chosen by hand stay, the import's colours on the others.
+  const free = [plan.baseHand ? null : plan.baseHex, ...(plan.changes || []).filter((c) => c.kind !== "pause" && !c.hand).map((c) => c.hex)];
+  const map = hzAssign(free.filter(Boolean), heads);
+  const headOf = (hex, was, hand) => {
+    if (!hex || hand) return was;
+    const h = map?.get(hex);
     if (!h?.exact) warnings.push({ kind: "unloaded", name: plan.names?.[hex] ?? null, hex });
+    if (h?.with) warnings.push(hzSame(h.with, hex, (x) => plan.names?.[x] ?? null));
     return h?.head ?? was;
   };
-  const base = headOf(plan.baseHex, plan.base);
+  const base = headOf(plan.baseHex, plan.base, plan.baseHand);
   let cur = base;
-  const changes = (plan.changes || []).map((c) => {
-    const head = c.kind === "pause" ? cur : (cur = headOf(c.hex, c.head));
+  const changes = (plan.changes || []).map((c0) => {
+    // A colour change the spools now hold: a head change.
+    const c = hzSwap(c0, heads);
+    const head = c.kind === "pause" ? cur : c !== c0 ? (cur = c.head) : (cur = headOf(c.hex, c.head, c.hand));
     return { ...c, head };
   });
   return { ...plan, base, changes, warnings: hzUniq(warnings) };
+}
+
+/* The head in force at `z` (a change at `z` included), a pause keeping
+   the one before it. */
+function hzHeadAt(plan, z) {
+  let cur = plan?.base ?? 0;
+  for (const c of [...(plan?.changes || [])].sort((a, b) => a.z - b.z)) {
+    if (c.z > z + 1e-6) break;
+    if (c.kind !== "pause") cur = c.head;
+  }
+  return cur;
+}
+
+/* What the import said of colour `hex` dropped (its head chosen by hand),
+   what it said of the others kept. */
+const hzForget = (warnings, hex) =>
+  (warnings || []).filter((w) => !(["unloaded", "unknown", "same"].includes(w.kind) && (w.hex === hex || w.with === hex)));
+
+/* A plan as a saved 3MF keeps it for Orca: [{ z, extruder, kind }], each
+   head through `extOf` (a model extruder from 1); a pause carries the head
+   in force. */
+function hzToFile(plan, extOf) {
+  let cur = plan?.base ?? 0;
+  return [...(plan?.changes || [])]
+    .sort((a, b) => a.z - b.z)
+    .map((c) => {
+      if (c.kind !== "pause") cur = c.head;
+      return { z: c.z, extruder: extOf(cur), kind: c.kind === "pause" ? "pause" : "auto" };
+    });
+}
+
+/* The plan Snap Studio saved beside a 3MF's list (`saved`, with `check`
+   the list it was saved with), when that list is still the file's (`hc`,
+   hcFromFile's): an edit in another slicer makes it stale. Null otherwise. */
+function hzFromSaved(saved, hc) {
+  if (!saved || !Array.isArray(saved.changes) || saved.check !== hcKey(hc)) return null;
+  const { check, ...plan } = saved;
+  return { ...plan, changes: plan.changes.map((c) => ({ ...c })), warnings: [] };
 }
 
 /* A change's layer typed (from 2: the first is the start): its height. */
@@ -403,7 +509,7 @@ function hzMemo(data, m) {
 
 if (typeof module !== "undefined") {
   module.exports = {
-    hcColours, hcFromFile, hcKey, hcRequest, hcMarks,
+    hcColours, hcFromFile, hcKey, hcRequest, hcMarks, hzToFile, hzFromSaved, hzAssign, hzHeadAt, hzForget, hzAbove, hzSwap,
     hzLayerTop, hzSnap, hzBands, hzPlanHeads, hzRequest, hzColourGap, hzNearestHead, hzParseDescribe, hzColourOf, hzFromDescribe, hzFromFile, hzRematch, hzLayerZ,
     hzPick, hzPlanSettings, hzQuick, hzMemo, hzForU1, HZ_MACHINE_KEYS,
   };
