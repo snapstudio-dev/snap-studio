@@ -8,7 +8,7 @@ lists below.
 
 | Plan | Subject | State |
 |---|---|---|
-| [v0.19.md](v0.19.md) | 0.19.0: changelog, What's new, README, site, and the checks before publishing | Docs in [#96](https://github.com/kameka22/snap-studio/pull/96): version **0.19.0**, What's new `current` **0.19**, Snappy first. The release itself is published by `scripts/release.sh` |
+| [v0.20.md](v0.20.md) | 0.20.0: changelog, What's new, README, site, and the checks before publishing | Docs in [#111](https://github.com/kameka22/snap-studio/pull/111): version **0.20.0**, What's new `current` **0.20**, colours by height first. The release itself is published by `scripts/release.sh` |
 
 ## In progress
 
@@ -25,8 +25,9 @@ lists below.
 
 | Plan | Subject | State |
 |---|---|---|
-| [gcode-preview-cut.md](gcode-preview-cut.md) | Long prints: the sliced preview stops part way up (3 M segment budget drops the top layers); keep every layer and simplify evenly instead | In progress, PR [#106](https://github.com/kameka22/snap-studio/pull/106) |
-| [stl-in-files.md](stl-in-files.md) | Files library: list STL files with a rendered preview, details, Analyze and View in 3D; Prepare and print them like 3MF files | Merged in [#105](https://github.com/kameka22/snap-studio/pull/105) (`dd244f3`); checks in the app left |
+| [gcode-preview-cut.md](gcode-preview-cut.md) | Long prints: the sliced preview stops part way up (3 M segment budget drops the top layers); keep every layer and simplify evenly instead | Merged in [#106](https://github.com/kameka22/snap-studio/pull/106), in 0.20.0 |
+| [hueforge-etape-2.md](hueforge-etape-2.md) | Colours by height, step 2: Prepare's « By height » mode, HueForge 3MF import, the file's settings in the slice sheet | Merged in [#103](https://github.com/kameka22/snap-studio/pull/103) (`2ee123d`), in 0.20.0; step 3 in [#104](https://github.com/kameka22/snap-studio/pull/104); checks on the U1 left |
+| [stl-in-files.md](stl-in-files.md) | Files library: list STL files with a rendered preview, details, Analyze and View in 3D; Prepare and print them like 3MF files | Merged in [#105](https://github.com/kameka22/snap-studio/pull/105) (`dd244f3`), in 0.20.0; checks in the app left |
 | [ai-agents.md](ai-agents.md) | OpenCode next to Claude Code, one agent active at a time | Written, postponed |
 | [ai-builtin-sandbox.md](ai-builtin-sandbox.md) | Claude Code's built-in sandbox as the default sandbox on macOS and Linux; yolobox kept for those who use it | Written, draft PR [#62](https://github.com/kameka22/snap-studio/pull/62) |
 | [slice-basic-advanced.md](slice-basic-advanced.md) | Basic and Advanced levels for the slice sheet (title bar and Settings) | Written, draft PR |
@@ -40,8 +41,8 @@ lists below.
 | [library-nav-contrast.md](library-nav-contrast.md) | Explore: Back, Forward and Reload almost invisible over dark sites; adaptive pill (dark on light sites, light on dark sites), chosen | Merged in [#88](https://github.com/kameka22/snap-studio/pull/88), with the Linux flicker fix; checks on macOS and Windows still listed in the plan |
 | [plate-material-compatibility.md](plate-material-compatibility.md) | Plate and material compatibility: warnings and glue tip in Prepare and at start, plus the plate set per printer in Control, a check when a spool is loaded, a suggested bed temperature and a glue reminder | Merged in [#16](https://github.com/kameka22/snap-studio/pull/16). The pre-merge rule-table review has no comment on the pull request and is not asked again. Graphic Effect stays the least sure pair in the plan |
 | [usage-analytics.md](usage-analytics.md) | Anonymous usage count with Aptabase: one `app_started` event, announced in a friendly sheet at first launch, easy to turn off in Settings | Merged in [#90](https://github.com/kameka22/snap-studio/pull/90), in 0.19.0. Privacy doc, README, site footer and What's new are in place; the plan's first-launch text is the flow before [#95](https://github.com/kameka22/snap-studio/pull/95) |
-| [snappy-first-click.md](snappy-first-click.md) | Snappy's icon sometimes needs a second click: the avatar redrawn under the pointer swallows the click; the avatar stops taking the pointer | Implemented in draft PR [#101](https://github.com/kameka22/snap-studio/pull/101); checks in the app left (see the plan) |
-| [print-progress-match.md](print-progress-match.md) | Print progress and time left as on the U1's screen: measure what the screen reads, then the same percentage, a slicer-based time left and the same rounding | Same percentage as the screen (measured on the U1) and slicer-based time left implemented in draft PR [#100](https://github.com/kameka22/snap-studio/pull/100) (steps 2 and 3, their tests); the screen's time left and rounding still to measure (see the plan) |
+| [snappy-first-click.md](snappy-first-click.md) | Snappy's icon sometimes needs a second click: the avatar redrawn under the pointer swallows the click; the avatar stops taking the pointer | Merged in [#101](https://github.com/kameka22/snap-studio/pull/101), in 0.20.0; checks in the app left (see the plan) |
+| [print-progress-match.md](print-progress-match.md) | Print progress and time left as on the U1's screen: measure what the screen reads, then the same percentage, a slicer-based time left and the same rounding | Same percentage as the screen (measured on the U1) and slicer-based time left merged in [#100](https://github.com/kameka22/snap-studio/pull/100), in 0.20.0 (steps 2 and 3, their tests); the screen's time left and rounding still to measure (see the plan) |
 
 The other planned features each have a draft pull request: see the
 [Roadmap](../../README.md#roadmap).

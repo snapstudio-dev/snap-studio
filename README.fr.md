@@ -80,10 +80,13 @@ l'app.
 
 <img align="left" width="48%" hspace="12" src="docs/screenshots/files.png" alt="Snap Studio — vos fichiers 3MF en un coup d'œil" />
 
-Vos fichiers 3MF en un coup d'œil.
+Vos fichiers 3MF et STL en un coup d'œil.
 
 - Miniatures de vos fichiers 3MF (Orca, Bambu, Prusa, MakerWorld), ou rendu
   3D quand il n'y en a pas.
+- Les STL aussi, avec un aperçu rendu et un badge STL : analysez-les,
+  regardez-les, préparez-les et imprimez-les comme un 3MF. Un modèle qui
+  semble dessiné en pouces ou en mètres le signale.
 - Durée, filament, plateaux.
 - Visionneuse 3D et trajectoires G-code couche par couche.
 
@@ -123,6 +126,25 @@ Le plateau U1 comme dans Orca — puis découper.
   supports et redécouper**.
 
 <img src="docs/screenshots/supports-warning.png" width="460" alt="L'avertissement de supports : des parties commencent dans le vide, avec Activer les supports">
+
+<br clear="both">
+
+### 🎚 Couleurs par hauteur (HueForge)
+
+Une tête au départ, d'autres couleurs à partir de couches données, pour les
+impressions HueForge et les bandes de couleur.
+
+- Le mode couleur de Préparer a un troisième choix, **Par hauteur** : tout
+  le plateau part sur une tête, puis change de tête, ou fait une pause pour
+  changer de bobine à la main, aux hauteurs listées sous les objets.
+  Saisissez-les en numéros de couche, comme HueForge les compte, ou en mm ;
+  chacune se cale sur le haut d'une couche.
+- Un 3MF HueForge (ou un 3MF Orca avec des changements de couleur) s'ouvre
+  tout seul dans ce mode : chaque couleur va sur la bobine chargée la plus
+  proche, avec un ⚠ quand elle s'en éloigne, et la feuille de découpe reprend
+  les réglages du fichier.
+- Le plateau est dessiné dans ces couleurs, et l'aperçu marque chaque
+  changement et chaque pause à côté du curseur des couches.
 
 <br clear="both">
 
@@ -290,6 +312,8 @@ Ce que l'imprimante va faire, avant qu'elle le fasse.
   curseur pour avancer couche par couche.
 - La durée estimée, sa répartition par type (parois, remplissage, surfaces,
   déplacements) et le filament par tête, avec son coût.
+- Tournez la vue sous le plateau et il s'efface : le dessous de la pièce
+  apparaît (dans Préparer et la vue 3D aussi).
 - Puis **Envoyer à l'imprimante**, **Enregistrer le G-code** ou retour aux
   réglages.
 

@@ -137,9 +137,9 @@ No cloud and no account: everything goes over the LAN to the U1's own **Moonrake
 
 ## 5. Tests and CI
 
-- **Rust**: `cargo test --lib` gives **336 passed, 0 failed, 32 ignored** (the ignored tests need a local Snapmaker Orca or the engine). Several tests run against a small fake Moonraker on `127.0.0.1`, for file listing, deletion permissions and sharing. Another test checks that the print-start request matches Snapmaker Orca's. With the printer simulator, `cargo test --lib --features sim` gives **368 passed**, 33 ignored: the printer code against simulated U1s, on a virtual clock. Counted on 2026-11-07 with Rust 1.99.1 on Linux, on the 0.19.0 tree.
-- **Interface logic**: **31 Node test scripts** (`scripts/test-*.js`, 3,535 lines) cover Prepare, towers and pillars, virtual heads, the spool check, Prints, the camera, Control, bed mesh, printer files and their picking, files attached to an AI message, the 3D printer model, themes, Snappy and the introductions. All passed on that same run.
-- **Translations**: `scripts/check-i18n.py` checks the 9 catalogs, with 2,562 keys each and 100 % coverage.
+- **Rust**: `cargo test --lib` gives **369 passed, 0 failed, 33 ignored** (the ignored tests need a local Snapmaker Orca or the engine). Several tests run against a small fake Moonraker on `127.0.0.1`, for file listing, deletion permissions and sharing. Another test checks that the print-start request matches Snapmaker Orca's. With the printer simulator, `cargo test --lib --features sim` gives **401 passed**, 34 ignored: the printer code against simulated U1s, on a virtual clock. Counted on 2026-11-15 by the CI (Linux) on `main` at `2ee123d`, the 0.20.0 tree.
+- **Interface logic**: **32 Node test scripts** (`scripts/test-*.js`, 4,012 lines) cover Prepare, towers and pillars, virtual heads, the spool check, Prints, the camera, Control, bed mesh, printer files and their picking, files attached to an AI message, the 3D printer model, themes, Snappy, the introductions and colours by height. All passed on that same run.
+- **Translations**: `scripts/check-i18n.py` checks the 9 catalogs, with 2,624 keys each and 100 % coverage.
 - **CI** (GitHub Actions): `test.yml` runs both jobs, "Rust unit tests" (with and without the simulator) and "Interface logic and catalogs", on every pull request and every push to `main`. `build.yml` (started by hand) builds the release for macOS (universal), Windows x64 and Linux amd64/arm64, signs the update packages and publishes `latest.json` for the updater; it fails if a release binary carries the printer simulator or its server. `engine.yml` repackages each Snapmaker Orca version and runs a **real test slice** on every platform before publishing; if one platform fails, nothing is published. `pages.yml` deploys the website.
 
 ## 6. Documentation and languages
@@ -191,6 +191,12 @@ A welcome assistant then sets up the language, the models folder, the U1 on your
 ## 9. Development log
 
 Since 2026-10-28, the opening of the Snapmaker Innovation Fund Phase 2. Updated with each release; full details are in the [CHANGELOG](../CHANGELOG.md).
+
+**0.20.0, 2026-11-15** ([#111](https://github.com/kameka22/snap-studio/pull/111))
+- Colours by height (HueForge): the engine side and the preview's layer marks ([#102](https://github.com/kameka22/snap-studio/pull/102)), then Prepare's « By height » mode, the HueForge 3MF import with each colour matched to the closest loaded spool, and the file's settings taken over by the slice sheet ([#103](https://github.com/kameka22/snap-studio/pull/103)).
+- STL files in the Files library ([#105](https://github.com/kameka22/snap-studio/pull/105)) and the view below the plate ([#107](https://github.com/kameka22/snap-studio/pull/107)).
+- Lighter and smoother: every layer of long prints in the G-code preview with about a third of the memory per line ([#106](https://github.com/kameka22/snap-studio/pull/106)), smoother scrolling in Explore ([#108](https://github.com/kameka22/snap-studio/pull/108)). Fixes: undo after a slider ([#110](https://github.com/kameka22/snap-studio/pull/110)), the print percentage as on the U1's screen and a slicer-based time left ([#100](https://github.com/kameka22/snap-studio/pull/100)), Snappy's first click ([#101](https://github.com/kameka22/snap-studio/pull/101)), the camera's last image ([#98](https://github.com/kameka22/snap-studio/pull/98)).
+- Step 3 of colours by height ([#104](https://github.com/kameka22/snap-studio/pull/104)) and the engine upgrade ([#86](https://github.com/kameka22/snap-studio/pull/86)) are not included.
 
 **0.19.0, 2026-11-08** ([#96](https://github.com/kameka22/snap-studio/pull/96))
 - Snappy ([#95](https://github.com/kameka22/snap-studio/pull/95)), the in-app workshop assistant: an animated icon at the end of the sidebar separator and a floating card, on a Claude session shared with Create. It acts through the app's own tools (printers, queue, Prepare and slicing, files, Create, Explore, settings), sees a printer's camera, the plate and attached images, and every change waits for the user's confirmation.

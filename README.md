@@ -71,10 +71,13 @@ The Snapmaker ecosystem and the model sites you use, inside the app.
 
 <img align="left" width="48%" hspace="12" src="docs/screenshots/files.png" alt="Snap Studio — your 3MF files at a glance" />
 
-Your 3MF files at a glance.
+Your 3MF and STL files at a glance.
 
 - Thumbnails of your 3MF files (Orca, Bambu, Prusa, MakerWorld), or a 3D
   render when there is none.
+- STL files too, with a rendered preview and an STL badge: analyze, view,
+  prepare and print them like a 3MF. A model that looks drawn in inches or
+  meters says so.
 - Duration, filament, plates.
 - A 3D viewer and layer-by-layer G-code toolpaths.
 
@@ -108,6 +111,23 @@ The U1 plate as in Orca — then slice.
   on and slice again**.
 
 <img src="docs/screenshots/supports-warning.png" width="460" alt="The supports warning: parts start in the air, with Turn supports on">
+
+<br clear="both">
+
+### 🎚 Colors by height (HueForge)
+
+One head at the start, other colors from given layers up, for HueForge prints
+and color bands.
+
+- Prepare's color mode has a third choice, **By height**: the whole plate
+  starts on one head, then changes head, or pauses for a spool swap by hand,
+  at the heights listed under the objects. Type them as layer numbers, as
+  HueForge counts them, or in mm; each snaps to the top of a layer.
+- A HueForge 3MF (or an Orca one with color changes) opens in this mode on
+  its own: each color goes to the closest loaded spool, with a ⚠ when that
+  spool is far from it, and the slice sheet takes over the file's settings.
+- The plate is drawn in those colors, and the preview marks each change and
+  pause beside the layer slider.
 
 <br clear="both">
 
@@ -258,6 +278,8 @@ What the printer will do, before it does it.
   layer by layer.
 - The estimated time, its breakdown by type (walls, infill, surfaces,
   travel) and the filament per head, with its cost.
+- Turn the view below the plate and the plate hides: the underside of the
+  part shows (in Prepare and the 3D view too).
 - Then **Send to Printer**, **Save G-code** or back to the settings.
 
 <br clear="both">

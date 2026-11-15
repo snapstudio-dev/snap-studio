@@ -1,41 +1,41 @@
 {
-  "version": "0.19",
+  "version": "0.20",
   "highlights": [
     {
-      "id": "snappy",
-      "en": "Snappy",
-      "fr": "Snappy",
-      "de": "Snappy",
-      "es": "Snappy",
-      "pt-BR": "Snappy",
-      "it": "Snappy",
-      "ja": "Snappy",
-      "zh-Hans": "Snappy",
-      "ko": "Snappy"
+      "id": "colours-by-height",
+      "en": "Colours by height",
+      "fr": "Couleurs par hauteur",
+      "de": "Farben nach Höhe",
+      "es": "Colores por altura",
+      "pt-BR": "Cores por altura",
+      "it": "Colori per altezza",
+      "ja": "高さで色替え",
+      "zh-Hans": "按高度换色",
+      "ko": "높이별 색상"
     },
     {
-      "id": "supports-warning",
-      "en": "Supports warning",
-      "fr": "Avertissement supports",
-      "de": "Stützhinweis",
-      "es": "Aviso de soportes",
-      "pt-BR": "Aviso de suportes",
-      "it": "Avviso sui supporti",
-      "ja": "サポートの警告",
-      "zh-Hans": "支撑警告",
-      "ko": "서포트 경고"
+      "id": "stl-in-files",
+      "en": "STL in Files",
+      "fr": "STL dans Fichiers",
+      "de": "STL in Dateien",
+      "es": "STL en Archivos",
+      "pt-BR": "STL em Arquivos",
+      "it": "STL in File",
+      "ja": "ファイルでSTL",
+      "zh-Hans": "文件中的 STL",
+      "ko": "파일에서 STL"
     },
     {
-      "id": "plate-glue",
-      "en": "Glue on the plate",
-      "fr": "Colle sur le plateau",
-      "de": "Kleber auf der Platte",
-      "es": "Pegamento en la placa",
-      "pt-BR": "Cola na mesa",
-      "it": "Colla sul piano",
-      "ja": "プレートののり",
-      "zh-Hans": "热床涂胶",
-      "ko": "플레이트 접착제"
+      "id": "lighter-app",
+      "en": "Lighter, smoother",
+      "fr": "Plus léger, plus fluide",
+      "de": "Leichter, flüssiger",
+      "es": "Más ligera y fluida",
+      "pt-BR": "Mais leve e fluido",
+      "it": "Più leggera e fluida",
+      "ja": "軽く、なめらかに",
+      "zh-Hans": "更轻、更流畅",
+      "ko": "더 가볍고 부드럽게"
     }
   ]
 }

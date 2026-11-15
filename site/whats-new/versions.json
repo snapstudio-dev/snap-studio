@@ -1,6 +1,161 @@
 {
-  "current": "0.19",
+  "current": "0.20",
   "versions": [
+    {
+      "version": "0.20",
+      "tagline": {
+        "en": "Colours by height with HueForge import, STL files in Files, and a lighter, smoother app.",
+        "fr": "Des couleurs par hauteur avec l’import HueForge, les STL dans Fichiers, et une app plus légère et plus fluide."
+      },
+      "summary": {
+        "en": "Colours by height, STL in Files, and a lighter app",
+        "fr": "Les couleurs par hauteur, les STL dans Fichiers, et une app plus légère"
+      },
+      "features": [
+        {
+          "id": "colours-by-height",
+          "icon": "prepare",
+          "color": "#ff375f",
+          "edge": "linear-gradient(90deg, #ff375f, #ff9f0a 35%, #30d158 65%, #0a84ff)",
+          "image": "../assets/whats-new-0.20-heights.webp",
+          "frame": "939/1675",
+          "tag": {
+            "en": "Prepare",
+            "fr": "Préparer"
+          },
+          "chip": {
+            "en": "Colours by height",
+            "fr": "Couleurs par hauteur",
+            "de": "Farben nach Höhe",
+            "es": "Colores por altura",
+            "pt-BR": "Cores por altura",
+            "it": "Colori per altezza",
+            "ja": "高さで色替え",
+            "zh-Hans": "按高度换色",
+            "ko": "높이별 색상"
+          },
+          "title": {
+            "en": "Colours by height, and HueForge files",
+            "fr": "Des couleurs par hauteur, et les fichiers HueForge"
+          },
+          "text": {
+            "en": "Prepare’s colour mode gets a third choice, By height: the plate starts on one head, then changes head, or pauses for a spool swap, at the layers you list, counted as HueForge does or in mm. A HueForge 3MF opens in this mode on its own, each colour on the closest loaded spool, with a warning when it is far off, and the file’s settings are taken over. In the preview, marks beside the layer slider show each change.",
+            "fr": "Le mode couleur de Préparer gagne un troisième choix, Par hauteur : le plateau part sur une tête, puis change de tête, ou fait une pause pour changer de bobine, aux couches que vous indiquez, comptées comme dans HueForge ou en mm. Un 3MF HueForge s’ouvre tout seul dans ce mode, chaque couleur sur la bobine chargée la plus proche, avec un avertissement quand elle s’en éloigne, et les réglages du fichier sont repris. Dans l’aperçu, des repères à côté du curseur des couches montrent chaque changement."
+          },
+          "alt": {
+            "en": "Prepare in By height mode: a list of colour changes, each layer with its colour and the head it goes to.",
+            "fr": "Préparer en mode Par hauteur : la liste des changements, chaque couche avec sa couleur et la tête qui l’imprime."
+          }
+        },
+        {
+          "id": "stl-in-files",
+          "icon": "folder",
+          "color": "#0a84ff",
+          "edge": "linear-gradient(90deg, #0a84ff, #64d2ff)",
+          "image": "../assets/whats-new-0.20-stl.webp",
+          "tag": {
+            "en": "Files",
+            "fr": "Fichiers"
+          },
+          "chip": {
+            "en": "STL in Files",
+            "fr": "STL dans Fichiers",
+            "de": "STL in Dateien",
+            "es": "STL en Archivos",
+            "pt-BR": "STL em Arquivos",
+            "it": "STL in File",
+            "ja": "ファイルでSTL",
+            "zh-Hans": "文件中的 STL",
+            "ko": "파일에서 STL"
+          },
+          "title": {
+            "en": "STL files, beside your 3MF",
+            "fr": "Les STL, à côté de vos 3MF"
+          },
+          "text": {
+            "en": "STL files now show in the library, with a rendered preview and an STL badge. Analyze them, view them in 3D, prepare and print them like 3MF files. A model whose size suggests inches or meters instead of millimeters gets a word in its details.",
+            "fr": "Les fichiers STL apparaissent maintenant dans la bibliothèque, avec un aperçu rendu et un badge STL. Analysez-les, regardez-les en 3D, préparez-les et imprimez-les comme des 3MF. Un modèle dont la taille fait penser à des pouces ou des mètres plutôt qu’à des millimètres le signale dans ses détails."
+          },
+          "alt": {
+            "en": "The Files library with STL models, each with its preview and an STL badge.",
+            "fr": "La bibliothèque Fichiers avec des modèles STL, chacun avec son aperçu et un badge STL."
+          }
+        },
+        {
+          "id": "lighter-app",
+          "icon": "sliders",
+          "color": "#30d158",
+          "edge": "linear-gradient(90deg, #30d158, #64d2ff)",
+          "image": "../assets/whats-new-0.20-performance.webp",
+          "tag": {
+            "en": "Performance",
+            "fr": "Performances"
+          },
+          "chip": {
+            "en": "Lighter, smoother",
+            "fr": "Plus léger, plus fluide",
+            "de": "Leichter, flüssiger",
+            "es": "Más ligera y fluida",
+            "pt-BR": "Mais leve e fluido",
+            "it": "Più leggera e fluida",
+            "ja": "軽く、なめらかに",
+            "zh-Hans": "更轻、更流畅",
+            "ko": "더 가볍고 부드럽게"
+          },
+          "title": {
+            "en": "Lighter and smoother",
+            "fr": "Plus fluide, plus léger"
+          },
+          "text": {
+            "en": "The sliced preview takes about three times less memory per line, loads travel moves only when shown, and now shows every layer of long prints. Explore’s sites scroll more smoothly, on macOS above all. Snappy and the camera work less in the background.",
+            "fr": "L’aperçu de découpe prend environ trois fois moins de mémoire par trajet, ne charge les déplacements à vide que s’ils sont affichés, et montre enfin toutes les couches des longues impressions. Les sites d’Explorer défilent plus fluidement, sur macOS surtout. Snappy et la caméra travaillent moins en arrière-plan."
+          },
+          "alt": {
+            "en": "Explore and Snappy side by side, with a model site open.",
+            "fr": "Explorer et Snappy côte à côte, avec un site de modèles ouvert."
+          }
+        }
+      ],
+      "small": [
+        {
+          "icon": "cube",
+          "color": "#bf5af2",
+          "title": {
+            "en": "Under the part",
+            "fr": "Sous la pièce"
+          },
+          "text": {
+            "en": "In Prepare and in the 3D and sliced previews, turning the view below the plate hides the plate, so the underside of the part shows.",
+            "fr": "Dans Préparer et dans les aperçus 3D et de découpe, tourner la vue sous le plateau masque le plateau : le dessous de la pièce apparaît."
+          }
+        },
+        {
+          "icon": "sparkle",
+          "color": "#64d2ff",
+          "title": {
+            "en": "Help on a click",
+            "fr": "L’aide au clic"
+          },
+          "text": {
+            "en": "In Prepare and Maintenance, an ⓘ opens its text in a bubble on a click, instead of a tooltip that needs the pointer to wait on it.",
+            "fr": "Dans Préparer et Entretien, un ⓘ ouvre son texte dans une bulle au clic, au lieu d’une infobulle qui demande d’attendre dessus."
+          }
+        },
+        {
+          "icon": "check",
+          "color": "#30d158",
+          "title": {
+            "en": "Fixes",
+            "fr": "Corrections"
+          },
+          "text": {
+            "en": "A print’s percentage is the one on the printer’s screen, and its time left follows the slicer’s estimate. Snappy’s icon opens on the first click. The camera keeps its last image instead of a question mark. Undo works in Prepare right after a slider. A saved plate comes back after a restart. A model changed on disk is read again.",
+            "fr": "Le pourcentage d’une impression est celui de l’écran de l’imprimante, et son temps restant suit l’estimation du slicer. L’icône de Snappy s’ouvre au premier clic. La caméra garde sa dernière image au lieu d’un point d’interrogation. Annuler marche dans Préparer juste après un curseur. Un plateau enregistré revient après un redémarrage. Un modèle modifié sur le disque est relu."
+          }
+        }
+      ],
+      "date": "2026-11-15"
+    },
     {
       "version": "0.19",
       "tagline": {
