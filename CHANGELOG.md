@@ -85,6 +85,10 @@ with its packages for macOS, Windows and Linux. What comes next:
     slider;
   - the line of the file's settings in the slice sheet follows a language
     change.
+- **Prepare after a restart**: a plate saved in "By height" mode, or in "By
+  colour" mode when Settings start Prepare in it, no longer breaks Prepare
+  when the app starts again. The plate came back empty, and no file could be
+  added to it or emptied from it (#103).
 - **Invisible objects in Prepare**: an object whose shape could not be read
   stayed invisible on the plate, with no message and no new attempt. It now
   says so, with the reason, and is read again later. The shapes are no

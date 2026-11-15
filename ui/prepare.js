@@ -3005,7 +3005,11 @@ window.addEventListener("langchange", () => {
 });
 
 prLoadState();
-prStatus();
+// Once every script has run: a saved plate's status reaches functions
+// declared further down (prColors) and in files loaded after this one
+// (prepare-heights.js); run now, it threw and left this file half set up.
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", prStatus, { once: true });
+else setTimeout(prStatus);
 
 /* ---------------------------------------------------- heads and spools */
 
@@ -3128,8 +3132,7 @@ function prPlateColours() {
 }
 
 /* What blocks the slice in "by colour" mode: the plate's colours without
-   a head, and the uncoloured objects without a picked one. Declarations:
-   `prStatus` may run before this point of the file. */
+   a head, and the uncoloured objects without a picked one. */
 function prBlockers() {
   if (PR.assoc === "height") return { colours: [], objects: [], orphans: hzOrphans() };
   const orphans = prOrphans();
