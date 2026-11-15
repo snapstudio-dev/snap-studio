@@ -36,11 +36,11 @@ with its packages for macOS, Windows and Linux. What comes next:
   other unit under it. One short line gives the layer heights and where they
   come from (the file or the slice profile), explained in its ⓘ. The plate
   itself is drawn in those colours. A HueForge 3MF switches to this mode on
-  its own; for a print that comes as an STL, its description (the describe
-  file, or the text of its MakerWorld page) can be pasted or opened: the
-  layer heights, the 100 % infill and the swaps are taken over, each colour
-  going to the closest loaded spool, and the colours no spool holds exactly
-  are named in one line, its ⓘ saying the closest spool is used and when
+  its own, each colour going to the closest loaded spool. Each line shows
+  the file's colour (its code on hover) before the head
+  it goes to, with a ⚠ when that head's spool is far from it; a pause shows
+  the colour to load by hand. The colours no spool holds exactly are named
+  in one line, its ⓘ saying the closest spool is used and when
   there is nothing to do. With the printer offline, one line says so, the
   heads follow the file's order, and the colours are matched once the
   printer answers. The slice sheet takes over the file's settings when it
@@ -72,7 +72,7 @@ with its packages for macOS, Windows and Linux. What comes next:
     deletion counts it among the head's users;
   - emptying the plate and adding a HueForge 3MF takes that file's plan, not
     the old one; adding a second copy of the file keeps the plan as edited;
-  - each colour of a 3MF or a describe goes to its own head while there are
+  - each colour of a 3MF goes to its own head while there are
     enough, and a line says which colours share a head when there are not; a
     3MF object assigned to an extruder starts on that one;
   - a colour change of the file (M600) goes to the head holding that colour,

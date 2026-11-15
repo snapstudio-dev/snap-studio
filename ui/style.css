@@ -2714,6 +2714,12 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .hz-unit .seg-btn { padding: 0 8px; font-size: 11px; }
 .hz-col { white-space: nowrap; }
 .hz-col i { display: inline-block; width: 9px; height: 9px; margin-right: 3px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent); vertical-align: -1px; }
+.p-hz .p-toks { align-items: center; min-width: 0; }
+.hz-want { display: inline-flex; align-items: center; font-size: 11px; color: var(--text-secondary); min-width: 0; }
+.hz-want span { max-width: 72px; overflow: hidden; text-overflow: ellipsis; }
+.hz-to { font-size: 11px; color: var(--text-secondary); }
+.hz-far { font-size: 12px; color: var(--warning, #c98a00); cursor: help; }
+.hz-pause .hz-want { margin-left: 2px; }
 /* The HueForge import sheet. */
 .modal-box.hz-box { width: 480px; }
 .hz-text { width: 100%; box-sizing: border-box; font: 12px/1.4 var(--font-mono, ui-monospace, monospace); resize: vertical; }

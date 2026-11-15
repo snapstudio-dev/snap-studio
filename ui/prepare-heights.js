@@ -91,9 +91,24 @@ function hzBanner(live, slots, n) {
   // Layers, as HueForge counts them ("At layer #5"), or mm.
   const byLayer = PRUI.hzUnit !== "mm" && hzSnap(1, lh, first).layer != null;
   const tok = (h, i) => (live ? prHeadToken(h, { slots, n, own: true, attrs: ` data-hzi="${i}"` }) : `<span class="sl-token">${vhIs(h) ? `V${vhUid(h) + 1}` : `T${h}`}</span>`);
+  // The file's colour before the head it goes to, a mark when the head's
+  // spool is far from it (the spool's colour known).
+  const pid = typeof headsActive === "function" ? headsActive() : "";
+  const want = (i) => {
+    const hex = hzWant(hz, i);
+    const name = hex && hz.names?.[hex];
+    return hex && { hex, name: name || hex.toUpperCase(), named: !!name };
+  };
+  const chip = (w) =>
+    `<span class="hz-col hz-want" title="${esc(tr("hz.want.title", { name: w.name }))}"><i style="--c:${esc(w.hex)}"></i>${w.named ? `<span>${esc(w.name)}</span>` : ""}</span>`;
+  const far = (w, h) =>
+    live && w && hzFar(w.hex, headsColorOf(pid, h))
+      ? `<span class="hz-far" tabindex="0" title="${esc(tr("hz.far", { name: w.name }))}" aria-label="${esc(tr("hz.far", { name: w.name }))}">⚠</span>`
+      : "";
+  const to = (w, h, i) => (w ? `${chip(w)}<span class="hz-to" aria-hidden="true">→</span>` : "") + tok(h, i) + far(w, h);
   const start = `<div class="p-color hz-line">
       <span class="hz-z">${esc(tr("hz.start"))}</span>
-      <span class="p-toks">${tok(hz.base, -1)}</span>
+      <span class="p-toks">${to(want(-1), hz.base, -1)}</span>
     </div>`;
   let cur = hz.base;
   const top = hzTop();
@@ -110,9 +125,13 @@ function hzBanner(live, slots, n) {
           <small>${esc(hzFmt(c.z))} mm</small></span>`
         : `<span class="hz-zcol"><span><input type="number" class="hz-z-in" data-hzz="${i}" step="${lh}" min="${first}" value="${+c.z.toFixed(3)}" aria-label="${esc(tr("hz.height"))}" /> mm</span>
           <small>${layer ? esc(tr("hz.layer", { n: layer })) : ""}</small></span>`;
+      // A pause names the colour to load by hand, when the file gives it.
+      const w = want(i);
       const who = pause
-        ? `<span class="hz-pause" title="${esc(tr("hz.pause.title"))}">${esc(tr("hz.pause"))}</span>`
-        : tok(c.head, i);
+        ? w
+          ? `<span class="hz-pause" title="${esc(tr("hz.pause.load.title", { name: w.name }))}">${esc(tr("hz.pause.load"))} ${chip(w)}</span>`
+          : `<span class="hz-pause" title="${esc(tr("hz.pause.title"))}">${esc(tr("hz.pause"))}</span>`
+        : to(w, c.head, i);
       return `<div class="p-color hz-line${above ? " hz-out" : ""}" data-hzrow="${i}">
         <span class="hz-z">${z}${above}</span>
         <span class="p-toks">${who}</span>
@@ -131,7 +150,6 @@ function hzBanner(live, slots, n) {
       <div class="p-grp-head">
         <span class="k">${esc(tr("hz.title", { n: hz.changes.length }))}</span>
         <div class="seg hz-unit" role="group" aria-label="${esc(tr("hz.unit"))}">${unit("layer", "hz.unit.layers")}${unit("mm", "hz.unit.mm")}</div>
-        <button type="button" class="btn" data-hzimport>${esc(tr("hz.import"))}</button>
       </div>
       <div class="group">${start}${rows}</div>
       <div class="hz-foot">
@@ -226,7 +244,6 @@ function hzMove(i, z, byLayer) {
 $("p-list").addEventListener("click", (e) => {
   if (PR.assoc !== "height") return;
   if (e.target.closest("[data-hzadd]")) return hzAdd();
-  if (e.target.closest("[data-hzimport]")) return hzOpenImport();
   const u = e.target.closest("[data-hzunit]");
   if (u) {
     PRUI.hzUnit = u.dataset.hzunit === "mm" ? "mm" : "layer";
@@ -346,6 +363,8 @@ window.addEventListener("headschange", (e) => {
 
 const HZI = { parsed: null };
 
+/* The describe's import: no button opens it for now (a HueForge 3MF
+   needs none); kept for when it comes back. */
 function hzOpenImport() {
   $("hz-text").value = "";
   HZI.parsed = null;

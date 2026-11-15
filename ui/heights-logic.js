@@ -175,6 +175,17 @@ function hzColourGap(a, b) {
   return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
 }
 
+/* The file's colour of the start (`i` -1) or of a change: the one it
+   swaps to, a pause's included (loaded by hand); null for a row made by
+   hand, or a plan typed on an STL. */
+function hzWant(plan, i) {
+  const c = i < 0 ? null : plan?.changes?.[i];
+  const hex = i < 0 ? plan?.baseHex : c?.hex || c?.swap;
+  return hzColourGap(hex, hex) === 0 ? hex : null;
+}
+/* A head's spool far from the file's colour, both known. */
+const hzFar = (want, spool) => Number.isFinite(hzColourGap(want, spool)) && hzColourGap(want, spool) > HZ_LOADED;
+
 /* The head holding `hex` (the same colour, else the nearest), from
    `heads` [{ head, color }]: { head, exact } or null when none has a
    colour. "Loaded" is within a small gap (a spool's hex rarely matches
@@ -511,7 +522,7 @@ function hzMemo(data, m) {
 
 if (typeof module !== "undefined") {
   module.exports = {
-    hcColours, hcFromFile, hcKey, hcRequest, hcMarks, hzToFile, hzFromSaved, hzAssign, hzHeadAt, hzForget, hzAbove, hzSwap,
+    hcColours, hcFromFile, hcKey, hcRequest, hcMarks, hzToFile, hzFromSaved, hzAssign, hzHeadAt, hzForget, hzAbove, hzSwap, hzWant, hzFar,
     hzLayerTop, hzSnap, hzBands, hzPlanHeads, hzRequest, hzColourGap, hzNearestHead, hzParseDescribe, hzColourOf, hzFromDescribe, hzFromFile, hzRematch, hzLayerZ,
     hzPick, hzPlanSettings, hzQuick, hzMemo, hzForU1, HZ_MACHINE_KEYS,
   };

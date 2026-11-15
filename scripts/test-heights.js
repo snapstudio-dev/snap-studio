@@ -350,4 +350,17 @@ assert.deepStrictEqual(
 assert.deepStrictEqual(H.hzMemo({ process: "0.12mm Standard @U1" }, memo), { process: "0.12mm Standard @U1" }, "a profile chosen since");
 assert.deepStrictEqual(H.hzMemo({ adv: { a: "1" } }, null), { adv: { a: "1" } });
 
+// The file's colour of each row: the start's, a change's, a pause's swap;
+// none for a row made by hand. A spool far from it is marked.
+{
+  const plan = { base: 0, baseHex: "#000000", changes: [{ z: 1, head: 1, kind: "auto", hex: "#ffffff" }, { z: 2, head: 1, kind: "pause", swap: "#ff0000" }, { z: 3, head: 2, kind: "auto" }] };
+  assert.strictEqual(H.hzWant(plan, -1), "#000000");
+  assert.strictEqual(H.hzWant(plan, 0), "#ffffff");
+  assert.strictEqual(H.hzWant(plan, 1), "#ff0000", "a pause names the colour to load");
+  assert.strictEqual(H.hzWant(plan, 2), null, "added by hand");
+  assert.strictEqual(H.hzWant({ base: 0, changes: [] }, -1), null, "a plan typed on an STL");
+  assert.ok(H.hzFar("#ffffff", "#000000") && !H.hzFar("#ffffff", "#f4f4f4"));
+  assert.ok(!H.hzFar("#ffffff", null) && !H.hzFar(null, "#000000"), "unknown: no mark");
+}
+
 console.log("test-heights: ok");
