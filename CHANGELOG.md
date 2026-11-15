@@ -59,18 +59,19 @@ with its packages for macOS, Windows and Linux. What comes next:
 - **By height mode, after a full review** (#103):
   - a plate saved by height keeps its plan, its heads and its layer heights:
     reopened, it comes back as it was (the file's list is used if it was
-    edited in another slicer since);
+    edited in another slicer since); a plan emptied before saving stays
+    empty;
   - the slice checks the layer heights an imported plan was placed on: a
     profile changed in the sheet since no longer moves the colours silently;
   - going to "By height" and back keeps the head choices of the mode it came
     from;
   - the tint of the plate shows up to 64 colour bands, instead of 16;
-  - a change above the objects is marked "ignored" in the list and left out
-    of the slice;
+  - a change above the objects (as they stand, turned or not) is marked
+    "ignored" in the list and left out of the slice, its head with it;
   - a plan using a deleted virtual head blocks the slice sheet, and the
     deletion counts it among the head's users;
   - emptying the plate and adding a HueForge 3MF takes that file's plan, not
-    the old one;
+    the old one; adding a second copy of the file keeps the plan as edited;
   - each colour of a 3MF or a describe goes to its own head while there are
     enough, and a line says which colours share a head when there are not; a
     3MF object assigned to an extruder starts on that one;

@@ -250,6 +250,10 @@ assert.strictEqual(H.hzSwap({ z: 1, head: 0, kind: "pause", swap: "#ff0000", han
 assert.deepStrictEqual(H.hzRequest(saving, [{ base: [1] }], { top: 1.0 }).changes.map((c) => c.z), [0.48, 0.8], "1.2 above a 1 mm object");
 assert.strictEqual(H.hzRequest(saving, [{ base: [1] }], { top: 0 }).changes.length, 3, "top unknown: all kept");
 assert.ok(H.hzAbove(1.0, 1.0) && !H.hzAbove(0.96, 1.0));
+// ...and their heads are not the slice's (sheet, empty-head check, tower).
+const high = { base: 0, changes: [{ z: 0.48, head: 1, kind: "auto" }, { z: 30, head: 2, kind: "auto" }] };
+assert.deepStrictEqual(H.hzPlanHeads(high, 10), [0, 1], "T2 at 30 mm on a 10 mm object: never used");
+assert.deepStrictEqual(H.hzPlanHeads(high), [0, 1, 2], "top unknown: all");
 const far = H.hzFromDescribe({ ...d, swaps: [{ layer: 11, z: 0.99, name: "Pink" }] }, heads);
 assert.deepStrictEqual(far.warnings, [{ kind: "gap", z: 0.99, to: 0.96 }, { kind: "unknown", name: "Pink" }]);
 

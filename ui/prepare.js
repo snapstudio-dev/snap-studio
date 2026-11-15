@@ -120,7 +120,7 @@ const prStored = ({ id, name, path, item, piece, pos, rot, scale, size, plate, e
 
 function prSave() {
   const objects = PR.objects.map(prStored);
-  localStorage.setItem("snapstudio.plate", JSON.stringify({ objects, nextId: PR.nextId, colourHeads: PR.colourHeads, hz: PR.hz, tower: prTowerStored(), smoothMix: vhSmoothOn(PR) }));
+  localStorage.setItem("snapstudio.plate", JSON.stringify({ objects, nextId: PR.nextId, colourHeads: PR.colourHeads, hz: PR.hz, hzFrom: PR.hzFrom, tower: prTowerStored(), smoothMix: vhSmoothOn(PR) }));
   prStatus();
   prPruneMeshes();
   prHintRefresh();
@@ -175,6 +175,8 @@ function prLoadState() {
       PR.nextId = s.nextId || PR.objects.length + 1;
       PR.colourHeads = s.colourHeads && typeof s.colourHeads === "object" ? s.colourHeads : {};
       PR.hz = s.hz && Array.isArray(s.hz.changes) ? s.hz : null;
+      // The mode "by height" came from, to go back to as it was.
+      PR.hzFrom = s.hzFrom === "colour" || s.hzFrom === "object" ? s.hzFrom : undefined;
       // Read by prepare-tower.js (prTowerRestore).
       PR.tower = s.tower;
       // Smooth mix (virtual heads): on unless the plate says otherwise.
@@ -2443,8 +2445,9 @@ async function prSavePlate() {
    object's that has some: the slice wants them all alike), with each
    extruder's colour from its file. */
 function prSaveHeights() {
-  // "By height": the plate's own plan (prepare-heights.js).
-  if (PR.assoc === "height" && PR.hz?.changes?.length) return hzSaved();
+  // "By height": the plate's own plan (prepare-heights.js), none when it
+  // was emptied (never the file's list it came from).
+  if (PR.assoc === "height") return PR.hz?.changes?.length ? hzSaved() : null;
   const o = PR.objects.find((x) => x.hc?.length);
   if (!o) return null;
   const fils = (typeof headsModelNow === "function" && headsModelNow(o.path)?.filaments) || [];

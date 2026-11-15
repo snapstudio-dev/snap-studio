@@ -484,7 +484,7 @@ document.querySelector("#smodal .sl-stepper").addEventListener("click", (e) => {
 function slUsedSet() {
   const values = slMapValues();
   // "By height": the plan's heads too, as the slice sends them.
-  if (slHzOn()) for (const h of hzPlanHeads(PR.hz)) values.add(h);
+  if (slHzOn()) for (const h of hzLiveHeads()) values.add(h);
   return vhPhysical(values, headsVirtual(currentPrinter()?.id || ""));
 }
 const slHzOn = () => typeof hzSheetOn === "function" && hzSheetOn();
@@ -526,7 +526,7 @@ const slSmooth = () => slMixes() && vhSmoothOn(PR);
 const slOrphans = () => {
   const values = slMapValues();
   // "By height": the plan's heads are the slice's too.
-  if (typeof PR !== "undefined" && PR.assoc === "height" && PR.hz) for (const h of hzPlanHeads(PR.hz)) values.add(h);
+  if (typeof PR !== "undefined" && PR.assoc === "height" && PR.hz) for (const h of hzLiveHeads()) values.add(h);
   return [...values].filter((h) => vhOrphan(headsVirtual(currentPrinter()?.id || ""), h));
 };
 function slOrphanLine() {
@@ -681,7 +681,7 @@ async function startSlice() {
   const pid = currentPrinter()?.id || "";
   // "By height" mode: the plate's plan (prepare-heights.js), its heads used too.
   const byHeight = typeof PR !== "undefined" && PR.assoc === "height" && PR.hz;
-  const hzHeadsUsed = byHeight ? hzPlanHeads(PR.hz) : [];
+  const hzHeadsUsed = byHeight ? hzLiveHeads() : [];
   const used = new Set([...maps.flat(), ...hzHeadsUsed]);
   const eng = vhEngine(used, headsVirtual(pid), filaments.length);
   const virtual_heads = eng.heads.map((v) => ({ a: v.a, b: v.b, pct: v.pct, color: headsVirtualColor(pid, v) || null }));

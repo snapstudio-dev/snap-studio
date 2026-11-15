@@ -133,10 +133,12 @@ function hzBands(plan) {
 }
 
 /* The heads a plan prints with: the start's and each head change's (a
-   pause keeps the head). For the slice's heads and the prime tower. */
-function hzPlanHeads(plan) {
+   pause keeps the head). For the slice's heads and the prime tower: with
+   `top` (the objects' tallest, mm), the changes they never reach left out,
+   as the slice leaves them (hzRequest). */
+function hzPlanHeads(plan, top = 0) {
   if (!plan) return [];
-  return [plan.base ?? 0, ...(plan.changes || []).filter((c) => c.kind !== "pause").map((c) => c.head)];
+  return [plan.base ?? 0, ...(plan.changes || []).filter((c) => c.kind !== "pause" && !hzAbove(c.z, top)).map((c) => c.head)];
 }
 
 /* A change at `z` the objects never reach (`top` their tallest, mm; 0 or

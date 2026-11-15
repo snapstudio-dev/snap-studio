@@ -134,7 +134,7 @@ function prTowerHeads() {
   }
   if (typeof advHeads === "function") for (const h of Object.values(advHeads({ tower: false }))) used.add(h);
   // "By height": the heads the plan changes to print too.
-  if (PR.assoc === "height") for (const h of hzPlanHeads(PR.hz)) used.add(h);
+  if (PR.assoc === "height") for (const h of hzLiveHeads()) used.add(h);
   // A virtual head prints with its two heads; an orphan with none.
   return vhPhysical(used, headsVirtual(pid));
 }
@@ -144,7 +144,7 @@ function prTowerVirtualUsed() {
   const list = headsVirtual(headsActive());
   // A virtual head is always a choice: in the heads the slice gets.
   if (!list.length) return false;
-  if (PR.assoc === "height" && hzPlanHeads(PR.hz).some((h) => vhFind(list, h))) return true;
+  if (PR.assoc === "height" && hzLiveHeads().some((h) => vhFind(list, h))) return true;
   return plSliced(PR.objects, bedState).some((o) => Object.values(prSliceHeads(o)).some((h) => vhFind(list, h)));
 }
 

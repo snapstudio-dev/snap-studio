@@ -19,15 +19,20 @@ const hzSnapZ = (z) => {
   return hzSnap(z, lh, first);
 };
 
-/* The tallest object on the plate (mm), for a new change. */
+/* The tallest object on the plate as it stands (mm, rotated and scaled),
+   for a new change and the changes never reached. */
 function hzTop() {
   let top = 0;
   for (const o of PR.objects) {
     if (bedState(o) === "out") continue;
-    top = Math.max(top, (o.size?.[2] || 0) * Math.abs(o.scale?.[2] ?? 1));
+    const sh = shape(o);
+    top = Math.max(top, sh.zmax - sh.zmin);
   }
   return top;
 }
+/* The plan's heads the slice prints with (those of changes above the
+   objects left out). */
+const hzLiveHeads = () => hzPlanHeads(PR.hz, hzTop());
 
 /* The printer's loaded heads with their colours, for the import. */
 function hzHeads() {
@@ -290,12 +295,14 @@ function hzSaved() {
 
 /* A HueForge 3MF added to the plate: its list becomes the plate's, the
    mode switches to "by height", its colours go to the loaded heads. A
-   plate Snap Studio saved "by height" gets its plan back as it was. `own`
+   plate Snap Studio saved "by height" gets its plan back as it was. Called
+   before the file's objects join the plate (PR.objects is the others). `own`
    is the file's object's extruder (from 1), its start. */
 async function hzAdoptFile(path, hc, heights, own = null) {
-  // A plan made by hand or from a file still on the plate is kept; an
-  // emptied plate's, or one whose file is gone from it, is not.
-  const others = PR.objects.filter((o) => o.path !== path);
+  // A plan made by hand or from a file still on the plate is kept (a second
+  // copy of that file too); an emptied plate's, or one whose file is gone
+  // from it, is not. Called before the file's objects join the plate.
+  const others = PR.objects.slice();
   const kept = PR.hz?.changes?.length && others.length && (!PR.hz.path || others.some((o) => o.path === PR.hz.path));
   const model = await headsModel(path).catch(() => null);
   if (kept) return toast(tr("hz.kept"), true);
