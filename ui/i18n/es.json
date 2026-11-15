@@ -2848,7 +2848,7 @@
   "hz.remove": "Quitar este cambio",
   "hz.add": "Añadir un cambio",
   "hz.layers.file": "Capas {lh} mm · 1.ª {first} mm · archivo",
-  "hz.layers.file.tip": "Alturas de capa impuestas por el archivo. Se aplican automáticamente en los ajustes de laminado, donde aún puedes cambiarlas.",
+  "hz.layers.file.tip": "Alturas de capa impuestas por el archivo, aplicadas automáticamente en los ajustes de laminado. Los cambios de color están situados en estas capas: con un perfil de otras alturas, el laminado se rechaza.",
   "hz.layers.profile": "Capas {lh} mm · 1.ª {first} mm · perfil",
   "hz.layers.profile.tip": "Alturas de capa del perfil de laminado elegido. Los números de capa de los cambios se calculan con ellas.",
   "hz.taken": "Ya hay un cambio a {z} mm",

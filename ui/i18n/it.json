@@ -2848,7 +2848,7 @@
   "hz.remove": "Rimuovi questo cambio",
   "hz.add": "Aggiungi un cambio",
   "hz.layers.file": "Strati {lh} mm · 1° {first} mm · file",
-  "hz.layers.file.tip": "Altezze di strato imposte dal file. Vengono riprese automaticamente nelle impostazioni di slicing, dove puoi ancora cambiarle.",
+  "hz.layers.file.tip": "Altezze di strato imposte dal file, riprese automaticamente nelle impostazioni di slicing. I cambi di colore sono posti su questi strati: con un profilo di altre altezze lo slicing viene rifiutato.",
   "hz.layers.profile": "Strati {lh} mm · 1° {first} mm · profilo",
   "hz.layers.profile.tip": "Altezze di strato del profilo di slicing scelto. I numeri di strato dei cambi sono calcolati con esse.",
   "hz.taken": "C'è già un cambio a {z} mm",

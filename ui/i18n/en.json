@@ -2803,7 +2803,7 @@
   "hz.remove": "Remove this change",
   "hz.add": "Add a change",
   "hz.layers.file": "Layers {lh} mm · 1st {first} mm · file",
-  "hz.layers.file.tip": "Layer heights set by the file. They are taken into the slice settings automatically, where you can still change them.",
+  "hz.layers.file.tip": "Layer heights set by the file, taken into the slice settings automatically. The colour changes are placed on these layers: a profile with other heights makes the slice refuse.",
   "hz.layers.profile": "Layers {lh} mm · 1st {first} mm · profile",
   "hz.layers.profile.tip": "Layer heights of the chosen slice profile. The changes' layer numbers are counted with them.",
   "hz.taken": "There is already a change at {z} mm",

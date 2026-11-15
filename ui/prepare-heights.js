@@ -109,7 +109,7 @@ function hzBanner(live, slots, n) {
   // One short line, where the layers come from in its ⓘ.
   const [key, tip] = PR.hz?.layers ? ["hz.layers.file", "hz.layers.file.tip"] : ["hz.layers.profile", "hz.layers.profile.tip"];
   const layers = `<small class="vp-sub">${esc(tr(key, { lh: hzFmt(lh), first: hzFmt(first) }))}</small>
-        <span class="mt-info" title="${esc(tr(tip))}">i</span>`;
+        <span class="mt-info" tabindex="0" title="${esc(tr(tip))}" aria-label="${esc(tr(tip))}">i</span>`;
   const warns = hzWarnsHtml(hz.warnings || []);
   const unit = (u, key) => `<button type="button" class="seg-btn${(u === "layer") === byLayer ? " on" : ""}" data-hzunit="${u}">${esc(tr(key))}</button>`;
   return `<div class="p-grp p-hz">
@@ -152,7 +152,8 @@ function hzWarnsHtml(warnings) {
       .map((w) => `<span class="hz-col">${w.hex ? `<i style="--c:${esc(w.hex)}"></i>` : ""}${esc(w.name || w.hex || "?")}</span>`)
       .join(", ");
     const [a, b] = tr("hz.warn.unloaded", { n: missing.length, names: "\u0000" }).split("\u0000");
-    const tip = `<span class="mt-info" title="${esc(tr("hz.warn.unloaded.tip", { n: missing.length }))}">i</span>`;
+    const help = esc(tr("hz.warn.unloaded.tip", { n: missing.length }));
+    const tip = `<span class="mt-info" tabindex="0" title="${help}" aria-label="${help}">i</span>`;
     lines.push(out(`${esc(a)}${names}${esc(b ?? "")} ${tip}`));
   }
   return lines.join("");

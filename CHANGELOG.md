@@ -30,25 +30,26 @@ with its packages for macOS, Windows and Linux. What comes next:
   in height; the slice says so otherwise (#102).
 - **By height mode (HueForge)**: Prepare's colour mode gets a third choice,
   "By height". The whole plate starts on one head and changes head, or
-  pauses for a spool swap, at the heights listed under the objects. They
-  are typed as layer numbers, as HueForge counts them ("layer 5 → T1"), or
-  in mm (a switch, remembered); each snaps to the top of a layer and shows
-  the other unit under it. One short line gives the layer heights and where
-  they come from (the file or the slice profile), explained in its ⓘ. The plate itself is drawn in those colours. A
-  HueForge 3MF switches to this mode on its own; for a print that comes as
-  an STL, its description (the describe file, or the text of its MakerWorld
-  page) can be pasted or opened: the layer heights, the 100 % infill and
-  the swaps are taken over, each colour going to the closest loaded spool,
-  and the colours no spool holds exactly are named in one line, its ⓘ
-  saying the closest spool is used and when there is nothing to do. With the printer
-  offline, one line says so, the heads follow the file's order, and the
-  colours are matched once the printer answers. The slice sheet takes over
-  the file's settings when it opens: the profile at its layer height (or
-  that height itself when no profile has it), its infill, walls, supports
-  and brim, and its detailed settings (first layer, shells, patterns, seam,
-  ironing…; line widths, compensations and speeds only from a file made for
-  the U1); one line lists them, each can still be changed, and the settings
-  remembered for the printer stay yours (#103).
+  pauses for a spool swap, at the heights listed under the objects. They are
+  typed as layer numbers, as HueForge counts them ("layer 5 → T1"), or in mm
+  (a switch, remembered); each snaps to the top of a layer and shows the
+  other unit under it. One short line gives the layer heights and where they
+  come from (the file or the slice profile), explained in its ⓘ. The plate
+  itself is drawn in those colours. A HueForge 3MF switches to this mode on
+  its own; for a print that comes as an STL, its description (the describe
+  file, or the text of its MakerWorld page) can be pasted or opened: the
+  layer heights, the 100 % infill and the swaps are taken over, each colour
+  going to the closest loaded spool, and the colours no spool holds exactly
+  are named in one line, its ⓘ saying the closest spool is used and when
+  there is nothing to do. With the printer offline, one line says so, the
+  heads follow the file's order, and the colours are matched once the
+  printer answers. The slice sheet takes over the file's settings when it
+  opens: the profile at its layer height (or that height itself when no
+  profile has it), its infill, walls, supports and brim, and its detailed
+  settings (first layer, shells, patterns, seam, ironing…; line widths,
+  compensations and speeds only from a file made for the U1); one line lists
+  them, each can still be changed, and the settings remembered for the
+  printer stay yours (#103).
 
 ### Fixed
 - **Undo in Prepare**: ⌘Z / Ctrl+Z (and redo) now work right after using a

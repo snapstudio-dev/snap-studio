@@ -2806,7 +2806,7 @@
   "hz.remove": "Supprimer ce changement",
   "hz.add": "Ajouter un changement",
   "hz.layers.file": "Couches {lh} mm · 1re {first} mm · fichier",
-  "hz.layers.file.tip": "Hauteurs de couche imposées par le fichier. Elles sont reprises automatiquement dans les réglages de découpe, où vous pouvez encore les changer.",
+  "hz.layers.file.tip": "Hauteurs de couche imposées par le fichier, reprises automatiquement dans les réglages de découpe. Les changements de couleur sont calés sur ces couches : un profil avec d'autres hauteurs fait refuser la découpe.",
   "hz.layers.profile": "Couches {lh} mm · 1re {first} mm · profil",
   "hz.layers.profile.tip": "Hauteurs de couche du profil de découpe choisi. Les numéros de couche des changements sont calculés avec elles.",
   "hz.taken": "Il y a déjà un changement à {z} mm",

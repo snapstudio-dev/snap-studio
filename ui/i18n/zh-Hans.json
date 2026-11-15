@@ -2764,7 +2764,7 @@
   "hz.remove": "删除此换色",
   "hz.add": "添加换色",
   "hz.layers.file": "层高 {lh} mm · 首层 {first} mm · 文件",
-  "hz.layers.file.tip": "由文件指定的层高。它们会自动应用到切片设置中，您仍可在那里修改。",
+  "hz.layers.file.tip": "由文件指定的层高，会自动应用到切片设置中。换色位置与这些层对齐：使用其他层高的配置将无法切片。",
   "hz.layers.profile": "层高 {lh} mm · 首层 {first} mm · 配置",
   "hz.layers.profile.tip": "所选切片配置的层高。换色的层号按它们计算。",
   "hz.taken": "{z} mm 处已有换色",

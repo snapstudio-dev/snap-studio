@@ -2848,7 +2848,7 @@
   "hz.remove": "Diesen Wechsel entfernen",
   "hz.add": "Wechsel hinzufügen",
   "hz.layers.file": "Schichten {lh} mm · 1. {first} mm · Datei",
-  "hz.layers.file.tip": "Von der Datei vorgegebene Schichthöhen. Sie werden automatisch in die Slicing-Einstellungen übernommen und lassen sich dort noch ändern.",
+  "hz.layers.file.tip": "Von der Datei vorgegebene Schichthöhen, automatisch in die Slicing-Einstellungen übernommen. Die Farbwechsel liegen auf diesen Schichten: Mit einem Profil mit anderen Höhen wird das Slicing abgelehnt.",
   "hz.layers.profile": "Schichten {lh} mm · 1. {first} mm · Profil",
   "hz.layers.profile.tip": "Schichthöhen des gewählten Slicing-Profils. Die Schichtnummern der Wechsel werden damit berechnet.",
   "hz.taken": "Bei {z} mm gibt es bereits einen Wechsel",

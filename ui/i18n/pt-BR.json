@@ -2848,7 +2848,7 @@
   "hz.remove": "Remover esta troca",
   "hz.add": "Adicionar uma troca",
   "hz.layers.file": "Camadas {lh} mm · 1ª {first} mm · arquivo",
-  "hz.layers.file.tip": "Alturas de camada impostas pelo arquivo. Elas são aplicadas automaticamente nas configurações de fatiamento, onde você ainda pode alterá-las.",
+  "hz.layers.file.tip": "Alturas de camada impostas pelo arquivo, aplicadas automaticamente nas configurações de fatiamento. As trocas de cor estão nessas camadas: com um perfil de outras alturas, o fatiamento é recusado.",
   "hz.layers.profile": "Camadas {lh} mm · 1ª {first} mm · perfil",
   "hz.layers.profile.tip": "Alturas de camada do perfil de fatiamento escolhido. Os números de camada das trocas são calculados com elas.",
   "hz.taken": "Já existe uma troca em {z} mm",
