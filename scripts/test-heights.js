@@ -61,10 +61,12 @@ assert.ok(H.hcRequest([{ ...one, base: [1, 2], map: [0, 0, 2] }]).changes);
 
 // Marks: the pauses, then the main tool's changes.
 assert.deepStrictEqual(H.hcMarks([undefined, 0, 0, 1, 1, 0], [5]), [
+  { layer: 1, kind: "head", tool: 0, start: true },
   { layer: 3, kind: "head", tool: 1 },
   { layer: 5, kind: "pause" },
 ]);
 assert.deepStrictEqual(H.hcMarks([0, undefined, 0], []), [], "a layer without extrusion changes nothing");
+assert.deepStrictEqual(H.hcMarks([0, 0, 0], [2]), [{ layer: 2, kind: "pause" }], "one head: no start mark");
 // A virtual head alternating at every layer: no head marks, pauses kept.
 const alt = Array.from({ length: 100 }, (_, l) => (l % 3 === 2 ? 2 : 0));
 assert.deepStrictEqual(H.hcMarks(alt, [40]), [{ layer: 40, kind: "pause" }]);

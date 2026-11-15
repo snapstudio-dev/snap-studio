@@ -64,20 +64,24 @@ function hcRequest(items, plate = {}) {
 }
 
 /* The layers (from 1) the preview marks on its slider: the pauses, and
-   the layers whose main tool differs from the layer below's. `tools[l]`
-   is layer `l`'s main tool (undefined: no extrusion). A plate changing
+   the layers whose main tool differs from the layer below's, and then the
+   first printed layer with its head (`start`), so the first colour is
+   marked too. `tools[l]` is layer `l`'s main tool (undefined: no
+   extrusion). A plate changing
    heads more than `max` times (a virtual head alternates at every layer)
    gets no head marks: they would say nothing. */
 function hcMarks(tools, pauses, max = 32) {
   const marks = (pauses || []).map((l) => ({ layer: l, kind: "pause" }));
   const heads = [];
-  let prev;
+  let prev, first;
   for (let l = 0; l < tools.length; l++) {
     const t = tools[l];
     if (t == null) continue;
-    if (prev != null && t !== prev) heads.push({ layer: l, kind: "head", tool: t });
+    if (prev == null) first = { layer: l, kind: "head", tool: t, start: true };
+    else if (t !== prev) heads.push({ layer: l, kind: "head", tool: t });
     prev = t;
   }
+  if (heads.length && heads.length <= max) heads.unshift(first);
   if (heads.length <= max) for (const h of heads) if (!marks.some((m) => m.layer === h.layer)) marks.push(h);
   return marks.sort((a, b) => a.layer - b.layer);
 }

@@ -1123,7 +1123,7 @@ function renderLayerMarks(data) {
   box.innerHTML = (data.marks || [])
     .map((m) => {
       const z = data.layerZ[Math.min(m.layer, data.layerZ.length - 1)];
-      const what = m.kind === "pause" ? tr("viewer.mark.pause") : tr("viewer.mark.head", { head: "T" + m.tool });
+      const what = m.kind === "pause" ? tr("viewer.mark.pause") : tr(m.start ? "viewer.mark.start" : "viewer.mark.head", { head: "T" + m.tool });
       const title = `${what} · ${tr("viewer.layer_of", { n: m.layer + 1, total: data.layers })}${z ? ` · Z ${fmtDec(z, 2)} mm` : ""}`;
       const style = `--at:${(m.layer / span).toFixed(4)}` + (m.kind === "head" ? `;--c:rgb(${toolRgb(m.tool).join(",")})` : "");
       return `<button class="v-mark ${m.kind}" data-layer="${m.layer + 1}" style="${style}" title="${esc(title)}" aria-label="${esc(title)}"></button>`;

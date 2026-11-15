@@ -2826,6 +2826,7 @@
   "slice.heights.by_object": "Los cambios de color por altura requieren imprimir la placa capa por capa. Ajusta Secuencia de impresión a «Por capa».",
   "viewer.mark.pause": "Pausa para cambiar la bobina",
   "viewer.mark.head": "Cambio al cabezal {head}",
+  "viewer.mark.start": "Inicio con el cabezal {head}",
   "slice.heights.layer": "Este archivo colocó sus cambios de color en capas de {file} (altura de capa / primera capa); el perfil elegido imprime {profile}. Los colores cambiarían a otras alturas: elige un perfil con las capas del archivo.",
   "slice.heights.scaled": "Un objeto con cambios de color por altura está escalado en altura: sus colores cambiarían en otro lugar. Vuelve a poner su escala Z al 100 %.",
   "slice.heights.raft": "Los cambios de color por altura no son compatibles con una balsa: eleva el objeto y los colores cambiarían demasiado abajo. Elige un perfil sin balsa.",

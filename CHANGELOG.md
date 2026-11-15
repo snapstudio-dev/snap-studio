@@ -53,6 +53,9 @@ with its packages for macOS, Windows and Linux. What comes next:
   instead of the model's colours (#103).
 
 ### Fixed
+- **Colour marks of the preview**: the first colour of a print changing
+  colours by height now has its mark on the layer slider too, at the first
+  layer, with the head it starts on; only the changes had one (#103).
 - **Invisible objects in Prepare**: an object whose shape could not be read
   stayed invisible on the plate, with no message and no new attempt. It now
   says so, with the reason, and is read again later. The shapes are no

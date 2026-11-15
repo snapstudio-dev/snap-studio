@@ -91,8 +91,9 @@ for (const k of ["uniform vec3 uEye;", "- u * hh", "segHeight()"]) assert.ok(ctx
 assert.ok(ctx.PATH_VS.includes("gl_VertexID == 0 ? aA : aB"), "one instance per line");
 
 // The marks beside the layer slider: layer 1 printed by T2 after layer 0's
-// T0, a head mark; a pause on that layer wins over it.
-assert.deepStrictEqual(plain(d.marks), [{ layer: 1, kind: "head", tool: 2 }]);
-assert.deepStrictEqual(plain(ctx.decodeGcode(buffer({ pauses: [1] })).marks), [{ layer: 1, kind: "pause" }]);
+// T0, a head mark, after the start mark of T0; a pause on that layer wins
+// over the head mark.
+assert.deepStrictEqual(plain(d.marks), [{ layer: 0, kind: "head", tool: 0, start: true }, { layer: 1, kind: "head", tool: 2 }]);
+assert.deepStrictEqual(plain(ctx.decodeGcode(buffer({ pauses: [1] })).marks), [{ layer: 0, kind: "head", tool: 0, start: true }, { layer: 1, kind: "pause" }]);
 
 console.log("toolpaths: ok");
