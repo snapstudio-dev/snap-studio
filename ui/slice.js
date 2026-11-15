@@ -395,7 +395,18 @@ function renderModelMap(fromPrinter) {
       </div>`);
     }
   });
-  $("s-map").innerHTML = rows.join("");
+  // "By height": the plan is what the slice follows, every colour of the
+  // model going to the start head; the rows stay, hidden, for the slice.
+  const plan = slHzPlanRows();
+  $("s-map").innerHTML = plan ? `${plan}<div class="hidden">${rows.join("")}</div>` : rows.join("");
+  const title = $("s-map-title");
+  if (plan) {
+    title.removeAttribute("data-i18n");
+    title.textContent = tr("hz.title", { n: PR.hz.changes.length });
+  } else {
+    title.setAttribute("data-i18n", "slice.model_colors");
+    title.textContent = tr("slice.model_colors");
+  }
   slOrphanLine();
   slUsedHeads();
   // Bed temperatures depend on the heads used.
@@ -471,7 +482,34 @@ document.querySelector("#smodal .sl-stepper").addEventListener("click", (e) => {
 /* Heads used by the model (colors → heads), a virtual head giving its two
    physical ones; empty if unknown. */
 function slUsedSet() {
-  return vhPhysical(slMapValues(), headsVirtual(currentPrinter()?.id || ""));
+  const values = slMapValues();
+  // "By height": the plan's heads too, as the slice sends them.
+  if (slHzOn()) for (const h of hzPlanHeads(PR.hz)) values.add(h);
+  return vhPhysical(values, headsVirtual(currentPrinter()?.id || ""));
+}
+const slHzOn = () => typeof hzSheetOn === "function" && hzSheetOn();
+
+/* "By height": the plan, read-only, as Prepare shows it: the start, then
+   each change with its layer and height, its head or a pause. */
+function slHzPlanRows() {
+  if (!slHzOn()) return "";
+  const pid = currentPrinter()?.id || "";
+  const tok = (h) => (vhIs(h) ? slVirtualToken(pid, h) : headToken({ h, slot: SL.slots.find((s) => s.index === h), tag: "span", cls: " ro", on: true }));
+  const row = (label, sub, who) => `<div class="sl-maprow">
+        <span class="sl-map-label"><b>${esc(label)}</b>${sub ? `<small>${esc(sub)}</small>` : ""}</span>
+        <span class="sl-arrow">→</span>
+        <span class="sl-tokens">${who}</span>
+      </div>`;
+  const up = (t) => t.charAt(0).toLocaleUpperCase() + t.slice(1);
+  return [
+    row(tr("hz.start"), "", tok(PR.hz.base ?? 0)),
+    ...PR.hz.changes.map((c) => {
+      const layer = hzSnapZ(c.z).layer;
+      const mm = `${hzFmt(c.z)} mm`;
+      const who = c.kind === "pause" ? `<span class="hz-pause">${esc(tr("hz.pause"))}</span>` : tok(c.head);
+      return layer ? row(up(tr("hz.layer", { n: layer })), mm, who) : row(mm, "", who);
+    }),
+  ].join("");
 }
 /* The map's head values as they are (virtual ones included). */
 const slMapValues = () => new Set([...document.querySelectorAll("#s-map select")].map((s) => +s.value));

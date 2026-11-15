@@ -49,7 +49,8 @@ with its packages for macOS, Windows and Linux. What comes next:
   settings (first layer, shells, patterns, seam, ironing…; line widths,
   compensations and speeds only from a file made for the U1); one line lists
   them, each can still be changed, and the settings remembered for the
-  printer stay yours (#103).
+  printer stay yours. Its colours show the plan by height, head by head,
+  instead of the model's colours (#103).
 
 ### Fixed
 - **Invisible objects in Prepare**: an object whose shape could not be read
