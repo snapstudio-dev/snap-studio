@@ -104,7 +104,11 @@ pub fn details(
         }
         _ => Map::new(),
     };
-    idx.details(name, &extra).ok_or_else(|| anyhow!(crate::t!("err.unknown_preset", name = name)))
+    if idx.kind_of(name) == Some(presets::Kind::Process) {
+        idx.process_details(name, machine, &extra)
+    } else {
+        idx.details(name, &extra).ok_or_else(|| anyhow!(crate::t!("err.unknown_preset", name = name)))
+    }
 }
 
 /// Saves the effective settings (quick settings, then overrides) as a user

@@ -94,4 +94,17 @@ assert.deepStrictEqual(vm.runInContext('prTowerRawSetting("max_layer_height")',r
 assert.deepStrictEqual(vm.runInContext('prTowerRawSetting("nozzle_diameter")',rawCtx),[.4,.6],'Prepare profile arrays stay intact before opening the sheet');
 rawCtx.prTowerAdv = ()=>({max_layer_height:[.25,.35]});
 assert.deepStrictEqual(vm.runInContext('prTowerRawSetting("max_layer_height")',rawCtx),[.25,.35],'advanced overrides take priority over raw profile');
-console.log('sequence UI: ok');
+// Exercise the actual async profile loader with a serialized Details shape:
+// nozzle/layer arrays exist only in geometry, not in process values.
+(async () => {
+  const profile = { values:{skirt_type:'perobject',skirt_loops:'1',skirt_height:'9',skirt_distance:'4',initial_layer_line_width:'125%',support_filament:'2'}, geometry:{nozzle_diameter:['0.4','0.6'],max_layer_height:['0.2','0.3']} };
+  Object.assign(profile.geometry, profile.values);
+  const loader = { PR:{}, prTowerProfileName:()=>({machine:'Machine',process:'Process'}), invoke:async()=>profile, prTowerChanged(){} };
+  vm.createContext(loader);
+  vm.runInContext(extract('ui/prepare-tower.js', /async function prTowerLoadProfile\(\)[\s\S]*?\n}/), loader);
+  await vm.runInContext('prTowerLoadProfile()', loader);
+  const c = S.sqClearance(k=>loader.PR.towerProfile.raw[k]);
+  assert.strictEqual(c.skirt.initial,.75,'machine-only nozzle arrays reach the clearance calculation');
+  assert.strictEqual(S.sqGap([{height:10}],c),81.8,'machine-only layer heights reach the tall skirt calculation');
+  console.log('sequence UI: ok');
+})().catch(error=>{ console.error(error); process.exitCode=1; });

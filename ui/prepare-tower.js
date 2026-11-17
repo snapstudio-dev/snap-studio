@@ -118,7 +118,7 @@ async function prTowerLoadProfile() {
   PR.towerProfile = { key, values: null };
   const d = await invoke("slice_details", { name: p.process, machine: p.machine, simple: p.simple, overrides: {}, color: null }).catch(() => null);
   if (PR.towerProfile?.key !== key) return;
-  PR.towerProfile.raw = d?.values || {};
+  PR.towerProfile.raw = d?.geometry || d?.values || {};
   PR.towerProfile.values = Object.fromEntries(Object.entries(d?.values || {}).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]));
   prTowerChanged();
 }

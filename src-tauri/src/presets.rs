@@ -78,6 +78,10 @@ pub struct Details {
     pub chain: Vec<String>,
     /// Effective values: inheritance resolved, Snap Studio's additions included.
     pub values: Map<String, Value>,
+    /// Machine and process settings used by Prepare's geometry checks.
+    /// Separate from `values`, which describes only the inspected preset.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub geometry: Option<Map<String, Value>>,
     /// Settings changed by Snap Studio for this slice.
     pub snap: Vec<String>,
     /// Custom preset: settings that differ from the system preset.
@@ -337,7 +341,23 @@ impl Index {
         for k in META {
             values.remove(*k);
         }
-        Some(Details { name: name.to_string(), kind: e.kind, user: e.user, chain, values, snap, custom })
+        Some(Details { name: name.to_string(), kind: e.kind, user: e.user, chain, values, geometry: None, snap, custom })
+    }
+
+    /// The CLI loads the machine first and the process second. `prepare`
+    /// copies the machine's nozzle diameters into the process before applying
+    /// the quick settings and overrides; expose that same effective geometry.
+    pub fn process_details(&self, name: &str, machine: &str, extra: &Map<String, Value>) -> Result<Details> {
+        let machine_values = self.resolve(machine)?;
+        let mut details = self.details(name, extra).ok_or_else(|| anyhow!(crate::t!("err.unknown_preset", name = name)))?;
+        let mut geometry = machine_values.clone();
+        geometry.extend(details.values.clone());
+        if let Some(nozzles) = machine_values.get("nozzle_diameter") {
+            geometry.insert("nozzle_diameter".into(), nozzles.clone());
+        }
+        geometry.extend(extra.clone());
+        details.geometry = Some(geometry);
+        Ok(details)
     }
 
     /// Presets of a given type that can be offered to the user.
@@ -782,6 +802,47 @@ mod tests {
         let Some(idx) = repo_index().or_else(index) else { return };
         let p = process_extra(&idx, "Snapmaker U1 (0.4 nozzle)", &over);
         assert!(!p.contains_key("idle_temperature") && p["ooze_prevention"] == "1");
+    }
+
+    #[test]
+    fn process_details_include_inherited_machine_geometry() {
+        let mut entries = HashMap::new();
+        for (name, kind, json) in [
+            (
+                "Machine base",
+                Kind::Machine,
+                serde_json::json!({"nozzle_diameter": ["0.4", "0.6"], "max_layer_height": ["0.2", "0.3"], "extruder_clearance_radius": "72.5"}),
+            ),
+            ("Machine", Kind::Machine, serde_json::json!({"inherits": "Machine base", "printable_height": "270.05"})),
+            (
+                "Process",
+                Kind::Process,
+                serde_json::json!({"skirt_type": "perobject", "skirt_loops": "1", "skirt_height": "9", "skirt_distance": "4", "initial_layer_line_width": "125%", "support_filament": "2", "nozzle_diameter": ["0.2"]}),
+            ),
+        ] {
+            entries.insert(name.into(), Entry { kind, json, user: false });
+        }
+        let idx = Index { entries, renamed: HashMap::new(), selected: Default::default() };
+        let extra = process_extra(&idx, "Machine", &Map::new());
+        // This is the Details response returned by slice_details for a process.
+        let details = idx.process_details("Process", "Machine", &extra).unwrap();
+        let response = serde_json::to_value(details).unwrap();
+        assert!(response["values"].get("max_layer_height").is_none(), "machine-only setting absent from the inspected process");
+        let geometry = &response["geometry"];
+        assert_eq!(geometry["max_layer_height"], serde_json::json!(["0.2", "0.3"]));
+        assert_eq!(
+            geometry["nozzle_diameter"],
+            serde_json::json!(["0.4", "0.6"]),
+            "machine nozzle copy overrides the process, as in prepare"
+        );
+        assert_eq!(geometry["printable_height"], "270.05");
+        assert_eq!(geometry["support_filament"], "2");
+        assert_eq!(geometry["initial_layer_line_width"], "125%");
+        let overrides = serde_json::json!({"nozzle_diameter": ["0.5", "0.8"], "skirt_height": "7"}).as_object().unwrap().clone();
+        let details = idx.process_details("Process", "Machine", &process_extra(&idx, "Machine", &overrides)).unwrap();
+        let geometry = details.geometry.unwrap();
+        assert_eq!(geometry["nozzle_diameter"], serde_json::json!(["0.5", "0.8"]), "explicit overrides win after the nozzle copy");
+        assert_eq!(geometry["skirt_height"], "7");
     }
 
     #[test]
