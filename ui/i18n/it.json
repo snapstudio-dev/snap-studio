@@ -2878,7 +2878,7 @@
   "prepare.seq": "Ordine di stampa",
   "prepare.seq.layer": "Per strato",
   "prepare.seq.object": "Per oggetto",
-  "prepare.seq.sub": "Ogni oggetto viene completato prima del successivo.",
+  "prepare.seq.sub": "Ogni oggetto viene completato prima del successivo. I cambi di testina avvengono senza torre di spurgo.",
   "prepare.seq.off.height": "La stampa per oggetto non è disponibile con i colori per altezza.",
   "prepare.seq.off.virtual": "La stampa per oggetto non è disponibile con le testine virtuali.",
   "prepare.seq.close": "«{a}» e «{b}» sono troppo vicini. Lascia almeno {gap} mm tra gli oggetti.",

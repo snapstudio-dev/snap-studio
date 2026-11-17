@@ -2878,7 +2878,7 @@
   "prepare.seq": "Druckreihenfolge",
   "prepare.seq.layer": "Schichtweise",
   "prepare.seq.object": "Objektweise",
-  "prepare.seq.sub": "Jedes Objekt wird vor dem nächsten fertiggestellt.",
+  "prepare.seq.sub": "Jedes Objekt wird vor dem nächsten fertiggestellt. Werkzeugwechsel erfolgen ohne Reinigungsturm.",
   "prepare.seq.off.height": "Objektweises Drucken ist mit Farben nach Höhe nicht verfügbar.",
   "prepare.seq.off.virtual": "Objektweises Drucken ist mit virtuellen Druckköpfen nicht verfügbar.",
   "prepare.seq.close": "„{a}“ und „{b}“ sind zu nah. Mindestens {gap} mm Abstand lassen.",

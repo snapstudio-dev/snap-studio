@@ -2833,7 +2833,7 @@
   "prepare.seq": "Print order",
   "prepare.seq.layer": "Layer by layer",
   "prepare.seq.object": "Object by object",
-  "prepare.seq.sub": "Each object is finished before the next one starts.",
+  "prepare.seq.sub": "Each object is finished before the next one starts. Head changes have no prime tower.",
   "prepare.seq.off.height": "Object by object is unavailable with By height colours.",
   "prepare.seq.off.virtual": "Object by object is unavailable with virtual heads.",
   "prepare.seq.close": "“{a}” and “{b}” are too close. Leave at least {gap} mm between objects.",

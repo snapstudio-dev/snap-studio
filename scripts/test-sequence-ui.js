@@ -15,7 +15,7 @@ const objects = [{ id:1, name:'Tall', foot:[[0,0],[20,0],[20,20],[0,20]], height
 const PR = { objects, assoc:'object', bed:{w:270,d:270}, rowDrag:null };
 const ctx = { ...S, PR, $, document: { querySelectorAll: s => s === '#p-seq [data-sequence]' ? buttons : [], createElement: element }, addEventListener(){},
   prTowerSetting:k => settings[k], prTowerVirtualUsed:() => ctx.virtual || false,
-  plSliced:xs => xs, bedState:()=>'on', shape:o=>({ zmin:0,zmax:o.height }), footprintPoly:o=>o.foot,
+  plSliced:xs => xs, bedState:()=>'on', shape:o=>({ zmin:0,zmax:o.height }), footprint:o=>o.foot,
   tr:(k,p)=> k + (p ? JSON.stringify(p):''), fmtDec:n=>String(n),
   prRemember:()=>remembered++, prSave(){}, prRenderInspector:()=>renders++, prSchedule(){},
   SL:{ memory:{} }, rememberFor:()=>({}), prTowerProfileName:()=>({machine:'U1'}),
@@ -49,4 +49,41 @@ run('prSeqRender(null)');
 $('s-machine').value='U1';
 $('p-seq').click({target:{closest:()=>buttons[1]}});
 assert.strictEqual(settings.print_sequence,'by object','visible selector writes the advanced setting');
+const cached = run('prSeqCheck()');
+assert.strictEqual(run('prSeqCheck()'), cached, 'unchanged scene reuses collision results');
+ctx.result = cached;
+run('prSeqRender(result)');
+const child = $('p-seq-message').children[0];
+run('prSeqRender(result)');
+assert.strictEqual($('p-seq-message').children[0], child, 'unchanged message keeps the repair button alive');
+
+
+// Execute the existing tower/pillar visibility chain, not a duplicate rule.
+const tower = require('../ui/tower-logic');
+const pillar = require('../ui/pillar-logic');
+const extract = (file, pattern) => fs.readFileSync(file,'utf8').match(pattern)[0];
+const towers = { ptState:tower.ptState, pmKind:pillar.pmKind,
+  PR:{tower:{on:true,kind:'material'}}, prTowerHeads:()=>new Set([0,1]),
+  prTowerSetting:()=> 'by object', prPillarHeads:()=>[], pmOffered:()=>true };
+vm.createContext(towers);
+vm.runInContext(extract('ui/prepare-tower.js', /const prTowerState = [\s\S]*?;/),towers);
+vm.runInContext(extract('ui/prepare-pillars.js', /function prTowerKindNow[\s\S]*?\n}/),towers);
+vm.runInContext(extract('ui/prepare-pillars.js', /const prPillarsShown = [^;]*;/),towers);
+vm.runInContext(extract('ui/prepare-pillars.js', /function prPillarsRequest\(\)[\s\S]*?\n}/),towers);
+assert.strictEqual(vm.runInContext('prPillarsShown()',towers),false,'sequential mode hides material towers');
+assert.strictEqual(vm.runInContext('prPillarsRequest().length',towers),0,'sequential requests contain no pillars');
+
+// Undo's real snapshot serializer/restorer preserve the object order.
+const prepareSource = fs.readFileSync('ui/prepare.js', 'utf8');
+vm.runInContext(prepareSource.slice(prepareSource.indexOf('const prSnap ='), prepareSource.indexOf('/* A state back:')), ctx);
+vm.runInContext(extract('ui/prepare.js', /function prUnsnap\(snapshot\)[\s\S]*?\n}/), ctx);
+const snapshot = run('prSnap()');
+const oldIds = PR.objects.map(o => o.id);
+PR.objects.reverse();
+ctx.snapshot = snapshot;
+run('prUnsnap(snapshot)');
+assert.deepStrictEqual(Array.from(PR.objects, o => o.id), oldIds, 'Undo restores print order');
+const unchanged = run('prSeqCheck()');
+PR.objects[0].height += 5;
+assert.notStrictEqual(run('prSeqCheck()'), unchanged, 'geometry edits invalidate the collision cache');
 console.log('sequence UI: ok');

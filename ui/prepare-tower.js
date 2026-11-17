@@ -473,14 +473,15 @@ function prTowerRenderSwitch() {
   const sw = $("p-tower-sw");
   if (!sw) return;
   const st = prTowerState();
+  const sequential = String(prTowerSetting("print_sequence")) === "by object";
   $("p-plateopts").classList.remove("hidden");
-  $("p-tower-row").classList.toggle("hidden", st.reason === "single" && !(typeof prSeqOn === "function" && prSeqOn()));
+  $("p-tower-row").classList.toggle("hidden", st.reason === "single" && !sequential);
   sw.checked = PR.tower.on;
   sw.disabled = !!st.reason;
   const why = $("p-tower-why");
   const pillars = prPillarsShown();
   // Off with a virtual head: advised, never turned on for the user.
-  why.textContent = st.reason ? tr(`prepare.tower.why.${st.reason}`) : st.show && !pillars ? prTowerLabel(undefined, true) : !PR.tower.on && prTowerVirtualUsed() ? tr("prepare.tower.virtual_hint") : "";
+  why.textContent = sequential ? tr("prepare.tower.why.by_object") : st.reason ? tr(`prepare.tower.why.${st.reason}`) : st.show && !pillars ? prTowerLabel(undefined, true) : !PR.tower.on && prTowerVirtualUsed() ? tr("prepare.tower.virtual_hint") : "";
   why.classList.toggle("hidden", !why.textContent);
   sw.title = st.reason ? why.textContent : "";
   $("p-tower-row").classList.toggle("off", !!st.reason);

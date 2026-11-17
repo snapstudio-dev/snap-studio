@@ -688,9 +688,9 @@ async function startSlice() {
   // Recheck after profile and head changes made inside the slice sheet.
   const sequence = prSeqCheck();
   if (sequence) {
-    sequence.blocked = sqBlocked({ assoc: PR.assoc, virtual: virtual_heads.length > 0 });
-    if (sequence.blocked || sequence.close.length || sequence.tall.length) {
-      setSliceMessage(prSeqText(sequence), "err");
+    const blocked = sqBlocked({ assoc: PR.assoc, virtual: virtual_heads.length > 0 });
+    if (blocked || sequence.close.length || sequence.tall.length) {
+      setSliceMessage(prSeqText({ ...sequence, blocked }), "err");
       return;
     }
   }

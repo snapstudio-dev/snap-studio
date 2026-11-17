@@ -2836,7 +2836,7 @@
   "prepare.seq": "Ordre d’impression",
   "prepare.seq.layer": "Couche par couche",
   "prepare.seq.object": "Objet par objet",
-  "prepare.seq.sub": "Chaque objet est terminé avant de commencer le suivant.",
+  "prepare.seq.sub": "Chaque objet est terminé avant de commencer le suivant. Les changements de tête se font sans tour de purge.",
   "prepare.seq.off.height": "Objet par objet est indisponible avec les couleurs Par hauteur.",
   "prepare.seq.off.virtual": "Objet par objet est indisponible avec les têtes virtuelles.",
   "prepare.seq.close": "« {a} » et « {b} » sont trop proches. Laissez au moins {gap} mm entre les objets.",

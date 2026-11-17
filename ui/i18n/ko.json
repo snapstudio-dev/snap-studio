@@ -2794,7 +2794,7 @@
   "prepare.seq": "출력 순서",
   "prepare.seq.layer": "레이어별",
   "prepare.seq.object": "객체별",
-  "prepare.seq.sub": "각 객체를 완성한 후 다음 객체를 출력합니다.",
+  "prepare.seq.sub": "각 객체를 완성한 후 다음 객체를 출력합니다. 헤드 변경 시 퍼지 타워를 사용하지 않습니다.",
   "prepare.seq.off.height": "높이별 색상에서는 객체별 출력을 사용할 수 없습니다.",
   "prepare.seq.off.virtual": "가상 헤드에서는 객체별 출력을 사용할 수 없습니다.",
   "prepare.seq.close": "“{a}”와 “{b}”가 너무 가깝습니다. 객체 사이를 {gap} mm 이상 띄우세요.",

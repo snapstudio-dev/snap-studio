@@ -25,13 +25,26 @@ function sqClearance(get = () => undefined) {
     const v = parseFloat(Array.isArray(get(k)) ? get(k)[0] : get(k));
     return isFinite(v) && v >= 0 ? v : d;
   };
-  return {
+  const c = {
     radius: num("extruder_clearance_radius", SQ_U1.radius),
     rod: num("extruder_clearance_height_to_rod", SQ_U1.rod),
     lid: num("extruder_clearance_height_to_lid", SQ_U1.lid),
     nozzle: num("nozzle_height", SQ_U1.nozzle),
     height: num("printable_height", SQ_U1.height),
   };
+  if (String(get("skirt_type")) === "perobject" && num("skirt_loops", 0) > 0) {
+    const nozzle = num("nozzle_diameter", .4);
+    const absolute = (value, base) => String(value).includes("%") ? parseFloat(value) * base / 100 : parseFloat(value);
+    const initial = absolute(get("initial_layer_line_width"), nozzle) || 0;
+    const width = initial > 0 ? initial : absolute(get("line_width"), nozzle) || 1.125 * nozzle;
+    const height = absolute(get("initial_layer_print_height"), num("layer_height", .2)) || .2;
+    c.skirt = {
+      distance: num("skirt_distance", 2), loops: num("skirt_loops", 1),
+      width, initial, spacing: Math.max(0, width - height * (1 - Math.PI / 4)),
+      tall: String(get("draft_shield")) === "enabled" || num("skirt_height", 1) * num("max_layer_height", .3) > c.nozzle,
+    };
+  }
+  return c;
 }
 
 /* The distance the engine wants between two footprints: the radius (each
@@ -39,7 +52,13 @@ function sqClearance(get = () => undefined) {
    lower than the nozzle. */
 function sqGap(items, c) {
   const short = items.length > 0 && items.every((o) => o.height < c.nozzle);
-  return short ? Math.max(0, SQ_SHORT_GAP / 2 - 0.1) * 2 : Math.max(0, c.radius / 2 - 0.1) * 2;
+  const skirt = c.skirt;
+  let offset = 0;
+  if (skirt) {
+    const extent = skirt.distance + skirt.width + (skirt.loops - 1) * skirt.spacing;
+    offset = short ? extent : skirt.tall ? skirt.distance + skirt.initial : Math.max(0, extent - c.radius / 2);
+  }
+  return Math.max(0, (short ? Math.max(SQ_SHORT_GAP / 2, offset) : c.radius / 2 + offset) - .1) * 2;
 }
 
 const sqSub = (a, b) => [a[0] - b[0], a[1] - b[1]];
@@ -72,7 +91,24 @@ function sqOverlap(a, b) {
    point or a segment counts as a polygon. */
 function sqDist(a, b) {
   if (!a.length || !b.length) return Infinity;
-  if (a.length > 2 && b.length > 2 && sqOverlap(a, b)) return 0;
+  const inside = (p, poly) => {
+    if (poly.length < 3) return false;
+    let sign = 0;
+    for (let i = 0; i < poly.length; i++) {
+      const v = sqSub(poly[(i + 1) % poly.length], poly[i]), w = sqSub(p, poly[i]);
+      const cross = v[0] * w[1] - v[1] * w[0];
+      if (Math.abs(cross) < 1e-10) continue;
+      if (sign && Math.sign(cross) !== sign) return false;
+      sign = Math.sign(cross);
+    }
+    return true;
+  };
+  if (a.some((p) => inside(p, b)) || b.some((p) => inside(p, a))) return 0;
+  const cross = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  for (let i = 0; i < a.length; i++) for (let j = 0; j < b.length; j++) {
+    const p = a[i], q = a[(i + 1) % a.length], u = b[j], v = b[(j + 1) % b.length];
+    if (cross(p, q, u) * cross(p, q, v) < 0 && cross(u, v, p) * cross(u, v, q) < 0) return 0;
+  }
   let d = Infinity;
   const edges = (poly) => (poly.length === 1 ? [[poly[0], poly[0]]] : poly.map((p, i) => [p, poly[(i + 1) % poly.length]]));
   for (const [p, q] of edges(b)) for (const v of a) d = Math.min(d, sqSegDist(v, p, q));
@@ -84,6 +120,13 @@ function sqDist(a, b) {
    not), for drawing the room the head needs around it. */
 function sqGrow(poly, d, steps = 6) {
   if (!poly.length) return [];
+  if (poly.length === 2 && d > 0) {
+    const [a, b] = poly, angle = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    return [b, a].flatMap((p, end) => Array.from({ length: steps * 2 + 1 }, (_, i) => {
+      const t = angle - Math.PI / 2 + end * Math.PI + i * Math.PI / (steps * 2);
+      return [p[0] + d * Math.cos(t), p[1] + d * Math.sin(t)];
+    }));
+  }
   if (poly.length < 3 || d <= 0) {
     if (d <= 0) return poly.map((p) => [p[0], p[1]]);
     const c = poly.reduce((s, p) => [s[0] + p[0] / poly.length, s[1] + p[1] / poly.length], [0, 0]);

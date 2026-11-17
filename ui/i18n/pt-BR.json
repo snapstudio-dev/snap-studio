@@ -2878,7 +2878,7 @@
   "prepare.seq": "Ordem de impressão",
   "prepare.seq.layer": "Por camada",
   "prepare.seq.object": "Por objeto",
-  "prepare.seq.sub": "Cada objeto é concluído antes de iniciar o próximo.",
+  "prepare.seq.sub": "Cada objeto é concluído antes de iniciar o próximo. As trocas de cabeçote ocorrem sem torre de purga.",
   "prepare.seq.off.height": "A impressão por objeto não está disponível com cores por altura.",
   "prepare.seq.off.virtual": "A impressão por objeto não está disponível com cabeçotes virtuais.",
   "prepare.seq.close": "“{a}” e “{b}” estão muito próximos. Deixe pelo menos {gap} mm entre os objetos.",

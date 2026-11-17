@@ -2794,7 +2794,7 @@
   "prepare.seq": "印刷順序",
   "prepare.seq.layer": "レイヤーごと",
   "prepare.seq.object": "オブジェクトごと",
-  "prepare.seq.sub": "各オブジェクトを完成させてから次を印刷します。",
+  "prepare.seq.sub": "各オブジェクトを完成させてから次を印刷します。ヘッド交換時にパージタワーは使用しません。",
   "prepare.seq.off.height": "高さ別の色ではオブジェクトごとに印刷できません。",
   "prepare.seq.off.virtual": "仮想ヘッドではオブジェクトごとに印刷できません。",
   "prepare.seq.close": "「{a}」と「{b}」が近すぎます。間隔を{gap} mm以上空けてください。",

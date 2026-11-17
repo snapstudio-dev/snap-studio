@@ -568,7 +568,8 @@ function prDraw() {
   if (typeof hzUniforms === "function") hzUniforms(gl, PR.prog);
   const boxes = [];
   const overlap = prOverlaps();
-  const seqBad = typeof prSeqBad === "function" ? prSeqBad(prSeqCheck()) : new Set();
+  const sequence = typeof prSeqCheck === "function" ? prSeqCheck() : null;
+  const seqBad = typeof prSeqBad === "function" ? prSeqBad(sequence) : new Set();
   for (const o of PR.objects) {
     const mesh = PR.meshes.get(meshKey(o));
     if (!mesh?.vao) continue;
@@ -617,7 +618,7 @@ function prDraw() {
   if (PR.hintHover) prDrawBoxes(gl, vp, PR.objects.filter((o) => PR.hintIds.has(o.id)), prTok("--warning", [1, 0.58, 0]));
   // The prime tower: translucent, after the parts.
   prTowerDraw(gl, vp, accent);
-  if (typeof prSeqDraw === "function") prSeqDraw(gl, vp);
+  if (typeof prSeqDraw === "function") prSeqDraw(gl, vp, sequence);
   // Rotate tool: three rings (ribbons) around the selection, always visible;
   // the hovered or grabbed ring thickens and lightens.
   const f = PR.tool === "rotate" ? ringFrame() : null;
@@ -713,6 +714,7 @@ const prSchedule = () => {
   if (PR.raf) return;
   PR.raf = requestAnimationFrame(() => {
     PR.raf = 0;
+    if (typeof prSeqUpdate === "function") prSeqUpdate();
     prDraw();
   });
 };
@@ -1357,6 +1359,7 @@ function prRenderInspector() {
   prTowerEnsurePlaced();
   if (!prTowerSelValid()) PR.towerSel = false;
   const overlap = prOverlaps();
+  const sequence = typeof prSeqCheck === "function" ? prSeqCheck() : null;
   const live = typeof headsActive === "function";
   const pid = live ? headsActive() : "";
   const slots = live ? headsSlots(pid) : [];
@@ -1410,7 +1413,7 @@ function prRenderInspector() {
       .join("");
     const head = `<div class="grow-row p-obj${PR.sel.has(o.id) ? " on" : ""}" data-id="${o.id}" role="button" tabindex="0">
       ${bare ? `<span class="p-tw"></span>` : `<span class="p-tw" data-fold="${o.id}">${open ? "▾" : "▸"}</span>`}
-      <span class="k">${typeof prSeqBadge === "function" ? prSeqBadge(o.id) : ""}${esc(o.name)}</span>${tag}${pickUi}<span class="p-dots">${dots}</span>${act}</div>`;
+      <span class="k">${typeof prSeqBadge === "function" ? prSeqBadge(o.id, sequence) : ""}${esc(o.name)}</span>${tag}${pickUi}<span class="p-dots">${dots}</span>${act}</div>`;
     if (!open || !live) return head;
     const model = headsModelNow(o.path);
     return head + prColors(o).map((ext) => {

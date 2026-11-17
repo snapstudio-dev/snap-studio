@@ -96,4 +96,24 @@ assert.deepStrictEqual(S.sqMove(ids, ["d", "b"], "a"), ["b", "d", "a", "c"], "se
 assert.deepStrictEqual(S.sqMove(ids, ["b"], "b"), ids, "onto itself: no change");
 assert.deepStrictEqual(S.sqMove(ids, ["z"], "a"), ids, "unknown: no change");
 
+
+
+// Per-object skirts: mirror object_skirt_offset and Flow's line spacing.
+const skirtProfile = { skirt_type: 'perobject', skirt_loops: '2', skirt_distance: '4', initial_layer_line_width: '125%', initial_layer_print_height: '.2', nozzle_diameter: '.4' };
+const skirtClearance = S.sqClearance(k => skirtProfile[k]);
+const width = .5, spacing = width - .2 * (1 - Math.PI / 4);
+near(S.sqGap([{height:1}], skirtClearance), 2 * (4 + width + spacing - .1), 1e-9, 'short objects include the whole skirt');
+near(S.sqGap([{height:10}], skirtClearance), 72.3, 1e-9, 'a low narrow skirt fits under the head');
+skirtProfile.draft_shield = 'enabled';
+near(S.sqGap([{height:10}], S.sqClearance(k => skirtProfile[k])), 72.3 + 2 * (4 + width), 1e-9, 'a tall skirt adds clearance on each side');
+skirtProfile.draft_shield = 'disabled'; skirtProfile.skirt_distance = '40';
+near(S.sqGap([{height:10}], S.sqClearance(k => skirtProfile[k])), 2 * (40 + width + spacing - .1), 1e-9, 'a wide skirt extends past the head radius');
+skirtProfile.skirt_type = 'combined';
+near(S.sqGap([{height:1}], S.sqClearance(k => skirtProfile[k])), 3.8, 1e-9, 'combined skirts do not inflate individual objects');
+
+assert.strictEqual(S.sqDist([[2,2],[8,8]], sq(0,0,10,10)), 0, 'segment inside a polygon');
+assert.strictEqual(S.sqDist([[-5,5],[15,5]], sq(0,0,10,10)), 0, 'segment crossing a polygon');
+assert.strictEqual(S.sqDist([[-5,0],[5,0]], [[0,-5],[0,5]]), 0, 'crossing segments');
+for (const p of S.sqGrow([[0,0],[100,0]],10)) near(S.sqDist([p],[[0,0],[100,0]]),10,1e-9,'a segment grows into a full-length capsule');
+
 console.log("sequence: ok");

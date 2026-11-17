@@ -2794,7 +2794,7 @@
   "prepare.seq": "打印顺序",
   "prepare.seq.layer": "逐层",
   "prepare.seq.object": "逐对象",
-  "prepare.seq.sub": "完成一个对象后再打印下一个。",
+  "prepare.seq.sub": "完成一个对象后再打印下一个。更换打印头时不使用擦料塔。",
   "prepare.seq.off.height": "按高度配色时无法逐对象打印。",
   "prepare.seq.off.virtual": "使用虚拟打印头时无法逐对象打印。",
   "prepare.seq.close": "“{a}”和“{b}”过近。对象之间至少留出 {gap} mm。",

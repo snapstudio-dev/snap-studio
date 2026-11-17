@@ -193,7 +193,7 @@ function prPillarRowTurn(rot) {
 
 /* The pillars a slice sends: centers and rings, outer first. */
 function prPillarsRequest() {
-  if (!prPillarsShown()) return [];
+  if (String(prTowerSetting("print_sequence")) === "by object" || !prPillarsShown()) return [];
   return prPillars().list
     .filter((p) => Number.isFinite(p.x))
     .map((p) => ({ name: prPillarName(p), x: p.x, y: p.y, rings: p.rings, brim: PM.brim }));

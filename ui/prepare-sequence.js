@@ -3,13 +3,22 @@
    is checked in bed coordinates, after each object's resting transform. */
 const prSeqOn = () => String(prTowerSetting("print_sequence") || "by layer") === "by object";
 const prSeqBlocked = () => sqBlocked({ assoc: PR.assoc, virtual: prTowerVirtualUsed() });
+let prSeqCache = null;
+let prSeqStatus = undefined;
+function prSeqUpdate() {
+  const r = prSeqCheck();
+  if (r !== prSeqStatus) { prSeqStatus = r; prStatus(); }
+}
 function prSeqCheck() {
   if (!prSeqOn()) return null;
   const items = plSliced(PR.objects, bedState).map((o) => {
     const sh = shape(o);
-    return { id: o.id, foot: footprintPoly(o), height: sh.zmax - sh.zmin };
+    return { id: o.id, foot: footprint(o), height: sh.zmax - sh.zmin };
   });
-  return { ...sqCheck(items, sqClearance(prTowerSetting)), items, blocked: prSeqBlocked() };
+  const clearance = sqClearance(prTowerSetting), blocked = prSeqBlocked();
+  const key = JSON.stringify([items, clearance, blocked]);
+  if (prSeqCache?.key !== key) prSeqCache = { key, result: { ...sqCheck(items, clearance), items, blocked } };
+  return prSeqCache.result;
 }
 const prSeqBad = (r) => new Set(r ? [...r.close.flat(), ...r.tall.map((x) => x.id)] : []);
 function prSeqText(r) {
@@ -37,6 +46,10 @@ function prSeqRender(r) {
   }
   const msg = $("p-seq-message"), text = r ? prSeqText(r) : "";
   msg.classList.toggle("hidden", !text);
+  const repair = !r?.blocked && !r?.close.length && r?.tall.find((x) => x.why !== "height");
+  const messageKey = JSON.stringify([text, repair?.id, tr("prepare.seq.make_last")]);
+  if (msg.dataset.sequence === messageKey) return;
+  msg.dataset.sequence = messageKey;
   msg.replaceChildren();
   if (text) {
     const p = document.createElement("div");
@@ -53,8 +66,7 @@ function prSeqRender(r) {
     }
   }
 }
-function prSeqBadge(id) {
-  const r = prSeqCheck();
+function prSeqBadge(id, r = prSeqCheck()) {
   return r?.order[id] ? `<span class="p-seq-number${prSeqBad(r).has(id) ? " bad" : ""}">${r.order[id]}</span>` : "";
 }
 function prSeqMove(ids, before) {
@@ -85,8 +97,8 @@ function prSeqDropHover(over, e) {
   row?.classList.add(t.before == null ? "p-seq-end" : "p-seq-insert");
   for (const el of rows) if (PR.rowDrag?.ids?.includes(+el.dataset.id)) el.classList.add("p-seq-drag");
 }
-function prSeqDraw(gl, vp) {
-  const r = prSeqCheck(), labels = $("p-seq-labels");
+function prSeqDraw(gl, vp, r) {
+  const labels = $("p-seq-labels");
   labels.replaceChildren();
   if (!r) return;
   const bad = prSeqBad(r), accent = accentRgb(), danger = prTok("--danger", [1, .23, .19]);
@@ -121,12 +133,12 @@ function prSeqDraw(gl, vp) {
     label.className = "p-seq-number" + (bad.has(o.id) ? " bad" : "");
     const t = r.tall.find((x) => x.id === o.id);
     label.textContent = r.order[o.id] + (t ? ` · ${fmtDec(o.height, 1)} mm > ${fmtDec(t.limit, 1)} mm` : "");
-    label.style.left = (q[0] + 1) / 2 * canvas.clientWidth + "px";
-    label.style.top = (1 - q[1]) / 2 * canvas.clientHeight + "px";
+    const canvasRect = canvas.getBoundingClientRect(), labelRect = labels.getBoundingClientRect();
+    label.style.left = canvasRect.left - labelRect.left + (q[0] + 1) / 2 * canvas.clientWidth + "px";
+    label.style.top = canvasRect.top - labelRect.top + (1 - q[1]) / 2 * canvas.clientHeight + "px";
     labels.append(label);
   }
   gl.depthMask(true);
-  prStatus();
 }
 $("p-seq").addEventListener("click", (e) => {
   const b = e.target.closest("[data-sequence]");
