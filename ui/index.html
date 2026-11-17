@@ -332,6 +332,8 @@
         <button id="p-supports-go" type="button" class="btn small" data-i18n="supports.badge.go">Turn supports on</button>
       </div>
       <div class="v-hint" data-i18n="prepare.hint">drag: move · ⌥ drag: rotate · ⌘ drag from an empty spot: select an area · ⇧ or right drag, ⇧ scroll: pan the view · arrows: 1 mm (⇧ 10 mm) · A: arrange · ⌘D: duplicate · ⌘Z: undo</div>
+      <div id="p-seq-message" class="p-seq-message hidden" role="status"></div>
+      <div id="p-seq-labels" aria-hidden="true"></div>
       <div id="p-objects" class="p-float p-objects prep-inspector">
         <div class="p-float-head" id="p-objects-head">
           <button type="button" id="p-objects-fold" class="p-tw p-fold">▾</button>
@@ -348,6 +350,14 @@
         <div id="p-list" class="p-float-body"></div>
         <!-- The plate's print options: one setting with the slice sheet's. -->
         <div id="p-plateopts" class="p-plateopts">
+          <div class="p-sequence">
+            <label id="p-seq-label" data-i18n="prepare.seq">Print order</label>
+            <div id="p-seq" class="seg" role="radiogroup" aria-labelledby="p-seq-label">
+              <button type="button" class="seg-btn" role="radio" data-sequence="by layer" data-i18n="prepare.seq.layer">Layer by layer</button>
+              <button type="button" class="seg-btn" role="radio" data-sequence="by object" data-i18n="prepare.seq.object">Object by object</button>
+            </div>
+            <small id="p-seq-why" class="sub"></small>
+          </div>
           <div class="group">
             <div class="grow-row" id="p-tower-row">
               <span class="k"><label for="p-tower-sw" data-i18n="prepare.tower">Prime tower</label><small id="p-tower-why" class="sub hidden"></small></span>
@@ -2366,10 +2376,12 @@
 <script src="tower-logic.js"></script>
 <script src="pillar-logic.js"></script>
 <script src="heights-logic.js"></script>
+<script src="sequence-logic.js"></script>
 <script src="prepare.js"></script>
 <script src="prepare-tower.js"></script>
 <script src="prepare-pillars.js"></script>
 <script src="prepare-heights.js"></script>
+<script src="prepare-sequence.js"></script>
 <script src="heads.js"></script>
 <script src="virtual.js"></script>
 <script src="plate-rules.js"></script>

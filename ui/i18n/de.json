@@ -2874,5 +2874,14 @@
   "hz.import.summary": {"one": "{n} Farbwechsel, Schichten {lh} mm, erste {first} mm", "other": "{n} Farbwechsel, Schichten {lh} mm, erste {first} mm"},
   "hz.import.infill": "Füllung 100 %, wie die Beschreibung verlangt",
   "slice.heights.multicolour": "Im Modus Nach Höhe druckt jedes Objekt in einer Farbe, die mit der Höhe wechselt: Hier hat ein Objekt mehrere eigene Farben (bemalt oder eine mehrfarbige Datei). Entfernen Sie seine Farben oder wählen Sie einen anderen Farbmodus.",
-  "hz.kept": "Die Farbwechsel dieser Datei wurden nicht übernommen: Die Platte hat bereits eigene. Entfernen Sie diese, um die der Datei zu verwenden."
+  "hz.kept": "Die Farbwechsel dieser Datei wurden nicht übernommen: Die Platte hat bereits eigene. Entfernen Sie diese, um die der Datei zu verwenden.",
+  "prepare.seq": "Druckreihenfolge",
+  "prepare.seq.layer": "Schichtweise",
+  "prepare.seq.object": "Objektweise",
+  "prepare.seq.sub": "Jedes Objekt wird vor dem nächsten fertiggestellt.",
+  "prepare.seq.off.height": "Objektweises Drucken ist mit Farben nach Höhe nicht verfügbar.",
+  "prepare.seq.off.virtual": "Objektweises Drucken ist mit virtuellen Druckköpfen nicht verfügbar.",
+  "prepare.seq.close": "„{a}“ und „{b}“ sind zu nah. Mindestens {gap} mm Abstand lassen.",
+  "prepare.seq.tall": "„{name}“ ist {h} mm hoch; hier sind {limit} mm erlaubt. Zuletzt drucken oder verschieben.",
+  "prepare.seq.make_last": "Zuletzt drucken"
 }

@@ -568,6 +568,7 @@ function advSet(k, v) {
   advRemember();
   advRenderPanel();
   advRenderRows();
+  if (k === "print_sequence") { prRenderInspector(); prSchedule(); }
   // A head chosen for supports, walls or infill counts for the plate.
   if (ADV_FILAMENT.has(k) && typeof pdBedLine === "function") pdBedLine();
 }
@@ -714,6 +715,7 @@ $("s-adv-reset").addEventListener("click", () => {
   advRemember();
   advRenderPanel();
   advRenderRows();
+  prRenderInspector(); prSchedule();
 });
 document.querySelectorAll(".sl-adv-btn").forEach((b) => b.addEventListener("click", () => advOpen(b.dataset.adv)));
 $("smodal").addEventListener("change", (e) => {

@@ -5713,6 +5713,20 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .snappy-send:disabled { opacity: 0.35; cursor: default; }
 .snappy-send.stop { background: var(--text); color: var(--content-bg); }
 
+/* Sequential printing in Prepare. */
+.p-sequence { display:flex; flex-direction:column; gap:8px; padding:12px; }
+#p-seq { display:flex; width:100%; }
+#p-seq .seg-btn { flex:1; white-space:normal; }
+.p-seq-number { display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:22px; padding:0 5px; border-radius:12px; background:var(--accent); color:white; font-size:12px; margin-right:6px; }
+.p-seq-number.bad { background:var(--danger); }
+#p-seq-labels { position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+#p-seq-labels .p-seq-number { position:absolute; transform:translate(-50%,-50%); border:1px solid white; white-space:nowrap; }
+.p-seq-message { position:absolute; z-index:4; top:16px; left:50%; transform:translateX(-50%); max-width:420px; padding:12px; border:1px solid var(--danger); border-radius:12px; background:var(--card-bg); box-shadow:0 4px 16px #0002; }
+.p-seq-message .btn { margin-top:8px; }
+.p-obj.p-seq-insert { box-shadow:0 -2px var(--accent); }
+.p-obj.p-seq-end { box-shadow:0 2px var(--accent); }
+.p-obj.p-seq-drag { opacity:.35; }
+
 /* ======================================================================
    macOS theme (macOS 26 Tahoe, Liquid Glass). Structure, not only colors:
    every rule below is scoped to :root[data-theme="macos"] (or to its
@@ -5904,4 +5918,3 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 
 :root[data-theme="macos"] .p3d-views, :root[data-theme="macos"] .p3d-quick { border-radius: 999px; background: var(--mt-glass-strong); -webkit-backdrop-filter: var(--mt-blur); backdrop-filter: var(--mt-blur); box-shadow: var(--mt-edge), var(--mt-shadow); }
 :root[data-theme="macos"] .p3d { border-radius: var(--mt-radius); }
-

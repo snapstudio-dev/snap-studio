@@ -273,6 +273,7 @@ function prTowerSetOn(on) {
 /* The overrides a slice sends: the tower's place, with it only; with the
    pillars, the engine's tower off and the objects in the list's order. */
 function prTowerOverrides() {
+  if (typeof prSeqOn === "function" && prSeqOn()) return { print_order: "as_obj_list", enable_prime_tower: "0" };
   if (prPillarsShown()) return pmOverrides();
   if (!prTowerShown() || PR.tower.x == null) return {};
   const n = (v) => String(Math.round(v * 1000) / 1000);
@@ -472,7 +473,8 @@ function prTowerRenderSwitch() {
   const sw = $("p-tower-sw");
   if (!sw) return;
   const st = prTowerState();
-  $("p-plateopts").classList.toggle("hidden", st.reason === "single");
+  $("p-plateopts").classList.remove("hidden");
+  $("p-tower-row").classList.toggle("hidden", st.reason === "single" && !(typeof prSeqOn === "function" && prSeqOn()));
   sw.checked = PR.tower.on;
   sw.disabled = !!st.reason;
   const why = $("p-tower-why");

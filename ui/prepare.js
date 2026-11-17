@@ -568,6 +568,7 @@ function prDraw() {
   if (typeof hzUniforms === "function") hzUniforms(gl, PR.prog);
   const boxes = [];
   const overlap = prOverlaps();
+  const seqBad = typeof prSeqBad === "function" ? prSeqBad(prSeqCheck()) : new Set();
   for (const o of PR.objects) {
     const mesh = PR.meshes.get(meshKey(o));
     if (!mesh?.vao) continue;
@@ -578,7 +579,7 @@ function prDraw() {
     gl.uniformMatrix4fv(uMV, false, m4.mul(view, model));
     gl.uniformMatrix4fv(uModel, false, model);
     const tint =
-      st === "partial" ? [...prTok("--danger", [1, 0.23, 0.19]), 0.45]
+      (st === "partial" || seqBad.has(o.id)) ? [...prTok("--danger", [1, 0.23, 0.19]), 0.45]
       : selected ? [...accent, 0.28]
       : overlap.has(o.id) ? [...prTok("--warning", [1, 0.58, 0]), 0.4]
       : st === "out" ? [0.56, 0.56, 0.58, 0.55]
@@ -616,6 +617,7 @@ function prDraw() {
   if (PR.hintHover) prDrawBoxes(gl, vp, PR.objects.filter((o) => PR.hintIds.has(o.id)), prTok("--warning", [1, 0.58, 0]));
   // The prime tower: translucent, after the parts.
   prTowerDraw(gl, vp, accent);
+  if (typeof prSeqDraw === "function") prSeqDraw(gl, vp);
   // Rotate tool: three rings (ribbons) around the selection, always visible;
   // the hovered or grabbed ring thickens and lightens.
   const f = PR.tool === "rotate" ? ringFrame() : null;
@@ -1262,7 +1264,9 @@ function prStatus() {
   const blockers = prBlockers();
   // The prime tower off the plate: the engine would print it there.
   const towerOut = typeof prTowerBlocks === "function" && prTowerBlocks();
-  const blocked = blockers.colours.length + blockers.objects.length + blockers.orphans.length + (towerOut ? 1 : 0);
+  const sequence = typeof prSeqCheck === "function" ? prSeqCheck() : null;
+  if (typeof prSeqRender === "function") prSeqRender(sequence);
+  const blocked = (sequence && (sequence.close.length || sequence.tall.length || sequence.blocked) ? 1 : 0) + blockers.colours.length + blockers.objects.length + blockers.orphans.length + (towerOut ? 1 : 0);
   const tools = plTools({
     n,
     sel: PR.sel.size,
@@ -1406,7 +1410,7 @@ function prRenderInspector() {
       .join("");
     const head = `<div class="grow-row p-obj${PR.sel.has(o.id) ? " on" : ""}" data-id="${o.id}" role="button" tabindex="0">
       ${bare ? `<span class="p-tw"></span>` : `<span class="p-tw" data-fold="${o.id}">${open ? "▾" : "▸"}</span>`}
-      <span class="k">${esc(o.name)}</span>${tag}${pickUi}<span class="p-dots">${dots}</span>${act}</div>`;
+      <span class="k">${typeof prSeqBadge === "function" ? prSeqBadge(o.id) : ""}${esc(o.name)}</span>${tag}${pickUi}<span class="p-dots">${dots}</span>${act}</div>`;
     if (!open || !live) return head;
     const model = headsModelNow(o.path);
     return head + prColors(o).map((ext) => {
@@ -1958,6 +1962,7 @@ addEventListener("pointermove", (e) => {
   g.style.top = e.clientY + "px";
   const over = document.elementFromPoint(e.clientX, e.clientY);
   prDropHover(e);
+  prSeqDropHover(over, e);
   $("view-prepare").querySelector(".prep-stage").classList.toggle("drop-bed", over === $("p-canvas"));
 });
 addEventListener("pointerup", (e) => {
@@ -1972,7 +1977,10 @@ addEventListener("pointerup", (e) => {
   setTimeout(() => (PR.rowDrag = null), 0);
   const over = document.elementFromPoint(e.clientX, e.clientY);
   const off = prDropOff(over);
+  const reorder = prSeqDropTarget(over, e);
   prDropEnd();
+  prSeqDropClear();
+  if (reorder) { prSeqMove(d.ids || [d.id], reorder.before); return; }
   const list = PR.objects.filter((x) => (d.ids || [d.id]).includes(x.id));
   if (!list.length) return;
   if (off) {
@@ -2706,6 +2714,11 @@ async function prepareShow() {
 
 /* Scene handed to slicing: objects on the plate only. */
 function prepareScene() {
+  const seq = prSeqCheck();
+  if (seq && (seq.blocked || seq.close.length || seq.tall.length)) {
+    toast(prSeqText(seq), true);
+    return null;
+  }
   const on = plSliced(PR.objects, bedState);
   const partial = PR.objects.filter((o) => bedState(o) === "partial");
   if (partial.length) {

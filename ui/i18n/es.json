@@ -2874,5 +2874,14 @@
   "hz.import.summary": {"one": "{n} cambio de color, capas de {lh} mm, primera de {first} mm", "other": "{n} cambios de color, capas de {lh} mm, primera de {first} mm"},
   "hz.import.infill": "Relleno al 100 %, como pide la descripción",
   "slice.heights.multicolour": "En el modo Por altura, cada objeto se imprime de un solo color, que cambia con la altura: aquí, un objeto tiene varios colores propios (pintado o un archivo multicolor). Quita sus colores o elige otro modo de color.",
-  "hz.kept": "No se aplicaron los cambios de color de este archivo: la placa ya tiene los suyos. Bórralos para usar los del archivo."
+  "hz.kept": "No se aplicaron los cambios de color de este archivo: la placa ya tiene los suyos. Bórralos para usar los del archivo.",
+  "prepare.seq": "Orden de impresión",
+  "prepare.seq.layer": "Por capas",
+  "prepare.seq.object": "Por objetos",
+  "prepare.seq.sub": "Cada objeto se termina antes de empezar el siguiente.",
+  "prepare.seq.off.height": "La impresión por objetos no está disponible con colores por altura.",
+  "prepare.seq.off.virtual": "La impresión por objetos no está disponible con cabezales virtuales.",
+  "prepare.seq.close": "«{a}» y «{b}» están demasiado cerca. Deja al menos {gap} mm entre objetos.",
+  "prepare.seq.tall": "«{name}» mide {h} mm; el límite aquí es {limit} mm. Imprímelo al final o muévelo.",
+  "prepare.seq.make_last": "Imprimir al final"
 }

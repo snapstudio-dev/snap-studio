@@ -685,6 +685,15 @@ async function startSlice() {
   const used = new Set([...maps.flat(), ...hzHeadsUsed]);
   const eng = vhEngine(used, headsVirtual(pid), filaments.length);
   const virtual_heads = eng.heads.map((v) => ({ a: v.a, b: v.b, pct: v.pct, color: headsVirtualColor(pid, v) || null }));
+  // Recheck after profile and head changes made inside the slice sheet.
+  const sequence = prSeqCheck();
+  if (sequence) {
+    sequence.blocked = sqBlocked({ assoc: PR.assoc, virtual: virtual_heads.length > 0 });
+    if (sequence.blocked || sequence.close.length || sequence.tall.length) {
+      setSliceMessage(prSeqText(sequence), "err");
+      return;
+    }
+  }
   const groupOf = (i) => SL.groups.findIndex((g) => g.items.includes(i));
   const scene = SL.source.items.map(({ id, colors, heads, base, hc, hcl, ...it }, i) => ({ ...it, extruder_map: (maps[groupOf(i)] || []).map(eng.index) }));
   // Colour changes at a height (HueForge): the plate's single head

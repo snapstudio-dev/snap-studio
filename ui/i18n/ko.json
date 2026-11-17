@@ -2790,5 +2790,14 @@
   "hz.import.summary": {"other": "색 변경 {n}개, 레이어 {lh} mm, 첫 레이어 {first} mm"},
   "hz.import.infill": "설명대로 채우기 100 %",
   "slice.heights.multicolour": "높이별 모드에서는 각 객체가 한 가지 색으로 출력되고, 그 색이 높이에 따라 바뀝니다. 여기서는 객체에 자체 색이 여러 개 있습니다(페인팅했거나 멀티컬러 파일). 그 색을 제거하거나 다른 색 모드를 선택하세요.",
-  "hz.kept": "이 파일의 색 변경은 가져오지 않았습니다: 플레이트에 이미 자체 변경이 있습니다. 파일의 변경을 쓰려면 그것들을 삭제하세요."
+  "hz.kept": "이 파일의 색 변경은 가져오지 않았습니다: 플레이트에 이미 자체 변경이 있습니다. 파일의 변경을 쓰려면 그것들을 삭제하세요.",
+  "prepare.seq": "출력 순서",
+  "prepare.seq.layer": "레이어별",
+  "prepare.seq.object": "객체별",
+  "prepare.seq.sub": "각 객체를 완성한 후 다음 객체를 출력합니다.",
+  "prepare.seq.off.height": "높이별 색상에서는 객체별 출력을 사용할 수 없습니다.",
+  "prepare.seq.off.virtual": "가상 헤드에서는 객체별 출력을 사용할 수 없습니다.",
+  "prepare.seq.close": "“{a}”와 “{b}”가 너무 가깝습니다. 객체 사이를 {gap} mm 이상 띄우세요.",
+  "prepare.seq.tall": "“{name}”의 높이는 {h} mm이며 여기의 제한은 {limit} mm입니다. 마지막에 출력하거나 이동하세요.",
+  "prepare.seq.make_last": "마지막에 출력"
 }

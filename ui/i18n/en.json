@@ -2829,5 +2829,14 @@
   "hz.import.summary": {"one": "{n} colour change, layers {lh} mm, first {first} mm", "other": "{n} colour changes, layers {lh} mm, first {first} mm"},
   "hz.import.infill": "Infill 100 %, as the description asks",
   "slice.heights.multicolour": "In By height mode, each object prints in one colour, changing with the height: here, an object has several colours of its own (painted, or a multi-colour file). Remove its colours, or choose another colour mode.",
-  "hz.kept": "This file's colour changes were not taken over: the plate already has its own. Clear them to use the file's."
+  "hz.kept": "This file's colour changes were not taken over: the plate already has its own. Clear them to use the file's.",
+  "prepare.seq": "Print order",
+  "prepare.seq.layer": "Layer by layer",
+  "prepare.seq.object": "Object by object",
+  "prepare.seq.sub": "Each object is finished before the next one starts.",
+  "prepare.seq.off.height": "Object by object is unavailable with By height colours.",
+  "prepare.seq.off.virtual": "Object by object is unavailable with virtual heads.",
+  "prepare.seq.close": "“{a}” and “{b}” are too close. Leave at least {gap} mm between objects.",
+  "prepare.seq.tall": "“{name}” is {h} mm tall; the limit here is {limit} mm. Print it last or move it.",
+  "prepare.seq.make_last": "Print it last"
 }

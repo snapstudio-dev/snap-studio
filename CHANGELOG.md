@@ -11,6 +11,10 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Added
+- **Print by object**: choose sequential printing in Prepare, reorder the
+  object list, and see head clearance and height conflicts before slicing (#22).
+
 ## [0.20.0] — 2026-11-15
 
 ### Added
