@@ -72,6 +72,15 @@ function prTowerAdv() {
   return (machine && SL.memory[machine]?.adv) || {};
 }
 
+/* Keep per-head arrays for geometry rules; the controls use scalar values. */
+function prTowerRawSetting(k) {
+  const adv = prTowerAdv();
+  if (k in adv) return adv[k];
+  if (typeof ADV !== "undefined" && ADV.rawDefaults?.[k] != null) return ADV.rawDefaults[k];
+  if (PR.towerProfile?.raw?.[k] != null) return PR.towerProfile.raw[k];
+  return prTowerProfileValue(k);
+}
+
 /* A profile's value: the sheet's, or the one read here, or the engine's. */
 function prTowerProfileValue(k) {
   if (typeof ADV !== "undefined" && ADV.defaults?.[k] != null) return ADV.defaults[k];
@@ -109,6 +118,7 @@ async function prTowerLoadProfile() {
   PR.towerProfile = { key, values: null };
   const d = await invoke("slice_details", { name: p.process, machine: p.machine, simple: p.simple, overrides: {}, color: null }).catch(() => null);
   if (PR.towerProfile?.key !== key) return;
+  PR.towerProfile.raw = d?.values || {};
   PR.towerProfile.values = Object.fromEntries(Object.entries(d?.values || {}).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]));
   prTowerChanged();
 }

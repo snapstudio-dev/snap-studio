@@ -116,4 +116,16 @@ assert.strictEqual(S.sqDist([[-5,5],[15,5]], sq(0,0,10,10)), 0, 'segment crossin
 assert.strictEqual(S.sqDist([[-5,0],[5,0]], [[0,-5],[0,5]]), 0, 'crossing segments');
 for (const p of S.sqGrow([[0,0],[100,0]],10)) near(S.sqDist([p],[[0,0],[100,0]]),10,1e-9,'a segment grows into a full-length capsule');
 
+const mixed = { skirt_type:'perobject', skirt_loops:1, skirt_distance:4, initial_layer_line_width:.5, max_layer_height:[.2,.3], skirt_height:9 };
+near(S.sqGap([{height:10}], S.sqClearance(k => mixed[k])),81.3,1e-9,'the maximum head layer height triggers the tall skirt');
+mixed.nozzle_diameter = [.4,.6]; mixed.initial_layer_line_width = '125%'; mixed.support_filament = 1;
+let mixedClearance = S.sqClearance(k => mixed[k]);
+near(mixedClearance.skirt.initial,.75,1e-9,'clearance initial width uses the largest nozzle');
+near(mixedClearance.skirt.width,.5,1e-9,'skirt flow width uses the support nozzle');
+near(S.sqGap([{height:10}],mixedClearance),81.8,1e-9,'tall skirt clearance uses the maximum nozzle width');
+near(S.sqGap([{height:1}],mixedClearance),8.8,1e-9,'short skirt extent uses the support nozzle width');
+mixed.support_filament = 2;
+mixedClearance = S.sqClearance(k => mixed[k]);
+near(mixedClearance.skirt.width,.75,1e-9,'support head selection changes skirt flow');
+near(S.sqGap([{height:1}],mixedClearance),9.3,1e-9,'larger support nozzle enlarges the short skirt');
 console.log("sequence: ok");

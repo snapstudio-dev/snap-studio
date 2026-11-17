@@ -21,8 +21,9 @@ const SQ_SHORT_GAP = 4;
 
 /* The clearances from a profile reader (key → value), the U1's otherwise. */
 function sqClearance(get = () => undefined) {
+  const scalar = (k) => Array.isArray(get(k)) ? get(k)[0] : get(k);
   const num = (k, d) => {
-    const v = parseFloat(Array.isArray(get(k)) ? get(k)[0] : get(k));
+    const v = parseFloat(scalar(k));
     return isFinite(v) && v >= 0 ? v : d;
   };
   const c = {
@@ -33,15 +34,25 @@ function sqClearance(get = () => undefined) {
     height: num("printable_height", SQ_U1.height),
   };
   if (String(get("skirt_type")) === "perobject" && num("skirt_loops", 0) > 0) {
-    const nozzle = num("nozzle_diameter", .4);
+    const maximum = (k, fallback) => {
+      const raw = get(k), values = (Array.isArray(raw) ? raw : [raw]).map(parseFloat).filter((v) => isFinite(v) && v > 0);
+      return values.length ? Math.max(...values) : fallback;
+    };
+    const nozzles = get("nozzle_diameter");
+    const support = Math.max(0, num("support_filament", 0) - 1);
+    const nozzle = parseFloat(Array.isArray(nozzles) ? nozzles[support] ?? nozzles[0] : nozzles) || .4;
+    const maxNozzle = maximum("nozzle_diameter", .4);
     const absolute = (value, base) => String(value).includes("%") ? parseFloat(value) * base / 100 : parseFloat(value);
-    const initial = absolute(get("initial_layer_line_width"), nozzle) || 0;
-    const width = initial > 0 ? initial : absolute(get("line_width"), nozzle) || 1.125 * nozzle;
-    const height = absolute(get("initial_layer_print_height"), num("layer_height", .2)) || .2;
+    // object_skirt_offset uses the largest nozzle for its initial width;
+    // skirt_flow uses the first object's support nozzle for its flow.
+    const initial = absolute(scalar("initial_layer_line_width"), maxNozzle) || 0;
+    const flowInitial = absolute(scalar("initial_layer_line_width"), nozzle) || 0;
+    const width = flowInitial > 0 ? flowInitial : absolute(scalar("line_width"), nozzle) || 1.125 * nozzle;
+    const height = absolute(scalar("initial_layer_print_height"), num("layer_height", .2)) || .2;
     c.skirt = {
       distance: num("skirt_distance", 2), loops: num("skirt_loops", 1),
       width, initial, spacing: Math.max(0, width - height * (1 - Math.PI / 4)),
-      tall: String(get("draft_shield")) === "enabled" || num("skirt_height", 1) * num("max_layer_height", .3) > c.nozzle,
+      tall: String(get("draft_shield")) === "enabled" || num("skirt_height", 1) * maximum("max_layer_height", .3) > c.nozzle,
     };
   }
   return c;

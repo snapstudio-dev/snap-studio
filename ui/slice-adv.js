@@ -281,9 +281,11 @@ async function advRefreshNow() {
         overrides: $("s-bed").value ? { curr_bed_type: $("s-bed").value } : {}, color: null,
       });
       if (seq !== ADV.seq) return;
+      ADV.rawDefaults = d?.values || {};
       ADV.defaults = { ...ADV_ENGINE_DEFAULTS, ...Object.fromEntries(Object.entries(d?.values || {}).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v])) };
       await spdSetProfile(d?.values || null);
     } catch {
+      ADV.rawDefaults = {};
       ADV.defaults = { ...ADV_ENGINE_DEFAULTS };
       await spdSetProfile(null);
     }

@@ -15,7 +15,7 @@ function prSeqCheck() {
     const sh = shape(o);
     return { id: o.id, foot: footprint(o), height: sh.zmax - sh.zmin };
   });
-  const clearance = sqClearance(prTowerSetting), blocked = prSeqBlocked();
+  const clearance = sqClearance(prTowerRawSetting), blocked = prSeqBlocked();
   const key = JSON.stringify([items, clearance, blocked]);
   if (prSeqCache?.key !== key) prSeqCache = { key, result: { ...sqCheck(items, clearance), items, blocked } };
   return prSeqCache.result;

@@ -14,7 +14,7 @@ let settings = {}, remembered = 0, renders = 0;
 const objects = [{ id:1, name:'Tall', foot:[[0,0],[20,0],[20,20],[0,20]], height:80 }, { id:2, name:'Short', foot:[[150,0],[170,0],[170,20],[150,20]], height:10 }];
 const PR = { objects, assoc:'object', bed:{w:270,d:270}, rowDrag:null };
 const ctx = { ...S, PR, $, document: { querySelectorAll: s => s === '#p-seq [data-sequence]' ? buttons : [], createElement: element }, addEventListener(){},
-  prTowerSetting:k => settings[k], prTowerVirtualUsed:() => ctx.virtual || false,
+  prTowerSetting:k => settings[k], prTowerRawSetting:k => settings[k], prTowerVirtualUsed:() => ctx.virtual || false,
   plSliced:xs => xs, bedState:()=>'on', shape:o=>({ zmin:0,zmax:o.height }), footprint:o=>o.foot,
   tr:(k,p)=> k + (p ? JSON.stringify(p):''), fmtDec:n=>String(n),
   prRemember:()=>remembered++, prSave(){}, prRenderInspector:()=>renders++, prSchedule(){},
@@ -86,4 +86,12 @@ assert.deepStrictEqual(Array.from(PR.objects, o => o.id), oldIds, 'Undo restores
 const unchanged = run('prSeqCheck()');
 PR.objects[0].height += 5;
 assert.notStrictEqual(run('prSeqCheck()'), unchanged, 'geometry edits invalidate the collision cache');
+const rawCtx = { ADV: { rawDefaults: { max_layer_height:[.2,.3] }, defaults:{max_layer_height:.2} },
+  PR:{towerProfile:{raw:{nozzle_diameter:[.4,.6]}}}, prTowerAdv:()=>({}), prTowerProfileValue:()=>0 };
+vm.createContext(rawCtx);
+vm.runInContext(extract('ui/prepare-tower.js', /function prTowerRawSetting\(k\)[\s\S]*?\n}/),rawCtx);
+assert.deepStrictEqual(vm.runInContext('prTowerRawSetting("max_layer_height")',rawCtx),[.2,.3],'slice profile arrays reach clearance rules intact');
+assert.deepStrictEqual(vm.runInContext('prTowerRawSetting("nozzle_diameter")',rawCtx),[.4,.6],'Prepare profile arrays stay intact before opening the sheet');
+rawCtx.prTowerAdv = ()=>({max_layer_height:[.25,.35]});
+assert.deepStrictEqual(vm.runInContext('prTowerRawSetting("max_layer_height")',rawCtx),[.25,.35],'advanced overrides take priority over raw profile');
 console.log('sequence UI: ok');
